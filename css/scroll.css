@@ -1,0 +1,35 @@
+
+  /* Scrollbar SOLO para el sidebar */
+  .aside-scroll{
+    overflow-y: auto;                 /* habilita scroll vertical */
+    overscroll-behavior: contain;     /* evita “arrastrar” el scroll al body */
+    scrollbar-gutter: stable;         /* reserva espacio, sin saltos de layout */
+  }
+  /* Firefox */
+  .aside-scroll{
+    scrollbar-width: thin;                            /* delgada */
+    scrollbar-color: #334155 #0b1220;                 /* thumb | track (slate-700 | casi negro) */
+  }
+  /* WebKit (Chrome/Edge/Brave/Opera) */
+  .aside-scroll::-webkit-scrollbar{
+    width: 10px;
+  }
+  .aside-scroll::-webkit-scrollbar-track{
+    background: #0b1220;                              /* track oscuro */
+    border-radius: 12px;
+  }
+  .aside-scroll::-webkit-scrollbar-thumb{
+    background-color: #334155;                        /* slate-700 */
+    border-radius: 12px;
+    border: 2px solid #0b1220;                        /* “gap” para que no se vea tosca */
+  }
+  .aside-scroll::-webkit-scrollbar-thumb:hover{
+    background-color: #475569;                        /* slate-600 al hover */
+  }
+
+  /* (Opcional) Fade suave arriba/abajo para indicar que hay más contenido */
+  .aside-scroll--fade{
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 12px, black calc(100% - 12px), transparent);
+            mask-image: linear-gradient(to bottom, transparent 0, black 12px, black calc(100% - 12px), transparent);
+  }
+
