@@ -785,41 +785,88 @@ async function generarPDFInventarioMovs(data, meta) {
   const now = new Date();
   const fechaCreacion = now.toLocaleString(); // local
 
-  const getLogo = async () => {
-    try {
-      const r = await fetch('../php/obtener_logo.php', { cache: 'no-store' });
-      const j = await r.json();
-      if (j.success && j.base64) return { dataURI: j.base64, mime: j.mime || 'image/png' };
-    } catch(e) {}
-    return null;
+  // Lee tamaño real de una dataURL
+const getImageSize = (src) => new Promise(resolve => {
+  const img = new Image();
+  img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+  img.src = src;
+});
+
+// Convierte cualquier dataURL a PNG (para jsPDF)
+const toPNG = (dataURL) => new Promise(resolve => {
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    resolve(canvas.toDataURL('image/png'));
   };
+  img.src = dataURL;
+});
+
+// Obtiene logo (y si no es PNG/JPEG lo convierte), regresando también dimensiones
+const getLogoReady = async () => {
+  try {
+    const r = await fetch('../php/obtener_logo.php', { cache: 'no-store' });
+    const j = await r.json();
+    if (!j.success || !j.base64) return null;
+
+    let dataURI = j.base64;
+    let mime = (j.mime || '').toLowerCase();
+
+    // jsPDF soporta PNG/JPEG; si viene WEBP u otro, conviértelo a PNG
+    if (!/png|jpeg|jpg/.test(mime)) {
+      dataURI = await toPNG(dataURI);
+      mime = 'image/png';
+    }
+    const { w, h } = await getImageSize(dataURI);
+    return { dataURI, mime, w, h };
+  } catch { return null; }
+};
+
+
 
   const addHeader = (firstPage=false) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
 
-    // Logo
-    if (window.__logoReporteInv) {
-      const fmt = (window.__logoReporteInv.mime || '').toLowerCase().includes('jpeg') ? 'JPEG' : 'PNG';
-      const w = 120, h = 40;
-      doc.addImage(window.__logoReporteInv.dataURI, fmt, M, y, w, h);
-    }
-    // Título
-    doc.text('Reporte de movimientos de inventario', M + 130, y + 18);
+  let xText = M;      // posición de texto si no hay logo
+  let headerH = 0;    // altura efectiva del header
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(`Creado: ${fechaCreacion}`, M + 130, y + 34);
-    doc.text(`${meta.etiquetaFiltro}  |  Ventana: ${meta.desde} → ${meta.hasta}`, M + 130, y + 50);
+  if (window.__logoReporteInv) {
+    const { dataURI, mime, w, h } = window.__logoReporteInv;
+    const fmt = (mime.includes('jpeg') || mime.includes('jpg')) ? 'JPEG' : 'PNG';
 
-    y += 60;
-    // Línea
-    doc.setLineWidth(0.5);
-    doc.line(M, y, pageW - M, y);
-    y += 14;
+    // Escalado proporcional dentro de un máximo
+    const maxW = 160;   // ancho máximo del logo en puntos
+    const maxH = 48;    // alto máximo del logo en puntos
+    const ratio = w / h;
 
-    if (!firstPage) return;
-  };
+    let drawW = Math.min(maxW, maxH * ratio);
+    let drawH = drawW / ratio;
+
+    doc.addImage(dataURI, fmt, M, y, drawW, drawH);
+
+    xText   = M + drawW + 12; // texto a la derecha del logo
+    headerH = drawH;
+  }
+
+  // Título y metadatos
+  doc.text('Reporte de movimientos de inventario', xText, y + 16);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+  doc.text(`Creado: ${fechaCreacion}`, xText, y + 32);
+  doc.text(`${meta.etiquetaFiltro}  |  Ventana: ${meta.desde} → ${meta.hasta}`, xText, y + 48);
+
+  // Avance vertical: usa la altura del logo o un mínimo
+  y += Math.max(headerH, 52);
+
+  // Separador
+  doc.setLineWidth(0.5);
+  doc.line(M, y, pageW - M, y);
+  y += 14;
+};
+
 
   const ensureSpace = (lines = 0) => {
     const need = y + lines * 14 + 40;
@@ -847,10 +894,10 @@ async function generarPDFInventarioMovs(data, meta) {
     y += h;
   };
 
-  // Precarga logo 1 sola vez
   if (!window.__logoReporteInv) {
-    window.__logoReporteInv = await getLogo();
+  window.__logoReporteInv = await getLogoReady(); // {dataURI,mime,w,h} | null
   }
+
 
   addHeader(true);
 
