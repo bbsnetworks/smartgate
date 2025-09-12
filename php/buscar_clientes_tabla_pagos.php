@@ -1,33 +1,86 @@
 <?php
 require_once 'conexion.php';
 
-$q = $_GET['q'] ?? '';
-$page = intval($_GET['page'] ?? 1);
+$q     = $_GET['q'] ?? '';
+$page  = max(1, intval($_GET['page'] ?? 1));
 $limit = 10;
 $offset = ($page - 1) * $limit;
 
-$q = $conexion->real_escape_string($q);
-$where = "";
+$clientes = [];
+$total    = 0;
 
 if ($q !== '') {
-  $where = "AND (CONCAT_WS(' ', nombre, apellido) LIKE '%$q%' OR telefono LIKE '%$q%')";
-}
+    // -------- Con búsqueda --------
+    $like = "%" . $q . "%";
 
-// Obtener total
-$totalQuery = $conexion->query("SELECT COUNT(*) as total FROM clientes WHERE tipo = 'clientes' $where");
-$total = $totalQuery->fetch_assoc()['total'] ?? 0;
+    // Total
+    $stmt = $conexion->prepare("
+        SELECT COUNT(*) as total
+        FROM clientes
+        WHERE tipo = 'clientes'
+          AND (
+            nombre LIKE ? 
+            OR apellido LIKE ? 
+            OR CONCAT(nombre,' ',apellido) LIKE ? 
+            OR telefono LIKE ?
+          )
+    ");
+    $stmt->bind_param("ssss", $like, $like, $like, $like);
+    $stmt->execute();
+    $total = (int)($stmt->get_result()->fetch_assoc()['total'] ?? 0);
+    $stmt->close();
 
-// Obtener resultados paginados
-$sql = "SELECT * FROM clientes WHERE tipo = 'clientes' $where ORDER BY nombre ASC LIMIT $limit OFFSET $offset";
-$res = $conexion->query($sql);
+    // Resultados paginados
+    $stmt = $conexion->prepare("
+        SELECT id, nombre, apellido, telefono, Inicio, Fin
+        FROM clientes
+        WHERE tipo = 'clientes'
+          AND (
+            nombre LIKE ? 
+            OR apellido LIKE ? 
+            OR CONCAT(nombre,' ',apellido) LIKE ? 
+            OR telefono LIKE ?
+          )
+        ORDER BY nombre ASC, apellido ASC, id ASC
+        LIMIT ? OFFSET ?
+    ");
+    $stmt->bind_param("ssssii", $like, $like, $like, $like, $limit, $offset);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $clientes[] = $row;
+    }
+    $stmt->close();
 
-$clientes = [];
-while ($row = $res->fetch_assoc()) {
-  $clientes[] = $row;
+} else {
+    // -------- Sin búsqueda --------
+    $stmt = $conexion->prepare("
+        SELECT COUNT(*) as total
+        FROM clientes
+        WHERE tipo = 'clientes'
+    ");
+    $stmt->execute();
+    $total = (int)($stmt->get_result()->fetch_assoc()['total'] ?? 0);
+    $stmt->close();
+
+    $stmt = $conexion->prepare("
+        SELECT id, nombre, apellido, telefono, Inicio, Fin
+        FROM clientes
+        WHERE tipo = 'clientes'
+        ORDER BY nombre ASC, apellido ASC, id ASC
+        LIMIT ? OFFSET ?
+    ");
+    $stmt->bind_param("ii", $limit, $offset);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $clientes[] = $row;
+    }
+    $stmt->close();
 }
 
 echo json_encode([
-  'clientes' => $clientes,
-  'total' => $total,
-  'limit' => $limit
+    'clientes' => $clientes,
+    'total'    => $total,
+    'limit'    => $limit
 ]);

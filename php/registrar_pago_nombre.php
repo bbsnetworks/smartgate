@@ -8,10 +8,10 @@ header("Content-Type: application/json");
 
 // ====== Entrada ======
 $in = json_decode(file_get_contents("php://input"), true) ?: [];
-
-$nombre           = trim($in["nombre"]        ?? '');
-$apellido         = trim($in["apellido"]      ?? '');
-$telefono         = trim($in["telefono"]      ?? '');
+$cliente_id       = (int)($in["cliente_id"]   ?? 0);
+$nombre           = trim($in["nombre"]        ?? '');       // opcional (solo ticket)
+$apellido         = trim($in["apellido"]      ?? '');       // opcional (solo ticket)
+$telefono         = trim($in["telefono"]      ?? '');       // opcional (solo ticket)
 $fecha_inicio_str = trim($in["fecha_inicio"]  ?? '');
 $fecha_fin_str    = trim($in["fecha_fin"]     ?? '');
 $monto            = (float)($in["monto"]      ?? 0);
@@ -19,8 +19,11 @@ $descuento        = (float)($in["descuento"]  ?? 0);
 $metodo           = trim($in["metodo"]        ?? "efectivo");
 
 // ====== Validaciones ======
-if ($nombre === '' || $apellido === '' || $fecha_inicio_str === '' || $fecha_fin_str === '') {
-  echo json_encode(["success" => false, "error" => "Faltan datos obligatorios."]); exit;
+if ($cliente_id <= 0) {
+  echo json_encode(["success" => false, "error" => "Cliente inválido."]); exit;
+}
+if ($fecha_inicio_str === '' || $fecha_fin_str === '') {
+  echo json_encode(["success" => false, "error" => "Faltan fechas."]); exit;
 }
 $fecha_inicio = DateTime::createFromFormat("Y-m-d", $fecha_inicio_str);
 $fecha_fin    = DateTime::createFromFormat("Y-m-d", $fecha_fin_str);
@@ -40,38 +43,22 @@ $fecha_fin->setTime(23, 59, 59);
 $beginSQL = $fecha_inicio->format("Y-m-d H:i:s");
 $finSQL   = $fecha_fin->format("Y-m-d H:i:s");
 
-// ====== Resolver cliente ======
-// 1) nombre+apellido+tel
-$cliente = null;
-if ($telefono !== '') {
-  $stmt = $conexion->prepare("SELECT id, data, personCode, apellido, nombre, genero,
-                                     orgIndexCode, telefono, email, Inicio, Fin, FechaIngreso
-                              FROM clientes
-                              WHERE nombre = ? AND apellido = ? AND telefono = ?
-                              LIMIT 1");
-  $stmt->bind_param("sss", $nombre, $apellido, $telefono);
-  $stmt->execute();
-  $cliente = $stmt->get_result()->fetch_assoc();
-  $stmt->close();
-}
-// 2) fallback: nombre+apellido
-if (!$cliente) {
-  $stmt = $conexion->prepare("SELECT id, data, personCode, apellido, nombre, genero,
-                                     orgIndexCode, telefono, email, Inicio, Fin, FechaIngreso
-                              FROM clientes
-                              WHERE nombre = ? AND apellido = ?
-                              ORDER BY id ASC
-                              LIMIT 1");
-  $stmt->bind_param("ss", $nombre, $apellido);
-  $stmt->execute();
-  $cliente = $stmt->get_result()->fetch_assoc();
-  $stmt->close();
-}
+// ====== Obtener cliente por ID (única fuente de verdad) ======
+$stmt = $conexion->prepare("
+  SELECT id, data, personCode, apellido, nombre, genero,
+         orgIndexCode, telefono, email, Inicio, Fin, FechaIngreso
+  FROM clientes
+  WHERE id = ?
+  LIMIT 1
+");
+$stmt->bind_param("i", $cliente_id);
+$stmt->execute();
+$cliente = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
 if (!$cliente) {
   echo json_encode(["success" => false, "error" => "Cliente no encontrado."]); exit;
 }
-
-$cliente_id = (int)$cliente['id'];
 
 // ====== No duplicar meses pagados ======
 $stmt = $conexion->prepare("SELECT fecha_aplicada FROM pagos WHERE cliente_id = ?");
@@ -97,7 +84,6 @@ foreach ($periodo as $f) {
 }
 
 // ====== Calcular nuevo endTime global (no reducir vigencia) ======
-// Tomar el mayor entre: MAX(fecha_fin de pagos), clientes.Fin y el nuevo fin
 $maxFinActual = null;
 
 $stmt = $conexion->prepare("SELECT MAX(fecha_fin) AS max_fin FROM pagos WHERE cliente_id = ?");
@@ -105,6 +91,7 @@ $stmt->bind_param("i", $cliente_id);
 $stmt->execute();
 $maxFinRow = $stmt->get_result()->fetch_assoc();
 $stmt->close();
+
 if (!empty($maxFinRow['max_fin'])) $maxFinActual = $maxFinRow['max_fin'];
 if (!empty($cliente['Fin']) && (strtotime($cliente['Fin']) > strtotime((string)$maxFinActual ?: '1970-01-01'))) {
   $maxFinActual = $cliente['Fin'];
@@ -114,8 +101,7 @@ $nuevaFinGlobal = $maxFinActual
   ? ((strtotime($finSQL) > strtotime($maxFinActual)) ? $finSQL : $maxFinActual)
   : $finSQL;
 
-// ====== BEGIN FIXO para la API ======
-// No mover beginTime: usar el actual de la BD, o caer a FechaIngreso 00:00:00, o último recurso a beginSQL
+// ====== BEGIN FIJO para la API ======
 $beginFijo = null;
 if (!empty($cliente['Inicio'])) {
   $beginFijo = $cliente['Inicio'];
@@ -182,15 +168,15 @@ try {
     $metodo,
     $descuento
   );
-  if (!$stmt->execute() || $stmt->affected_rows < 1) {
+  if (!$stmt->execute()) {
     throw new Exception("No se pudo insertar el pago.");
   }
   $stmt->close();
 
-  // Actualizar SOLO Fin (no tocamos Inicio)
+  // Actualizar SOLO Fin (si ya es igual, affected_rows puede ser 0 y NO es error)
   $stmt = $conexion->prepare("UPDATE clientes SET Fin = ? WHERE id = ?");
   $stmt->bind_param("si", $nuevaFinGlobal, $cliente_id);
-  if (!$stmt->execute() || $stmt->affected_rows < 1) {
+  if (!$stmt->execute()) {
     throw new Exception("No se pudo actualizar el cliente.");
   }
   $stmt->close();

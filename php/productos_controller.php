@@ -340,13 +340,16 @@ function reporteMovimientos(mysqli $conexion) {
 
   // Trae movimientos del periodo + stock actual (si el producto existe)
   $sql = "SELECT
-            im.producto_id, im.producto_codigo, im.producto_nombre,
-            im.tipo, im.cantidad, im.stock_despues, im.creado_en, im.nota,
-            p.stock AS stock_actual
-          FROM inventario_movimientos im
-          LEFT JOIN productos p ON p.id = im.producto_id
-          WHERE im.creado_en >= ? AND im.creado_en <= ?
-          ORDER BY im.producto_nombre, im.producto_id, im.creado_en, im.id";
+          im.producto_id, im.producto_codigo, im.producto_nombre,
+          im.tipo, im.cantidad, im.stock_despues, im.creado_en, im.nota,
+          p.stock AS stock_actual,
+          u.nombre AS usuario                    -- 👈 nombre del usuario
+        FROM inventario_movimientos im
+        LEFT JOIN productos p ON p.id = im.producto_id
+        LEFT JOIN usuarios  u ON u.id = im.usuario_id   -- 👈 join a tu tabla
+        WHERE im.creado_en >= ? AND im.creado_en <= ?
+        ORDER BY im.producto_nombre, im.producto_id, im.creado_en, im.id";
+
   $stmt = $conexion->prepare($sql);
   $stmt->bind_param("ss", $desde, $hasta);
   $stmt->execute();
@@ -387,7 +390,8 @@ function reporteMovimientos(mysqli $conexion) {
       'tipo'  => $tipoMov,
       'cantidad' => $cant,
       'stock_despues' => (float)$row['stock_despues'],
-      'nota'  => $row['nota']
+      'nota'  => $row['nota'],
+      'usuario'       => $row['usuario'] ?: '—'
     ];
   }
 

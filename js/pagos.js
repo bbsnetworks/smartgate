@@ -203,10 +203,10 @@ async function abrirModalPago() {
       confirmButtonText: "Guardar pago",
       preConfirm: () => {
         const seleccionado = document.querySelector(".cliente-seleccionado");
-        if (!seleccionado) {
-          Swal.showValidationMessage("Selecciona un cliente");
-          return false;
-        }
+  if (!seleccionado) {
+    Swal.showValidationMessage("Selecciona un cliente");
+    return false;
+  }
 
         const inicio = document.getElementById("fecha_inicio").value;
         const fin = document.getElementById("fecha_fin").value;
@@ -241,15 +241,16 @@ async function abrirModalPago() {
         }
 
         return {
-          nombre: seleccionado.dataset.nombre,
-          apellido: seleccionado.dataset.apellido,
-          telefono: seleccionado.dataset.telefono,
-          fecha_inicio: inicio,
-          fecha_fin: fin,
-          monto: monto,
-          descuento: descuento,
-          metodo: metodo,
-        };
+    cliente_id: Number(seleccionado.dataset.id),   // <-- NUEVO
+    nombre: seleccionado.dataset.nombre,
+    apellido: seleccionado.dataset.apellido,
+    telefono: seleccionado.dataset.telefono,
+    fecha_inicio: inicio,
+    fecha_fin: fin,
+    monto,
+    descuento,
+    metodo,
+  };
       },
 
       didOpen: () => {
@@ -594,15 +595,16 @@ async function abrirModalPagoConCliente(cliente) {
         }
 
         return {
-          nombre: cliente.nombre,
-          apellido: cliente.apellido,
-          telefono: cliente.telefono,
-          fecha_inicio: inicio,
-          fecha_fin: fin,
-          monto: monto,
-          descuento: descuento,
-          metodo: metodo,
-        };
+    cliente_id: Number(cliente.id),    // <-- NUEVO
+    nombre: cliente.nombre,
+    apellido: cliente.apellido,
+    telefono: cliente.telefono,
+    fecha_inicio: inicio,
+    fecha_fin: fin,
+    monto,
+    descuento,
+    metodo,
+  };
       },
     })
     .then((result) => {
@@ -877,7 +879,6 @@ function verPagos(clienteId, nombreCompleto) {
           const $mes = document.getElementById("filtroMes");
           const $anio = document.getElementById("filtroAnio");
           const $apli = document.getElementById("btnAplicarFiltro");
-          const $limp = document.getElementById("btnLimpiarFiltro");
           const $lista = document.getElementById("listaPagos");
           const $toggle = document.getElementById("btnToggleMas");
           const $badge = document.getElementById("badgeConteo");
@@ -914,22 +915,7 @@ function verPagos(clienteId, nombreCompleto) {
             actualizarBadge($badge, pagosVisibles);
           });
 
-          $limp.addEventListener("click", () => {
-            // Reset a mes/año actuales
-            $mes.value = mesActual;
-            $anio.value = anioActual.toString();
-            pagosVisibles = [...pagos];
-            colapsado = true;
-            renderListaPagos(
-              $lista,
-              pagosVisibles,
-              colapsado,
-              clienteId,
-              nombreCompleto
-            );
-            actualizarToggle($toggle, pagosVisibles, colapsado);
-            actualizarBadge($badge, pagosVisibles);
-          });
+          
 
           $toggle.addEventListener("click", () => {
             colapsado = !colapsado;
