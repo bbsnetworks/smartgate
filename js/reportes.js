@@ -393,24 +393,23 @@ async function generarPDFReporte() {
   // === Renderizar resumen de totales ===
   const renderTotales = () => {
     // Recalcula ventas por método (restando suscripciones por método)
-    const totalVentasPorMetodo = {
-  efectivo: 0,
-  tarjeta: 0,
-  transferencia: 0,
-};
+    const totalVentasPorMetodo = { efectivo: 0, tarjeta: 0, transferencia: 0 };
 
 data.ventas.forEach((v) => {
   const m = (v.metodo_pago || "").toLowerCase();
   if (!totalVentasPorMetodo[m]) totalVentasPorMetodo[m] = 0;
   v.productos.forEach((p) => {
     totalVentasPorMetodo[m] += parseFloat(p.total || 0);
-    totalVentas += parseFloat(p.total || 0);
+    // OJO: aquí ya NO sumamos a totalVentas para evitar el doble conteo
   });
 });
 
 const ventaEfectivo = totalVentasPorMetodo.efectivo;
 const ventaTarjeta = totalVentasPorMetodo.tarjeta;
 const ventaTransferencia = totalVentasPorMetodo.transferencia;
+
+// Calcula el total de ventas a partir de los métodos
+const totalVentasCalc = ventaEfectivo + ventaTarjeta + ventaTransferencia;
 
 
     // Layout
@@ -502,7 +501,7 @@ const ventaTransferencia = totalVentasPorMetodo.transferencia;
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...PALETTE.ok);
     doc.setFontSize(11);
-    const totVentasTxt = `TOTAL: ${fmtMoney(totalVentas)}`;
+    const totVentasTxt = `TOTAL: ${fmtMoney(totalVentasCalc)}`;
     doc.text(totVentasTxt, rightX + 6, y + cardH - 6);
 
     // Avanza debajo de las tarjetas
@@ -515,7 +514,7 @@ const ventaTransferencia = totalVentasPorMetodo.transferencia;
     doc.setTextColor(...PALETTE.bandTx);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    const totalGeneral = totalVentas + totalSuscripciones;
+    const totalGeneral = totalVentasCalc + totalSuscripciones;
     const label = "TOTAL GENERAL";
     const amount = fmtMoney(totalGeneral);
     const wLabel = doc.getTextWidth(label);
