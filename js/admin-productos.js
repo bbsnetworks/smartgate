@@ -340,7 +340,7 @@ function ejecutarEdicionProducto(id) {
               <input id="precio" type="number" step="0.01" class="swal2-input mx-auto w-3/4" placeholder="Precio" value="${producto.precio}">
 
               <label for="stock" class="font-semibold mx-auto mt-2">Stock:</label>
-              <input id="stock" type="number" min="0" class="swal2-input mx-auto w-3/4" placeholder="Stock" value="${producto.stock}">
+              <input id="stock" type="number" min="0" class="swal2-input mx-auto w-3/4" placeholder="Stock" value="${producto.stock}" readonly>
 
               <label for="categoria_id" class="font-semibold mx-auto mt-2 mb-2">Categoría:</label>
               <select id="categoria_id" class="mx-auto mt-1 w-3/4 p-2 rounded border border-slate-600 bg-slate-800 text-slate-100">
