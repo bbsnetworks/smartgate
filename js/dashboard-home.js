@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function cargarKPIs() {
   try {
-    const url = new URL('openapi/php/dashboard_resumen.php', location.origin);
+    const url = new URL('smartgate/php/dashboard_resumen.php', location.origin);
     url.searchParams.set('period', 'hoy');
     url.searchParams.set('user', USER_FILTER); // NUEVO
 
@@ -116,7 +116,7 @@ const charts = {}; // canvasId -> Chart
 
 async function cargarSerie(serie, resol, canvasId) {
   try {
-    const url = new URL('openapi/php/dashboard_resumen.php', location.origin);
+    const url = new URL('smartgate/php/dashboard_resumen.php', location.origin);
     url.searchParams.set('serie', serie);
     url.searchParams.set('res', resol);
     url.searchParams.set('user', USER_FILTER); // NUEVO

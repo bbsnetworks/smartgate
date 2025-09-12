@@ -1,5 +1,5 @@
 <?php
-  define('BASE_URL', '/openapi');
+  define('BASE_URL', '/smartgate');
 ?>
 
 <nav class="bg-slate-900 shadow-lg border-b border-slate-700">

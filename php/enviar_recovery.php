@@ -43,7 +43,7 @@ try {
 
     $mail->isHTML(true);
     $mail->Subject = 'Recupera tu contraseña';
-    $mail->Body = "Haz clic aquí para recuperar tu contraseña:<br><a href='http://localhost/openapi/vistas/reset.php?token=$token'>Recuperar contraseña</a>";
+    $mail->Body = "Haz clic aquí para recuperar tu contraseña:<br><a href='http://localhost/smartgate/vistas/reset.php?token=$token'>Recuperar contraseña</a>";
 
     $mail->send();
     echo json_encode(["success" => true]);

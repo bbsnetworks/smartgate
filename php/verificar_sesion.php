@@ -1,6 +1,6 @@
 <?php
 session_start();
-define('BASE_PATH', '/openapi');
+define('BASE_PATH', '/smartgate');
 
 include_once __DIR__.'/conexion.php'; // <— LOCAL, no la remota
 
