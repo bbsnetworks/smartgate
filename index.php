@@ -174,7 +174,7 @@
           <article id="card-aniversarios"
             class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow
                    h-full flex flex-col
-                   xl:col-start-3 xl:row-span-3">
+                   xl:col-start-2 xl:row-span-2">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-slate-300">Aniversarios (hoy)</h3>
               <i class="bi bi-cake2 icon-20 text-amber-400"></i>
@@ -192,7 +192,30 @@
               Coinciden mes/día con su fecha de alta
             </small>
           </article>
+          <!-- Card: Stock bajo -->
+<!-- Card: Stock bajo -->
+<div class="bg-slate-800/40 border border-slate-600/30 rounded-xl p-4 flex flex-col">
+  <div class="flex items-center justify-between mb-3">
+    <span class="text-xs text-slate-400">Umbral: ≤ 5</span>
+    <h3 class="text-red-400 font-semibold flex items-center gap-2">
+      Stock bajo
+      <!-- icono opcional -->
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2h6v2m-7-4h8l1-9H5l1 9z" />
+      </svg>
+    </h3>
+  </div>
 
+  <!-- Contenedor scrollable -->
+  <ul id="lista-stock-bajo" class="space-y-2 overflow-y-auto pr-1 flex-1 min-h-[100px] max-h-[250px]">
+    <!-- Items los llena JS -->
+  </ul>
+
+  <!-- Footer -->
+  <div id="stock-bajo-footer" class="mt-2 text-xs text-slate-400"></div>
+</div>
+
+    
           <!-- Ventas -->
           <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
             <div class="flex items-center justify-between">

@@ -71,6 +71,30 @@ async function cargarKPIs() {
           ul.appendChild(li);
         });
       }
+      // --- Stock bajo ---
+const ulStock = document.getElementById('lista-stock-bajo');
+if (ulStock) {
+  ulStock.innerHTML = '';
+  const items = Array.isArray(d.stock_bajo) ? d.stock_bajo : [];
+  if (items.length === 0) {
+    ulStock.innerHTML = '<li class="text-slate-400">Sin alertas de stock</li>';
+  } else {
+    items.forEach(it => {
+  const li = document.createElement('li');
+  li.className = 'flex items-center justify-between bg-red-900/30 border border-red-500/30 rounded-md px-2 py-1';
+  li.innerHTML = `
+    <span class="truncate mr-2 text-slate-200">${it.nombre}</span>
+    <span class="text-red-300 font-semibold">${it.stock}</span>
+    ${typeof it.min === 'number' ? `<span class="text-xs text-slate-400 ml-2">/ min ${it.min}</span>` : ''}
+  `;
+  ulStock.appendChild(li);
+});
+
+  }
+  const foot = document.getElementById('stock-bajo-footer');
+  if (foot) foot.textContent = items.length ? `${items.length} producto(s) bajo umbral` : '';
+}
+
     }
 
     // Nuevo: monto de inscripciones

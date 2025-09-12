@@ -34,6 +34,7 @@ endif;
   <link rel="stylesheet" href="../src/output.css">
   <script src="../js/sweetalert2@11.js"></script>
   <script src="../js/lucide.min.js"></script>
+  <script src="../js/jspdf.umd.min.js"></script>
   <script>
   window.tipoUsuario = "<?php echo $_SESSION['usuario']['rol'] ?? ''; ?>";
 </script>
@@ -65,6 +66,12 @@ endif;
     <div class="flex flex-wrap justify-left gap-4 mb-6">
       <button onclick="abrirModalAgregar()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold shadow">
         ➕ Agregar Producto
+      </button>
+      <button onclick="abrirModalMovimiento()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold shadow">
+        ➕/➖ Movimiento
+      </button>
+      <button onclick="abrirModalReporte()" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg font-semibold shadow">
+        📑 Reporte
       </button>
     </div>
 

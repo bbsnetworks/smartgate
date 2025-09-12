@@ -22,15 +22,6 @@ if ($rolSes === 'worker') {
   $selectedUid = $uidSes;
 }
 
-
-$uid = $_SESSION['usuario']['iduser'] ?? 0;
-$rol = $_SESSION['usuario']['rol'] ?? 'worker';
-
-$period = $_GET['period'] ?? 'hoy';
-$grafica = $_GET['grafica'] ?? null;
-$tipoGraf = $_GET['tipo'] ?? 'todos';
-
-
 // ---------- helpers ----------
 function columnaExiste(mysqli $cx, string $tabla, string $col): bool
 {
@@ -40,6 +31,18 @@ function columnaExiste(mysqli $cx, string $tabla, string $col): bool
   $stmt->bind_param('sss', $db, $tabla, $col);
   $stmt->execute();
   $c = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
+  $stmt->close();
+  return $c > 0;
+}
+function tablaExiste(mysqli $cx, string $tabla): bool {
+  $dbRes = $cx->query("SELECT DATABASE() AS db");
+  $db = $dbRes ? ($dbRes->fetch_assoc()['db'] ?? '') : '';
+  $stmt = $cx->prepare("SELECT COUNT(*) c
+    FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA=? AND TABLE_NAME=?");
+  $stmt->bind_param('ss', $db, $tabla);
+  $stmt->execute();
+  $c = (int)($stmt->get_result()->fetch_assoc()['c'] ?? 0);
   $stmt->close();
   return $c > 0;
 }
@@ -162,7 +165,11 @@ $out = [
   'inscripciones_detalle' => '',
   'inscripciones_monto' => 0,
   'inscripciones_monto_fmt' => '$0.00',
-  'inscripciones_monto_detalle' => ''
+  'inscripciones_monto_detalle' => '',
+  'stock_bajo' => [],
+  'stock_bajo_total' => 0,
+  
+
 ];
 
 // 1) Activos / NO activos (igual que antes)
@@ -202,6 +209,66 @@ $q2d = $conexion->query("
 $lista = [];
 if ($q2d) { while ($r = $q2d->fetch_assoc()) $lista[] = ['nombre'=>$r['nombre'], 'anios'=>(int)$r['anios']]; }
 $out['aniversarios_lista'] = $lista;
+
+// --- Stock bajo (lista) ---
+// Soporta 'productos' con columnas posibles:
+//   nombre | descripcion
+//   stock/existencias/cantidad
+//   stock_min/min_stock/minimo
+// Si no hay columna de mínimo, usamos umbral fijo (?umbral=5)
+$umbralParam = isset($_GET['umbral']) ? (int)$_GET['umbral'] : 5;
+
+if (tablaExiste($conexion, 'productos')) {
+  // nombre
+  $colNombre = columnaExiste($conexion, 'productos', 'nombre') ? 'nombre'
+            : (columnaExiste($conexion, 'productos', 'descripcion') ? 'descripcion' : null);
+
+  // stock actual
+  $colStock  = columnaExiste($conexion, 'productos', 'stock') ? 'stock'
+            : (columnaExiste($conexion, 'productos', 'existencias') ? 'existencias'
+            : (columnaExiste($conexion, 'productos', 'cantidad') ? 'cantidad' : null));
+
+  // mínimo por producto (opcional)
+  $colMin    = columnaExiste($conexion, 'productos', 'stock_min') ? 'stock_min'
+            : (columnaExiste($conexion, 'productos', 'min_stock') ? 'min_stock'
+            : (columnaExiste($conexion, 'productos', 'minimo') ? 'minimo' : null));
+
+  if ($colNombre && $colStock) {
+    if ($colMin) {
+      // Con mínimo por producto
+      $sql = "SELECT $colNombre AS nombre, $colStock AS stock, $colMin AS min
+              FROM productos
+              WHERE COALESCE($colStock,0) <= COALESCE($colMin,0)
+              ORDER BY $colStock ASC, $colNombre ASC
+              LIMIT 30";
+      $q = $conexion->query($sql);
+    } else {
+      // Sin columna de mínimo: umbral fijo
+      $sql = "SELECT $colNombre AS nombre, $colStock AS stock
+              FROM productos
+              WHERE COALESCE($colStock,0) <= ?
+              ORDER BY $colStock ASC, $colNombre ASC
+              LIMIT 30";
+      $stmt = $conexion->prepare($sql);
+      $stmt->bind_param('i', $umbralParam);
+      $stmt->execute();
+      $q = $stmt->get_result();
+    }
+
+    $stockBajo = [];
+    if ($q) {
+      while ($r = $q->fetch_assoc()) {
+        $stockBajo[] = [
+          'nombre' => $r['nombre'],
+          'stock'  => (int)($r['stock'] ?? 0),
+          'min'    => isset($r['min']) ? (int)$r['min'] : null
+        ];
+      }
+    }
+    $out['stock_bajo'] = $stockBajo;
+    $out['stock_bajo_total'] = count($stockBajo);
+  }
+}
 
 // 3) Ventas de productos (SUM)  **NO tocar si no quieres descuento aquí**
 
