@@ -18,12 +18,13 @@ if ($idPago <= 0 || $clienteId <= 0) {
   exit;
 }
 
-// === CONFIG API (ajusta si es distinto en tu entorno) ===
-$config = (object) [
-  "userKey"        => "21660945",
-  "userSecret"     => "93iLwvnQkXAvlHw8wbQz",
-  "urlHikCentralAPI" => "http://127.0.0.1:9016"
-];
+// === CONFIG desde DB ===
+$config = api_cfg();
+if (!$config) {
+  http_response_code(500);
+  echo json_encode(["success"=>false,"error"=>"Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."]);
+  exit;
+}
 
 // ---- Datos del pago a eliminar
 $stmt = $conexion->prepare("SELECT id, cliente_id, fecha_fin FROM pagos WHERE id = ? AND cliente_id = ? LIMIT 1");
@@ -41,7 +42,10 @@ $stmt->execute();
 $cliente = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 if (!$cliente) { echo json_encode(["success"=>false,"error"=>"Cliente no encontrado."]); exit; }
-
+// Debe existir el personId (campo 'data') para poder actualizar en HikCentral
+if (empty($cliente['data'])) {
+  echo json_encode(["success"=>false,"error"=>"El cliente no tiene personId (data) en HikCentral."]); exit;
+}
 // ---- ¿Este pago es el más reciente por fecha_fin?
 $stmt = $conexion->prepare("SELECT MAX(fecha_fin) AS max_fin FROM pagos WHERE cliente_id = ?");
 $stmt->bind_param("i", $clienteId);
@@ -84,7 +88,7 @@ if ($esUltimo) {
         "beginTime"        => (new DateTime($beginFijoRaw))->format("Y-m-d\TH:i:sP"),
         "endTime"          => (new DateTime($nuevaFinSQL))->format("Y-m-d\TH:i:sP")
       ]);
-      if (!isset($resp["code"]) || $resp["code"] !== "0") {
+      if (!isset($resp["code"]) || (string)$resp["code"] !== "0") {
         echo json_encode(["success"=>false,"error"=>"Error en HikCentral (mover Fin).","hik"=>$resp]);
         exit;
       }
@@ -136,7 +140,7 @@ try {
     "endTime"          => $finISO
   ]);
 
-  if (!isset($resp["code"]) || $resp["code"] !== "0") {
+  if (!isset($resp["code"]) || (string)$resp["code"] !== "0") {
     echo json_encode([
       "success"=>false,
       "error"=>"Error en HikCentral (FechaIngreso).",
