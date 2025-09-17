@@ -18,11 +18,13 @@ try {
     $spreadsheet = IOFactory::load($tmpFilePath);
     $sheet = $spreadsheet->getActiveSheet();
 
-    $config = (object) [
-        "userKey" => "21660945",
-        "userSecret" => "93iLwvnQkXAvlHw8wbQz",
-        "urlHikCentralAPI" => "http://127.0.0.1:9016"
-    ];
+    // Config desde BD
+    $config = api_cfg();
+    if (!$config) {
+        http_response_code(500);
+        echo json_encode(["error" => "Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."]);
+        exit;
+    }
 
     $listaAPI = Visitor::getPersonList($config);
     $personasAPI = $listaAPI['data']['list'] ?? [];

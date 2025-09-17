@@ -1,16 +1,18 @@
 <?php
 require_once 'conexion.php';
+require_once 'Visitor.php';
 header("Content-Type: application/json");
 
-$data = json_decode(file_get_contents("php://input"), true);
+$data   = json_decode(file_get_contents("php://input"), true);
 $action = $data["action"] ?? ($_SERVER["REQUEST_METHOD"] === "GET" ? "listar" : null);
 
+/* LISTAR */
 if ($action === "listar") {
-    $filtro = strtolower(trim($data["filtro"] ?? ""));
-    $sql = "SELECT id, nombre, apellido, telefono, email, tipo, face, data, emergencia, sangre, comentarios 
-        FROM clientes 
-        WHERE tipo = 'empleados' OR tipo = 'gerencia'";
-
+    // Evita warnings si $data es null con GET sin body
+    $filtro = strtolower(trim(is_array($data) ? ($data["filtro"] ?? "") : ""));
+    $sql = "SELECT id, nombre, apellido, telefono, email, tipo, face, data, emergencia, sangre, comentarios
+            FROM clientes
+            WHERE (tipo = 'empleados' OR tipo = 'gerencia')";
 
     if (!empty($filtro)) {
         $sql .= " AND (LOWER(nombre) LIKE ? OR LOWER(apellido) LIKE ? OR telefono LIKE ?)";
@@ -24,17 +26,24 @@ if ($action === "listar") {
     $stmt->execute();
     $res = $stmt->get_result();
     $empleados = [];
-
-    while ($row = $res->fetch_assoc()) {
-        $empleados[] = $row;
-    }
+    while ($row = $res->fetch_assoc()) $empleados[] = $row;
 
     echo json_encode(["success" => true, "empleados" => $empleados]);
     exit;
 }
 
-if ($data['action'] === 'actualizar') {
-    if (!isset($data['data'], $data['nombre'], $data['apellido'], $data['telefono'], $data['email'], $data['inicio'], $data['fin'], $data['orgIndexCode'], $data['orgName'])) {
+/* ACTUALIZAR */
+if (($data['action'] ?? null) === 'actualizar') {
+    // Acceso (opcional, pero recomendado)
+    session_start();
+    if (!in_array($_SESSION['usuario']['rol'] ?? '', ['admin','root'])) {
+        http_response_code(403);
+        echo json_encode(["success"=>false,"error"=>"No autorizado"]);
+        exit;
+    }
+
+    if (!isset($data['data'], $data['nombre'], $data['apellido'], $data['telefono'], $data['email'],
+               $data['inicio'], $data['fin'], $data['orgIndexCode'], $data['orgName'])) {
         echo json_encode(["success" => false, "error" => "Faltan datos"]);
         exit;
     }
@@ -42,7 +51,7 @@ if ($data['action'] === 'actualizar') {
     $stmt = $conexion->prepare("SELECT * FROM clientes WHERE data = ?");
     $stmt->bind_param("i", $data['data']);
     $stmt->execute();
-    $res = $stmt->get_result();
+    $res  = $stmt->get_result();
     $user = $res->fetch_assoc();
     $stmt->close();
 
@@ -50,14 +59,18 @@ if ($data['action'] === 'actualizar') {
         echo json_encode(["success" => false, "error" => "Empleado no encontrado"]);
         exit;
     }
-
-    // Convertir fechas a formato ISO para HikCentral
-    function convertirFechaHik($fechaLocal) {
-        $dt = new DateTime($fechaLocal, new DateTimeZone('America/Mexico_City'));
-        return $dt->format("Y-m-d\TH:i:sP");
+    if (empty($user['data'])) {
+        echo json_encode(["success"=>false,"error"=>"El empleado no tiene personId (data) en HikCentral."]);
+        exit;
     }
 
-    // Determinar tipo y departamento desde el texto del <select>
+    // Conversión de fechas a ISO para Hik
+    $convertirFechaHik = function ($fechaLocal) {
+        $dt = new DateTime($fechaLocal, new DateTimeZone('America/Mexico_City'));
+        return $dt->format("Y-m-d\TH:i:sP");
+    };
+
+    // Tipo/department desde el select
     $orgName = strtolower(trim($data["orgName"]));
     if ($orgName === 'empleados') {
         $tipo = 'empleados';
@@ -70,64 +83,27 @@ if ($data['action'] === 'actualizar') {
         $department = "All Departments/Gym Zero/Clientes";
     }
 
-    // === Regla de transición: empleado/gerencia -> clientes ===
-    // Si el registro original NO era clientes y AHORA será clientes,
-    // forzamos ventana corta: inicio = fecha de ingreso elegida, fin = inicio + 3 horas.
+    // Regla transición: empleados/gerencia -> clientes (ventana corta)
     $tipoOriginal = strtolower($user['tipo'] ?? '');
     if (($tipoOriginal === 'empleados' || $tipoOriginal === 'gerencia') && $tipo === 'clientes') {
         $tz = new DateTimeZone('America/Mexico_City');
-        $inicioDT = !empty($data['inicio'])
-            ? new DateTime($data['inicio'], $tz)
-            : new DateTime('now', $tz);
-        $finDT = clone $inicioDT;
-        $finDT->modify('+3 hours');
-
-        // Reescribimos para BD y para convertir a ISO posteriormente
-        $data['inicio'] = $inicioDT->format('Y-m-d\TH:i'); // formato de <input type="datetime-local">
+        $inicioDT = !empty($data['inicio']) ? new DateTime($data['inicio'], $tz) : new DateTime('now', $tz);
+        $finDT = (clone $inicioDT)->modify('+3 hours');
+        $data['inicio'] = $inicioDT->format('Y-m-d\TH:i');
         $data['fin']    = $finDT->format('Y-m-d\TH:i');
     }
-    // === Fin regla de transición ===
 
-    // Actualizar en base local
-    $emergencia  = $data['emergencia']  ?? null;
-    $sangre      = $data['sangre']      ?? null;
-    $comentarios = $data['comentarios'] ?? null;
+    // Config desde DB
+    $config = api_cfg();
+    if (!$config) {
+        http_response_code(500);
+        echo json_encode(["success"=>false,"error"=>"Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."]);
+        exit;
+    }
 
-    $stmt = $conexion->prepare("UPDATE clientes 
-        SET nombre = ?, apellido = ?, telefono = ?, email = ?, emergencia = ?, sangre = ?, comentarios = ?, Inicio = ?, Fin = ?, orgIndexCode = ?, tipo = ?, department = ? 
-        WHERE data = ?");
-
-    $stmt->bind_param("sssssssssissi", 
-        $data['nombre'],          // s
-        $data['apellido'],        // s
-        $data['telefono'],        // s
-        $data['email'],           // s
-        $emergencia,              // s
-        $sangre,                  // s
-        $comentarios,             // s
-        $data['inicio'],          // s
-        $data['fin'],             // s
-        $data['orgIndexCode'],    // i
-        $tipo,                    // s
-        $department,              // s
-        $data['data']             // i
-    );
-
-    $stmt->execute();
-    $stmt->close();
-
-    // Configuración y actualización en HikCentral
-    require_once 'Encrypter.php';
-    require_once 'Visitor.php';
-
-    $config = (object)[
-        "userKey" => "21660945",
-        "userSecret" => "93iLwvnQkXAvlHw8wbQz",
-        "urlHikCentralAPI" => "http://127.0.0.1:9016"
-    ];
-
+    // API primero
     $payload = [
-        "personId"         => (string)$data["data"],
+        "personId"         => (string)$user["data"],
         "personCode"       => $user["personCode"],
         "personFamilyName" => $data["apellido"],
         "personGivenName"  => $data["nombre"],
@@ -135,27 +111,52 @@ if ($data['action'] === 'actualizar') {
         "gender"           => (int)$user["genero"],
         "phoneNo"          => $data["telefono"],
         "email"            => $data["email"],
-        "beginTime"        => convertirFechaHik($data["inicio"]),
-        "endTime"          => convertirFechaHik($data["fin"])
+        "beginTime"        => $convertirFechaHik($data["inicio"]),
+        "endTime"          => $convertirFechaHik($data["fin"])
     ];
-
     $response = Visitor::updateUser($config, $payload);
-
-    if (isset($response["code"]) && $response["code"] === "0") {
-        echo json_encode(["success" => true, "msg" => "Empleado actualizado correctamente."]);
-    } else {
-        echo json_encode(["success" => false, "error" => "Error en API HikCentral: " . ($response["msg"] ?? "Desconocido")]);
+    if (!isset($response["code"]) || (string)$response["code"] !== "0") {
+        echo json_encode(["success"=>false,"error"=>"Error en API HikCentral: ".($response["msg"] ?? "Desconocido")]);
+        exit;
     }
 
+    // Luego BD
+    $emergencia  = $data['emergencia']  ?? null;
+    $sangre      = $data['sangre']      ?? null;
+    $comentarios = $data['comentarios'] ?? null;
+
+    $stmt = $conexion->prepare("UPDATE clientes
+        SET nombre = ?, apellido = ?, telefono = ?, email = ?, emergencia = ?, sangre = ?, comentarios = ?,
+            Inicio = ?, Fin = ?, orgIndexCode = ?, tipo = ?, department = ?
+        WHERE data = ?");
+    // orgIndexCode es string
+    $stmt->bind_param(
+        "ssssssssssssi",
+        $data['nombre'],
+        $data['apellido'],
+        $data['telefono'],
+        $data['email'],
+        $emergencia,
+        $sangre,
+        $comentarios,
+        $data['inicio'],
+        $data['fin'],
+        $data['orgIndexCode'],
+        $tipo,
+        $department,
+        $data['data']
+    );
+    $stmt->execute();
+    $stmt->close();
+
+    echo json_encode(["success" => true, "msg" => "Empleado actualizado correctamente."]);
     exit;
 }
 
-
-
-
-
-if ($data['action'] === 'obtener' && isset($data['id'])) {
-    $stmt = $conexion->prepare("SELECT nombre, apellido, telefono, email,face, tipo, Inicio, Fin, data, orgIndexCode, emergencia, sangre, comentarios FROM clientes WHERE data = ?");
+/* OBTENER */
+if (($data['action'] ?? null) === 'obtener' && isset($data['id'])) {
+    $stmt = $conexion->prepare("SELECT nombre, apellido, telefono, email, face, tipo, Inicio, Fin, data, orgIndexCode, emergencia, sangre, comentarios
+                                FROM clientes WHERE data = ?");
     $stmt->bind_param("i", $data['id']);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -167,16 +168,15 @@ if ($data['action'] === 'obtener' && isset($data['id'])) {
     exit;
 }
 
-
+/* ELIMINAR */
 if ($action === "eliminar") {
     if (!isset($data["id"])) {
         echo json_encode(["success" => false, "error" => "ID no recibido"]);
         exit;
     }
 
-    $stmt = $conexion->prepare("DELETE FROM clientes WHERE id = ? AND tipo = 'empleado'");
+    $stmt = $conexion->prepare("DELETE FROM clientes WHERE id = ? AND tipo IN ('empleados','gerencia')");
     $stmt->bind_param("i", $data["id"]);
-
     if ($stmt->execute()) {
         echo json_encode(["success" => true, "msg" => "Empleado eliminado correctamente."]);
     } else {
@@ -186,3 +186,4 @@ if ($action === "eliminar") {
 }
 
 echo json_encode(["success" => false, "error" => "Acción no válida"]);
+

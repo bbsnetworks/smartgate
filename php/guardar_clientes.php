@@ -1,3 +1,5 @@
+muy bien, ahora necesito lo mismo para guardar_clientes
+
 <?php
 require 'conexion.php';
 set_time_limit(300);
@@ -11,11 +13,12 @@ if (!$data || !is_array($data)) {
     exit;
 }
 
-$config = (object) [
-    "userKey" => "21660945",
-    "userSecret" => "93iLwvnQkXAvlHw8wbQz",
-    "urlHikCentralAPI" => "http://127.0.0.1:9016"
-];
+$config = api_cfg();
+if (!$config) {
+  http_response_code(500);
+  echo json_encode(["error"=>"Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."]);
+  exit;
+}
 
 $insertados = 0;
 
