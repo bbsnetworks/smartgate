@@ -4,11 +4,12 @@ require_once 'conexion.php';
 session_start();
 header('Content-Type: application/json');
 
-$config = (object)[
-  "userKey" => "21660945",
-  "userSecret" => "93iLwvnQkXAvlHw8wbQz",
-  "urlHikCentralAPI" => "http://127.0.0.1:9016"
-];
+$config = api_cfg();
+if (!$config) {
+  http_response_code(500);
+  echo json_encode(["success"=>false, "error"=>"Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."]);
+  exit;
+}
 
 $puerta = $_POST['puerta'] ?? 'principal';
 
@@ -60,14 +61,15 @@ $ch = curl_init();
 curl_setopt_array($ch, [
   CURLOPT_URL => $fullUrl,
   CURLOPT_RETURNTRANSFER => 1,
-  CURLOPT_TIMEOUT => 10,
-  CURLOPT_SSL_VERIFYPEER => false,
-  CURLOPT_SSL_VERIFYHOST => false,
+  CURLOPT_TIMEOUT => Visitor::TIMEOUT,
   CURLOPT_POST => 1,
   CURLOPT_HTTPHEADER => $headers,
   CURLOPT_POSTFIELDS => $payload,
 ]);
-
+if (stripos($fullUrl, 'https://') !== 0) {
+  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+  curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+}
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $err      = curl_error($ch);

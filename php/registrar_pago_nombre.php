@@ -113,12 +113,15 @@ if (!empty($cliente['Inicio'])) {
   $beginFijo = $beginSQL; // fallback
 }
 
-// ====== Config Hik ======
-$config = (object) [
-  "userKey" => "21660945",
-  "userSecret" => "93iLwvnQkXAvlHw8wbQz",
-  "urlHikCentralAPI" => "http://127.0.0.1:9016"
-];
+$config = api_cfg();
+if (!$config) {
+  http_response_code(500);
+  echo json_encode([
+    "success" => false,
+    "error"   => "Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."
+  ]);
+  exit;
+}
 
 // Guardar valores previos por si hay rollback
 $prevInicio = $cliente['Inicio'] ?: $beginFijo;
@@ -138,10 +141,19 @@ try {
     "beginTime"        => (new DateTime($beginFijo))->format("Y-m-d\TH:i:sP"),
     "endTime"          => (new DateTime($nuevaFinGlobal))->format("Y-m-d\TH:i:sP")
   ]);
-  if (!isset($resp["code"]) || $resp["code"] !== "0") {
-    echo json_encode(["success" => false, "error" => "Error actualizando en HikCentral", "hikcentral_response" => $resp]);
-    exit;
-  }
+  if (!isset($resp["code"]) || (string)$resp["code"] !== "0") {
+  echo json_encode([
+    "success" => false,
+    "error"   => "Error actualizando en HikCentral",
+    "hikcentral_response" => $resp
+  ]);
+  exit;
+}
+if (empty($cliente['data'])) {
+  echo json_encode(["success" => false, "error" => "El cliente no tiene personId (data) en HikCentral."]);
+  exit;
+}
+
 } catch (Exception $e) {
   echo json_encode(["success" => false, "error" => "Excepción en HikCentral: " . $e->getMessage()]); exit;
 }

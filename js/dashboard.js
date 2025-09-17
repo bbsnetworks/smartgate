@@ -205,6 +205,125 @@ async function verificarSuscripcion(retornarSolo = false) {
   if (retornarSolo) return { mensaje, clase, mostrarAgregar };
   return { mensaje, clase, mostrarAgregar };
 }
+async function modalApiConfig() {
+  // 1) Leer si existe la configuración
+  let existe = false;
+  let prev = { userKey: '', userSecret: '', urlHikCentralAPI: '' };
+  try {
+    const r = await fetch('php/api_config_controller.php?action=obtener', { cache: 'no-store' });
+    const d = await r.json();
+    if (d.ok && d.data) {
+      existe = true;
+      prev = d.data;
+    }
+  } catch (e) {
+    // no bloquear si falla; permitimos crear
+  }
+
+  // 2) Mostrar modal con valores (si existen)
+  const denyText = existe ? 'Eliminar' : undefined;
+  const showDenyButton = !!existe;
+
+  Swal.fire({
+    title: 'Configurar API HikCentral',
+    html: `
+      <div class="flex flex-col gap-2 text-left">
+        <label class="text-sm text-slate-300">User Key</label>
+        <input id="api_userKey" class="swal2-input" placeholder="11111111" value="${escapeHtml(prev.userKey || '')}">
+        <label class="text-sm text-slate-300 mt-2">User Secret</label>
+        <input id="api_userSecret" type="password" class="swal2-input" placeholder="••••••••••" value="${escapeHtml(prev.userSecret || '')}">
+        <label class="text-sm text-slate-300 mt-2">URL HikCentral API</label>
+        <input id="api_url" class="swal2-input" placeholder="http://127.0.0.1:9016" value="${escapeHtml(prev.urlHikCentralAPI || '')}">
+        ${prev.updated_at ? `<small class="text-slate-400 mt-1">Última actualización: ${prev.updated_at}</small>` : '' }
+      </div>
+    `,
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: 'Guardar',
+    cancelButtonText: 'Cancelar',
+    showDenyButton,
+    denyButtonText: denyText,
+    background: '#1e293b',
+    color: '#f8fafc',
+    confirmButtonColor: '#10b981',
+    denyButtonColor: '#ef4444',
+    preConfirm: () => {
+      const userKey = document.getElementById('api_userKey').value.trim();
+      const userSecret = document.getElementById('api_userSecret').value.trim();
+      const urlHikCentralAPI = document.getElementById('api_url').value.trim();
+
+      if (!userKey || !userSecret || !urlHikCentralAPI) {
+        Swal.showValidationMessage('Todos los campos son obligatorios');
+        return false;
+      }
+      if (!/^https?:\/\/.+/i.test(urlHikCentralAPI)) {
+        Swal.showValidationMessage('La URL debe comenzar con http:// o https://');
+        return false;
+      }
+      return { userKey, userSecret, urlHikCentralAPI };
+    }
+  }).then(async (res) => {
+    if (res.isConfirmed && res.value) {
+      await guardarApiConfig(res.value);
+    } else if (res.isDenied && existe) {
+      await eliminarApiConfig();
+    }
+  });
+}
+
+// Guardar (insert/overwrite id=1)
+async function guardarApiConfig(payload) {
+  try {
+    const r = await fetch('php/api_config_controller.php?action=guardar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      Swal.fire({ icon: 'success', title: 'Listo', text: 'Configuración guardada.', background: '#1e293b', color: '#f8fafc' });
+    } else {
+      Swal.fire({ icon: 'error', title: 'Error', text: d.msg || 'No se pudo guardar', background: '#1e293b', color: '#f8fafc' });
+    }
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: 'Error', text: 'Error de red/servidor', background: '#1e293b', color: '#f8fafc' });
+  }
+}
+
+// Eliminar (si existe)
+async function eliminarApiConfig() {
+  const confirm = await Swal.fire({
+    title: '¿Eliminar configuración?',
+    text: 'Se eliminarán las credenciales guardadas.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, eliminar',
+    cancelButtonText: 'Cancelar',
+    background: '#1e293b',
+    color: '#f8fafc',
+    confirmButtonColor: '#ef4444'
+  });
+  if (!confirm.isConfirmed) return;
+
+  try {
+    const r = await fetch('php/api_config_controller.php?action=eliminar', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      Swal.fire({ icon: 'success', title: 'Eliminada', text: 'La configuración fue eliminada.', background: '#1e293b', color: '#f8fafc' });
+    } else {
+      Swal.fire({ icon: 'error', title: 'Error', text: d.msg || 'No se pudo eliminar', background: '#1e293b', color: '#f8fafc' });
+    }
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: 'Error', text: 'Error de red/servidor', background: '#1e293b', color: '#f8fafc' });
+  }
+}
+
+// Utilidad simple para evitar inyectar HTML en inputs del modal
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (m) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
 
 
 

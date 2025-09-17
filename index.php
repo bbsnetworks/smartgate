@@ -90,6 +90,11 @@
             <a onclick="modalSuscripcion()" class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
               <i class="bi bi-key icon-20 text-amber-400"></i><span>Administrar Suscripción</span>
             </a>
+            <a onclick="modalApiConfig()" 
+              class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
+              <i class="bi bi-gear-wide-connected icon-20 text-amber-400"></i>
+              <span>Configurar API</span>
+            </a>
           <?php endif; ?>
           <a onclick="modalBranding()"
            class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
