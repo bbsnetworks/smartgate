@@ -12,18 +12,22 @@ if (!$personId) {
     exit();
 }
 
-$config = (object) [
-    "userKey" => "21660945",
-    "userSecret" => "93iLwvnQkXAvlHw8wbQz",
-    "urlHikCentralAPI" => "http://127.0.0.1:9016"
-];
+// Credenciales desde DB
+$config = api_cfg();
+if (!$config) {
+  http_response_code(500);
+  echo json_encode(["error" => "Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."]);
+  exit;
+}
 
 try {
     $response = Visitor::deleteUser($config, $personId); // usa personId ahora
 
-    if ($response["code"] === "0") {
+        if (isset($response["code"]) && (string)$response["code"] === "0") {
+        // En tu BD, 'data' es un entero (id de HikCentral) según add_user.php
+        $pid = (int)$personId;
         $stmt = $conexion->prepare("DELETE FROM clientes WHERE data = ?");
-        $stmt->bind_param("i", $personId);
+        $stmt->bind_param("i", $pid);
         $stmt->execute();
         $stmt->close();
 
@@ -37,8 +41,8 @@ try {
     } else {
         echo json_encode([
             "error" => "Error al eliminar en HikCentral",
-            "code" => $response["code"],
-            "msg" => $response["msg"]
+            "code" => $response["code"] ?? null,
+            "msg" => $response["msg"] ?? "Sin mensaje"
         ]);
     }
 } catch (Exception $e) {

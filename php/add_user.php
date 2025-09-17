@@ -48,8 +48,11 @@ class User {
         curl_setopt($ch, CURLOPT_URL, $fullUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+       // Desactiva verificación SSL solo si NO es https
+       if (stripos($fullUrl, 'https://') !== 0) {
+           curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+           curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+       }
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
@@ -66,12 +69,13 @@ class User {
     }
 }
 
-// Configuración y lectura de datos
-$config = (object) [
-    "userKey"          => "21660945",
-    "userSecret"       => "93iLwvnQkXAvlHw8wbQz",
-    "urlHikCentralAPI" => "http://127.0.0.1:9016"
-];
+// Config desde DB
+$config = api_cfg();
+if (!$config) {
+ http_response_code(500);
+ echo json_encode(["error" => "Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."]);
+ exit;
+}
 
 $userData = json_decode(file_get_contents("php://input"), true);
 
@@ -108,7 +112,7 @@ try {
         "endTime"   => $finISO
     ]));
 
-    if (isset($response["code"]) && $response["code"] === "0" && $response["msg"] === "Success") {
+    if (isset($response["code"]) && (string)$response["code"] === "0") {
         $dataField = isset($response["data"]) && is_numeric($response["data"]) ? intval($response["data"]) : null;
 
         if ($dataField === null) {
@@ -185,9 +189,6 @@ try {
 
         if (isset($assignResponse["code"]) && $assignResponse["code"] === "0") {
             $deviceResponse = Visitor::sendUserToDevice($config);
-
-            session_start();
-            $_SESSION['cambios_pendientes'] = true;
 
             echo json_encode([
                 "msg" => "Usuario agregado y asignado al grupo. Pendiente enviar al dispositivo.",
