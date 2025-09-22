@@ -295,8 +295,10 @@ function modalBranding() {
 async function cargarUsuariosGlobal() {
   try {
     const r = await fetch('php/usuarios_dashboard.php', { cache: 'no-store' });
-    const data = await r.json(); // {rol, uid, opciones:[{value,text,disabled}]}
+    const data = await r.json(); // {rol, uid, opciones:[...]}
+    CURRENT_UID = Number(data.uid || 0) || 0; // ⬅️ guarda el uid actual
     const sel = document.getElementById('sel-usuario-global');
+    
     if (!sel) return;
 
     sel.innerHTML = '';
@@ -325,5 +327,140 @@ async function cargarTodo() {
   await cargarKPIs();
   await cargarSerie('insc', document.getElementById('res-insc')?.value || 'mes', 'chart-insc');
   await cargarSerie('prod', document.getElementById('res-prod')?.value || 'mes', 'chart-prod');
+  await cargarCajaCard(); 
 }
 
+// === Caja ===
+let CURRENT_UID = 0; // lo llenamos al cargar usuarios
+
+function formatoMonedaMX(n) {
+  const num = Number(n || 0);
+  return num.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 });
+}
+
+function formatFechaCorta(fechaStr) {
+  if (!fechaStr) return 'Sin actualizar';
+  // fechaStr viene en 'YYYY-MM-DD HH:MM:SS'
+  const d = new Date(fechaStr.replace(' ', 'T'));
+  if (isNaN(d.getTime())) return fechaStr;
+  return d.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+// Resuelve el usuario objetivo a partir del filtro global
+function getTargetUserId() {
+  if (USER_FILTER === 'me') return CURRENT_UID;
+  if (USER_FILTER === 'all') return null; // no aplica caja
+  const id = parseInt(USER_FILTER, 10);
+  return Number.isFinite(id) && id > 0 ? id : CURRENT_UID;
+}
+
+async function cargarCajaCard() {
+  const montoEl = document.getElementById('kpi-caja-monto');
+  const updEl   = document.getElementById('kpi-caja-actualizado');
+  const btn     = document.getElementById('btn-caja-editar');
+
+  if (!montoEl || !updEl || !btn) return;
+
+  // Si filtro es "all", no aplica caja
+  if (USER_FILTER === 'all') {
+    montoEl.textContent = '—';
+    updEl.textContent   = 'Selecciona un usuario';
+    btn.disabled = true;
+    return;
+  }
+
+  const url = new URL('smartgate/php/caja_controller.php', location.origin);
+  url.searchParams.set('action', 'get');
+  url.searchParams.set('user', USER_FILTER); // 'me' o id
+
+  try {
+    const r = await fetch(url.toString(), { cache: 'no-store' });
+    const data = await r.json();
+
+    if (!data.ok) throw new Error(data.error || 'Error al cargar caja');
+
+    const info = data.data || { monto:0, fecha_actualizacion:null };
+    montoEl.textContent = formatoMonedaMX(info.monto);
+    const fecha = info.fecha_actualizacion;
+if (fecha) {
+  const d = new Date(fecha.replace(' ', 'T'));
+  const hoy = new Date();
+  const mismoDia = d.getFullYear() === hoy.getFullYear() &&
+                   d.getMonth() === hoy.getMonth() &&
+                   d.getDate() === hoy.getDate();
+
+  updEl.innerHTML = mismoDia
+    ? `Última actualización: ${formatFechaCorta(info.fecha_actualizacion)}`
+    : `Última actualización: ${formatFechaCorta(info.fecha_actualizacion)} 
+       <i class="bi bi-exclamation-triangle-fill text-amber-400 ml-1" 
+          title="No has actualizado tu caja hoy"></i>`;
+} else {
+  updEl.textContent = 'Sin actualizar';
+}
+
+    btn.disabled = !data.allowEdit;
+    btn.onclick = () => abrirModalEditarCaja(info.monto);
+
+  } catch (e) {
+    console.error(e);
+    montoEl.textContent = '—';
+    updEl.textContent = 'Error al cargar';
+    btn.disabled = true;
+  }
+}
+
+function validarMontoStr(s) {
+  // aceptar "123", "123.4", "123.45" y recortar a 2 decimales
+  if (typeof s !== 'string') return null;
+  s = s.replace(',', '.').trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  return parseFloat(parseFloat(s).toFixed(2));
+}
+
+function abrirModalEditarCaja(montoActual) {
+  swalcard.fire({
+    title: 'Editar monto de caja',
+    html: `
+      <div class="text-left">
+        <label class="block text-sm mb-1 text-slate-300">Monto (MXN)</label>
+        <input id="cajaMonto" type="text" class="swal2-input !w-full" placeholder="0.00" value="${(Number(montoActual)||0).toFixed(2)}">
+        <p class="text-xs text-slate-400 mt-2">Este monto representa lo que dejas en caja. Se guarda por usuario.</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'Guardar',
+    cancelButtonText: 'Cancelar',
+    focusConfirm: false,
+    preConfirm: () => {
+      const val = document.getElementById('cajaMonto').value;
+      const n = validarMontoStr(val);
+      if (n === null) {
+        Swal.showValidationMessage('Ingresa un monto válido con hasta 2 decimales (ej. 1234.56)');
+        return false;
+      }
+      return { monto: n };
+    }
+  }).then(async (res) => {
+    if (!res.isConfirmed) return;
+    const { monto } = res.value;
+
+    try {
+      const body = new FormData();
+      body.append('action', 'save');
+      body.append('user', USER_FILTER); // 'me' o id
+      body.append('monto', String(monto));
+
+      const rq = await fetch('php/caja_controller.php', { method: 'POST', body });
+      const data = await rq.json();
+
+      if (data.ok) {
+        await Swal.fire('✔️ Guardado', 'Monto de caja actualizado', 'success');
+        await cargarCajaCard();
+      } else {
+        Swal.fire('Error', data.error || 'No se pudo guardar', 'error');
+      }
+    } catch (e) {
+      Swal.fire('Error', 'Fallo la petición', 'error');
+    }
+  });
+}

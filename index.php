@@ -66,6 +66,9 @@
           <a href="vistas/lista-pagos.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-receipt icon-20 text-indigo-400"></i><span>Lista de Pagos</span>
           </a>
+          <a href="vistas/proveedores.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            <i class="bi bi-people-fill text-indigo-400"></i><span>Proveedores</span>
+          </a>
         </div>
       </div>
 
@@ -153,10 +156,27 @@
         </div>
       
         <!-- GRID de KPIs -->
-        <section id="kpis" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6
-         auto-rows-[minmax(180px,auto)]">
+        <section id="kpis" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-card">
           <!-- Activos -->
-          <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
+           <!-- Caja -->
+<article id="card-caja" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
+  <div class="flex items-center justify-between">
+    <h3 class="font-semibold text-slate-300">Caja</h3>
+    <i class="bi bi-safe2 icon-20 text-emerald-400"></i>
+  </div>
+
+  <p id="kpi-caja-monto" class="mt-3 text-4xl font-extrabold">—</p>
+  <small id="kpi-caja-actualizado" class="block text-slate-400">—</small>
+
+  <div class="mt-4">
+    <button id="btn-caja-editar"
+      class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
+      Editar monto
+    </button>
+  </div>
+</article>
+
+          <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow" style="grid-auto-rows:minmax(180px,auto)">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-slate-300">Clientes activos</h3>
               <i class="bi bi-person-check icon-20 text-green-400"></i>
@@ -179,7 +199,7 @@
           <article id="card-aniversarios"
             class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow
                    h-full flex flex-col
-                   xl:col-start-2 xl:row-span-2">
+                   xl:col-start-3 xl:row-span-2">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-slate-300">Aniversarios (hoy)</h3>
               <i class="bi bi-cake2 icon-20 text-amber-400"></i>
@@ -230,7 +250,14 @@
             <p id="kpi-ventas" class="mt-3 text-4xl font-extrabold">—</p>
             <small id="kpi-ventas-det" class="text-slate-400"></small>
           </article>
-
+<!-- Abrir puerta -->
+          <article id="card-abrir-puerta" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow cursor-pointer hover:bg-slate-700/70 transition">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-slate-300">Abrir puerta</h3>
+              <i class="bi bi-door-open icon-20 text-green-400"></i>
+            </div>
+            <p class="mt-3 text-sm text-slate-400">Click para enviar la orden.</p>
+          </article>
           <!-- Inscripciones -->
           <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
             <div class="flex items-center justify-between">
@@ -241,14 +268,7 @@
             <small id="kpi-insc-det" class="text-slate-400"></small>
           </article>
 
-          <!-- Abrir puerta -->
-          <article id="card-abrir-puerta" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow cursor-pointer hover:bg-slate-700/70 transition">
-            <div class="flex items-center justify-between">
-              <h3 class="font-semibold text-slate-300">Abrir puerta</h3>
-              <i class="bi bi-door-open icon-20 text-green-400"></i>
-            </div>
-            <p class="mt-3 text-sm text-slate-400">Click para enviar la orden.</p>
-          </article>
+          
 
           <!-- NUEVA: Monto inscripciones (hoy) -->
           <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">

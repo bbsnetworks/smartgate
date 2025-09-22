@@ -13,35 +13,21 @@ async function buscarReportes() {
   const container = document.getElementById("reporteContainer");
   container.innerHTML = "";
 
-  let fecha = "",
-    inicio = "",
-    fin = "";
+  let fecha = "", inicio = "", fin = "";
 
   if (tipo === "dia") {
     fecha = document.getElementById("fecha_dia").value;
-    if (!fecha)
-      return swalError.fire(
-        "Falta fecha",
-        "Selecciona una fecha para el reporte por día.",
-        "warning"
-      );
+    if (!fecha) return swalError.fire("Falta fecha","Selecciona una fecha para el reporte por día.","warning");
   } else if (tipo === "mes") {
     fecha = document.getElementById("fecha_mes").value;
-    if (!fecha)
-      return swalError.fire("Falta mes", "Selecciona un mes.", "warning");
+    if (!fecha) return swalError.fire("Falta mes","Selecciona un mes.","warning");
   } else if (tipo === "anio") {
     fecha = document.getElementById("fecha_anio").value;
-    if (!fecha)
-      return swalError.fire("Falta año", "Selecciona un año.", "warning");
+    if (!fecha) return swalError.fire("Falta año","Selecciona un año.","warning");
   } else if (tipo === "rango") {
     inicio = document.getElementById("rango_inicio").value;
-    fin = document.getElementById("rango_fin").value;
-    if (!inicio || !fin)
-      return swalError.fire(
-        "Falta rango",
-        "Selecciona ambas fechas del rango.",
-        "warning"
-      );
+    fin    = document.getElementById("rango_fin").value;
+    if (!inicio || !fin) return swalError.fire("Falta rango","Selecciona ambas fechas del rango.","warning");
   }
 
   swalInfo.fire({
@@ -53,78 +39,43 @@ async function buscarReportes() {
 
   try {
     const params = new URLSearchParams({ usuario, tipo, fecha, inicio, fin });
-    const response = await fetch(
-      `../php/obtener_reportes.php?${params.toString()}`
-    );
+    const response = await fetch(`../php/obtener_reportes.php?${params.toString()}`);
     const data = await response.json();
 
     Swal.close();
 
     if (!data.success) {
-      return swalError.fire(
-        "Error",
-        data.error || "No se pudo obtener la información.",
-        "error"
-      );
+      return swalError.fire("Error", data.error || "No se pudo obtener la información.", "error");
     }
 
-    const {
-      total_pagos,
-      total_productos,
-      cantidad_pagos,
-      cantidad_productos,
-      total_general,
-    } = data;
+    const { total_pagos, total_productos, cantidad_pagos, cantidad_productos, total_general } = data;
 
-    container.innerHTML += crearCard(
-      "Total en Suscripciones",
-      `$${parseFloat(total_pagos).toFixed(2)}`,
-      "bi-currency-dollar",
-      "text-blue-600",
-      "bg-sky-100"
-    );
-    container.innerHTML += crearCard(
-      "Suscripciones Registradas",
-      cantidad_pagos,
-      "bi-people-fill",
-      "text-blue-500",
-      "bg-sky-100"
-    );
+    container.innerHTML += crearCard("Total en Suscripciones", `$${parseFloat(total_pagos).toFixed(2)}`, "bi-currency-dollar", "text-blue-600", "bg-sky-100");
+    container.innerHTML += crearCard("Suscripciones Registradas", cantidad_pagos, "bi-people-fill", "text-blue-500", "bg-sky-100");
 
-    container.innerHTML += crearCard(
-      "Total en Productos Vendidos",
-      `$${parseFloat(total_productos).toFixed(2)}`,
-      "bi-cart-check",
-      "text-green-600",
-      "bg-stone-200"
-    );
-    container.innerHTML += crearCard(
-      "Ventas Registradas",
-      cantidad_productos,
-      "bi-boxes",
-      "text-green-500",
-      "bg-stone-200"
-    );
+    container.innerHTML += crearCard("Total en Productos Vendidos", `$${parseFloat(total_productos).toFixed(2)}`, "bi-cart-check", "text-green-600", "bg-stone-200");
+    container.innerHTML += crearCard("Ventas Registradas", cantidad_productos, "bi-boxes", "text-green-500", "bg-stone-200");
 
-    container.innerHTML += crearCard(
-      "Total General",
-      `$${parseFloat(total_general).toFixed(2)}`,
-      "bi-coin",
-      "text-indigo-600",
-      "bg-green-200"
-    );
+    container.innerHTML += crearCard("Total General", `$${parseFloat(total_general).toFixed(2)}`, "bi-coin", "text-indigo-600", "bg-green-200");
+
+    // ← Solo si hubo datos:
+    if (tipo === "dia") {
+  await renderCaja({ usuario, tipo, fecha, inicio, fin });
+}
 
     agregarBotonPDF();
   } catch (error) {
     console.error(error);
     swalError.fire("Error", "No se pudo conectar con el servidor.", "error");
+    return; // ← evita continuar
   }
 }
+
 
 function crearCard(titulo, valor, icono, iconColor, bgColor) {
   return `
     <div class="${bgColor} rounded-xl shadow p-6 text-center">
-      <i class="fas ${icono} text-4xl ${iconColor} mb-3"></i>
+      <i class="bi ${icono} text-4xl ${iconColor} mb-3"></i>
       <h2 class="text-lg font-semibold text-gray-700">${titulo}</h2>
       <p class="text-2xl font-bold text-gray-800 mt-2">${valor}</p>
     </div>
@@ -389,6 +340,61 @@ async function generarPDFReporte() {
       }
     });
   };
+  // === CAJA en PDF (solo efectivo) ===
+const renderCajaPDF = () => {
+  // A partir del mismo "data" ya cargado:
+  const efectivoSuscripciones = (data.pagos || [])
+    .filter(p => (p.metodo || "").toLowerCase() === "efectivo")
+    .reduce((sum, p) => sum + (parseFloat(p.monto || 0) - parseFloat(p.descuento || 0)), 0);
+
+  const efectivoVentas = (data.ventas || [])
+    .filter(v => (v.metodo_pago || "").toLowerCase() === "efectivo")
+    .reduce((sum, v) => sum + (v.productos || [])
+      .reduce((s, pr) => s + parseFloat(pr.total || 0), 0), 0);
+
+  const esperado = (efectivoSuscripciones || 0) + (efectivoVentas || 0);
+
+  // Lo que está en la UI
+  const dejadoInput = document.getElementById("monto_caja");
+  const dejado = Number(dejadoInput?.value || 0);
+
+  // Regla: SUMAR
+  const totalEntregar = esperado + dejado;
+
+  // Layout
+  y = ensureSpace(doc, y, 72);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(...PALETTE.title);
+  doc.text("Caja del día (solo efectivo)", 10, y);
+  y += 6;
+
+  const boxX = 10, boxW = 190, boxH = 46;
+  y = ensureSpace(doc, y, boxH + 18);
+  doc.setDrawColor(...PALETTE.stroke);
+  doc.setFillColor(245, 249, 255);
+  doc.roundedRect(boxX, y, boxW, boxH, 3, 3, "FD");
+
+  let yC = y + 12;
+  const rightBound = boxX + boxW - 8;
+
+  yC = lineAmount(doc, boxX + 8, yC, "Efectivo esperado", esperado, rightBound);
+  yC = lineAmount(doc, boxX + 8, yC, "Dejado en caja", dejado, rightBound);
+
+  doc.setDrawColor(...PALETTE.stroke);
+  doc.setLineWidth(0.3);
+  doc.line(boxX + 8, yC + 2, boxX + boxW - 8, yC + 2);
+  yC += 8;
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...PALETTE.ok);
+  const label = "TOTAL A ENTREGAR";
+  const amount = fmtMoney(totalEntregar);
+  doc.text(label, boxX + 8, yC);
+  doc.text(amount, boxX + boxW - 8 - doc.getTextWidth(amount), yC);
+
+  y += boxH + 18;
+};
 
   // === Renderizar resumen de totales ===
   const renderTotales = () => {
@@ -638,7 +644,9 @@ const totalVentasCalc = ventaEfectivo + ventaTarjeta + ventaTransferencia;
   renderVentas("Ventas de Productos - Transferencia:", ventas.transferencia);
 
   renderTotales();
-
+  if (tipo === "dia") {
+    renderCajaPDF();
+  }
   // Abrir PDF
   window.open(doc.output("bloburl"), "_blank");
 }
@@ -703,3 +711,163 @@ async function obtenerLogoDesdeDB() {
     return await cargarImagenBase64("../img/logo-gym.webp"); // fallback
   }
 }
+// ==== CAJA: cálculo de efectivo esperado usando obtener_reportes_detalle.php ====
+async function getEfectivoEsperado(params) {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`../php/obtener_reportes_detalle.php?${qs}`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || "No se pudo calcular el efectivo.");
+
+  // Suscripciones en efectivo (monto - descuento)
+  const efectivoSuscripciones = (data.pagos || [])
+    .filter(p => (p.metodo || "").toLowerCase() === "efectivo")
+    .reduce((sum, p) => sum + (parseFloat(p.monto || 0) - parseFloat(p.descuento || 0)), 0);
+
+  // Ventas en efectivo
+  const efectivoVentas = (data.ventas || [])
+    .filter(v => (v.metodo_pago || "").toLowerCase() === "efectivo")
+    .reduce((sum, v) => sum + (v.productos || [])
+      .reduce((s, pr) => s + parseFloat(pr.total || 0), 0), 0);
+
+  return {
+    esperado: (efectivoSuscripciones || 0) + (efectivoVentas || 0)
+  };
+}
+
+// ==== CAJA: renderizar card (UI) con caja_controller.php y permisos ====
+async function renderCaja(params) {
+  const container = document.getElementById("reporteContainer");
+
+  const card = document.createElement("div");
+  card.className = "col-span-1 md:col-span-2 bg-slate-900/40 border border-slate-700 rounded-2xl p-5";
+  card.innerHTML = crearCajaHTML();
+  container.appendChild(card);
+
+  // 1) Efectivo esperado (solo efectivo)
+  let esperado = 0;
+  try {
+    const ef = await getEfectivoEsperado(params);
+    esperado = ef.esperado;
+  } catch (e) {
+    console.error(e);
+    card.querySelector("[data-caja-warn]").classList.remove("hidden");
+  }
+
+  const $esperado = card.querySelector("[data-efectivo-esperado]");
+  const $dejado   = card.querySelector("#monto_caja");
+  const $entregar = card.querySelector("[data-por-entregar]");
+  const selUsuario = document.getElementById("usuario");
+
+  $esperado.textContent = `$${esperado.toFixed(2)}`;
+
+  // Worker = select deshabilitado (viene así desde PHP)
+  const esWorker = selUsuario.disabled === true;
+
+  // Controla si se puede editar (worker: no; admin/root: sí)
+  const setEditMode = (editable) => { $dejado.readOnly = !editable; };
+
+  const recalc = () => {
+    const dejado = Number($dejado.value || 0);
+    const porEntregar = esperado + dejado; // ← SUMA
+    $entregar.textContent = `$${porEntregar.toFixed(2)}`;
+    const wrap = card.querySelector("[data-por-entregar-wrap]");
+    wrap.classList.remove("text-emerald-400","text-rose-400");
+    wrap.classList.add("text-emerald-400");
+  };
+
+  // Carga el monto de caja según selección y rol
+  const cargarMontoCaja = async () => {
+    const selVal = selUsuario.value; // 'todos' o id
+    if (esWorker) {
+      const { monto } = await getCajaMontoFromController(selVal, true);
+      $dejado.value = Number(monto || 0).toFixed(2);
+      setEditMode(false); // worker no edita
+    } else {
+      if (selVal === 'todos') {
+        $dejado.value = '0.00';       // “Todos” arranca en 0
+        setEditMode(true);            // admin/root sí edita
+      } else {
+        const { monto } = await getCajaMontoFromController(selVal, false);
+        $dejado.value = Number(monto || 0).toFixed(2);
+        setEditMode(true);
+      }
+    }
+    recalc();
+  };
+
+  // Eventos
+  $dejado.addEventListener("input", recalc);
+
+  // Evitar listeners duplicados si se vuelve a buscar
+  if (!window._cajaUserChangeBound) {
+    selUsuario.addEventListener("change", async () => {
+      const tipo = document.getElementById("tipoPeriodo").value;
+      if (tipo !== "dia") return;
+      await cargarMontoCaja();
+    });
+    window._cajaUserChangeBound = true;
+  }
+
+  // Inicial
+  await cargarMontoCaja();
+}
+
+
+function crearCajaHTML() {
+  return `
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="bg-slate-800 rounded-xl p-4">
+        <div class="text-sm text-slate-300">Efectivo esperado</div>
+        <div class="mt-1 text-3xl font-bold text-white" data-efectivo-esperado>$0.00</div>
+        <div data-caja-warn class="mt-2 text-xs text-amber-400 hidden">
+          No se pudo calcular el efectivo esperado.
+        </div>
+      </div>
+
+      <div class="bg-slate-800 rounded-xl p-4">
+        <label for="monto_caja" class="text-sm text-slate-300">Dejado en caja</label>
+        <div class="mt-1 flex items-center gap-2">
+          <span class="text-slate-400">$</span>
+          <input id="monto_caja" type="number" step="0.01" min="0"
+                 class="w-full rounded-md bg-slate-700 text-white border border-slate-600 px-3 py-2 focus:ring-blue-400 focus:border-blue-400"
+                 placeholder="0.00">
+        </div>
+      </div>
+
+      <div class="bg-slate-800 rounded-xl p-4">
+        <div class="text-sm text-slate-300">Por entregar</div>
+        <div class="mt-1">
+          <span data-por-entregar-wrap class="text-3xl font-extrabold text-emerald-400">
+            <span data-por-entregar>$0.00</span>
+          </span>
+        </div>
+        <div class="mt-2 text-xs text-slate-400">= Esperado + Dejado en caja</div>
+      </div>
+    </div>
+  `;
+}
+// ==== CAJA: obtener monto desde caja_controller.php ====
+async function getCajaMontoFromController(userValue, esWorker) {
+  // userValue puede ser 'todos' o un id numérico (o el id del worker)
+  let userParam = 'me';
+  if (!esWorker) {
+    if (String(userValue) === 'todos') userParam = 'all';
+    else userParam = String(userValue);
+  }
+
+  const url = `../php/caja_controller.php?action=get&user=${encodeURIComponent(userParam)}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => null);
+
+  if (!data || data.ok !== true) {
+    console.warn('caja_controller:get fallo', data);
+    // Para “todos” devolvemos 0; para errores también 0
+    return { monto: 0, from: 'fallback' };
+  }
+
+  // Si viene sin data (modo all), dejamos 0
+  if (!data.data) return { monto: 0, from: 'all' };
+
+  return { monto: Number(data.data.monto || 0), from: 'db' };
+}
+

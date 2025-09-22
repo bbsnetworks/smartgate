@@ -1,4 +1,3 @@
-// swalConfig.js
 
 // Modal de éxito (verde)
 window.swalSuccess = Swal.mixin({

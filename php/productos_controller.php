@@ -91,7 +91,12 @@ switch ($method) {
 function obtenerProductos($conexion) {
   if (isset($_GET['id'])) {
     $id = intval($_GET['id']);
-    $stmt = $conexion->prepare("SELECT id, codigo, nombre, descripcion, precio, stock, categoria_id FROM productos WHERE id = ?");
+    $stmt = $conexion->prepare("
+  SELECT p.id, p.codigo, p.nombre, p.descripcion, p.precio, p.precio_proveedor, p.stock,
+         p.categoria_id, p.proveedor_id
+  FROM productos p
+  WHERE p.id = ?
+");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -105,8 +110,13 @@ function obtenerProductos($conexion) {
   $busqueda = isset($_GET['busqueda']) ? trim($_GET['busqueda']) : '';
 
   $productos = [];
-  $sql = "SELECT p.id, p.codigo, p.nombre, p.descripcion, p.stock, p.precio, c.nombre AS categoria
-          FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id";
+  $sql = "SELECT p.id, p.codigo, p.nombre, p.descripcion, p.stock,
+               p.precio, p.precio_proveedor,
+               c.nombre AS categoria,
+               pr.nombre AS proveedor_nombre
+        FROM productos p
+        LEFT JOIN categorias c  ON p.categoria_id = c.id
+        LEFT JOIN proveedores pr ON pr.id = p.proveedor_id";
   $params = [];
   $types = "";
 
@@ -127,7 +137,10 @@ function obtenerProductos($conexion) {
   $res = $stmt->get_result();
   while ($row = $res->fetch_assoc()) { $productos[] = $row; }
 
-  $sqlTotal = "SELECT COUNT(*) as total FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id";
+  $sqlTotal = "SELECT COUNT(*) as total
+             FROM productos p
+             LEFT JOIN categorias c  ON p.categoria_id = c.id
+             LEFT JOIN proveedores pr ON pr.id = p.proveedor_id";
   if ($busqueda !== '') {
     $sqlTotal .= " WHERE p.nombre LIKE ? OR p.descripcion LIKE ? OR p.codigo LIKE ? OR c.nombre LIKE ?";
     $stmtTotal = $conexion->prepare($sqlTotal);
@@ -157,7 +170,18 @@ function agregarProducto($conexion) {
     echo json_encode(["success" => false, "error" => "Todos los campos son obligatorios y deben ser válidos"]);
     return;
   }
+  $precio_proveedor = (float)($data['precio_proveedor'] ?? 0);
+$proveedor_id = isset($data['proveedor_id']) && $data['proveedor_id'] !== '' ? (int)$data['proveedor_id'] : null;
+if ($precio_proveedor < 0) { echo json_encode(["success"=>false,"error"=>"Costo proveedor inválido"]); return; }
 
+// si viene proveedor_id, valida que exista (no forzamos activo=1 por si lo reactivan luego)
+if ($proveedor_id) {
+  $stmtP = $conexion->prepare("SELECT id FROM proveedores WHERE id = ?");
+  $stmtP->bind_param("i", $proveedor_id);
+  $stmtP->execute();
+  if ($stmtP->get_result()->num_rows === 0) { echo json_encode(["success"=>false,"error"=>"Proveedor no válido"]); return; }
+  $stmtP->close();
+}
   // Código único
   $stmt = $conexion->prepare("SELECT id FROM productos WHERE codigo = ?");
   $stmt->bind_param("s", $codigo);
@@ -305,6 +329,12 @@ function eliminarProducto($conexion) {
     echo json_encode(["success"=>false, "error"=>"No se pudo eliminar: ".$e->getMessage()]);
   }
 }
+// Helper: Y-m-d[ H:i:s] -> d/m/Y
+function toDMY($str) {
+  $ts = strtotime($str);
+  return $ts ? date('d/m/Y', $ts) : $str;
+}
+
 function reporteMovimientos(mysqli $conexion) {
   $tipo = $_GET['tipo'] ?? 'dia';
 
@@ -386,13 +416,15 @@ function reporteMovimientos(mysqli $conexion) {
     }
 
     $grupos[$key]['movimientos'][] = [
-      'fecha' => $row['creado_en'],
-      'tipo'  => $tipoMov,
-      'cantidad' => $cant,
-      'stock_despues' => (float)$row['stock_despues'],
-      'nota'  => $row['nota'],
-      'usuario'       => $row['usuario'] ?: '—'
-    ];
+  'fecha'         => toDMY($row['creado_en']),  // <-- dd/mm/yyyy
+  'fecha_hora'    => $row['creado_en'],         // <-- la completa por si la necesitas en el modal
+  'tipo'          => $tipoMov,
+  'cantidad'      => $cant,
+  'stock_despues' => (float)$row['stock_despues'],
+  'nota'          => $row['nota'],
+  'usuario'       => $row['usuario'] ?: '—'
+];
+
   }
 
   // Ordena grupos por nombre/código
@@ -402,11 +434,12 @@ function reporteMovimientos(mysqli $conexion) {
   });
 
   echo json_encode([
-    'ok'     => true,
-    'desde'  => substr($desde,0,10),
-    'hasta'  => substr($hasta,0,10),
-    'resumen'=> $resumen,
-    'totales'=> ['entradas'=>$tot_entradas, 'salidas'=>$tot_salidas]
-  ]);
+  'ok'      => true,
+  'desde'   => toDMY($desde),  // <-- dd/mm/yyyy
+  'hasta'   => toDMY($hasta),  // <-- dd/mm/yyyy
+  'resumen' => $resumen,
+  'totales' => ['entradas'=>$tot_entradas, 'salidas'=>$tot_salidas]
+]);
+
 }
 

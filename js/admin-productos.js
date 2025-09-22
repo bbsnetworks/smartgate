@@ -61,25 +61,30 @@ function mostrarProductosFiltrados(productos) {
     return;
   }
 
-  productos.forEach((producto, index) => {
+  const fmt = n => `$${Number(n ?? 0).toFixed(2)}`;
+
+  productos.forEach((p) => {
+    const descripcionCorta = (p.descripcion || '').length > 40
+      ? p.descripcion.slice(0, 30) + "..."
+      : (p.descripcion || '');
+    const prov = p.proveedor_nombre || '—';
+
     const fila = document.createElement("tr");
-    const descripcionCorta = producto.descripcion.length > 40 
-  ? producto.descripcion.slice(0, 30) + "..." 
-  : producto.descripcion;
     fila.innerHTML = `
-      <td class="px-4 py-2">${producto.codigo}</td>
-      <td class="px-4 py-2">${producto.nombre}</td>
+      <td class="px-4 py-2">${p.codigo}</td>
+      <td class="px-4 py-2">${p.nombre}</td>
       <td class="px-4 py-2">${descripcionCorta}</td>
-      <td class="px-4 py-2">$${parseFloat(producto.precio).toFixed(2)}</td>
-      <td class="px-4 py-2">${producto.stock}</td>
-      <td class="px-4 py-2">${producto.categoria}</td>
+      <td class="px-4 py-2">${fmt(p.precio)}</td>
+      <td class="px-4 py-2">${fmt(p.precio_proveedor)}</td>
+      <td class="px-4 py-2">${prov}</td>
+      <td class="px-4 py-2">${p.stock}</td>
       <td class="px-4 py-2 text-center space-x-2">
-        <button onclick="editarProducto(${producto.id})" 
-          class="text-yellow-400 hover:text-white border border-yellow-400 hover:bg-yellow-500 focus:ring-4 focus:outline-none focus:ring-yellow-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2 dark:border-yellow-300 dark:text-yellow-300 dark:hover:text-white dark:hover:bg-yellow-400 dark:focus:ring-yellow-900">
+        <button onclick="editarProducto(${p.id})"
+          class="text-yellow-400 hover:text-white border border-yellow-400 hover:bg-yellow-500 focus:ring-4 focus:outline-none focus:ring-yellow-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2">
           ✏️ Editar
         </button>
-        <button onclick="eliminarProducto(${producto.id})" 
-          class="text-red-700 hover:text-white border border-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2 dark:border-red-500 dark:text-red-500 dark:hover:text-white dark:hover:bg-red-600 dark:focus:ring-red-900">
+        <button onclick="eliminarProducto(${p.id})"
+          class="text-red-700 hover:text-white border border-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2">
           🗑️ Eliminar
         </button>
       </td>
@@ -91,89 +96,111 @@ function mostrarProductosFiltrados(productos) {
 
 
 
+
 function abrirModalAgregar() {
-  fetch("../php/categorias_controller.php")
-    .then(r => r.json())
-    .then(({ categorias }) => {
-      const options = [
-        `<option value="" disabled selected>Selecciona categoría</option>`,
-        ...categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`)
-      ].join("");
+  // Trae categorías y proveedores activos en paralelo
+  Promise.all([
+    fetch("../php/categorias_controller.php").then(r => r.json()),
+    fetch("../php/proveedores_controller.php?action=listar&activo=1&limit=200").then(r => r.json())
+  ]).then(([catData, provData]) => {
+    const categorias = catData.categorias || [];
+    const proveedores = (provData.proveedores || []);
 
-      swalcard.fire({
-        title: "Agregar Producto",
-        width: 650,
-        // NO usar customClass aquí para no pisar el mixin
-        html: `
-          <div class="grid text-left text-sm text-white">
-            <label for="codigo" class="font-semibold mx-auto">Código de Barras:</label>
-            <input id="codigo" inputmode="numeric" pattern="\\d*"
-                   class="swal2-input mx-auto w-3/4" placeholder="Código de Barras">
+    const catOpts = [
+      `<option value="" disabled selected>Selecciona categoría</option>`,
+      ...categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`)
+    ].join("");
 
-            <label for="nombre" class="font-semibold mx-auto mt-2">Nombre del Producto:</label>
-            <input id="nombre" class="swal2-input mx-auto w-3/4" placeholder="Nombre del Producto">
+    const provOpts = [
+      `<option value="" selected>— Sin proveedor —</option>`,
+      ...proveedores.map(p => `<option value="${p.id}">${p.nombre}</option>`)
+    ].join("");
 
-            <label for="descripcion" class="font-semibold mx-auto mt-2">Descripción:</label>
-            <textarea id="descripcion" rows="3"
-                      class="swal2-textarea mx-auto w-3/4" placeholder="Descripción"></textarea>
+    swalcard.fire({
+      title: "Agregar Producto",
+      width: 680,
+      html: `
+        <div class="grid text-left text-sm text-white">
+          <label class="font-semibold mx-auto">Código de Barras:</label>
+          <input id="codigo" inputmode="numeric" pattern="\\d*" class="swal2-input mx-auto w-3/4" placeholder="Código de Barras">
 
-            <label for="precio" class="font-semibold mx-auto mt-2">Precio:</label>
-            <input id="precio" type="number" step="0.01" min="0"
-                   class="swal2-input mx-auto w-3/4" placeholder="0.00">
+          <label class="font-semibold mx-auto mt-2">Nombre del Producto:</label>
+          <input id="nombre" class="swal2-input mx-auto w-3/4" placeholder="Nombre del Producto">
 
-            <label for="stock" class="font-semibold mx-auto mt-2">Stock:</label>
-            <input id="stock" type="number" min="0" step="1"
-                   class="swal2-input mx-auto w-3/4" placeholder="0">
+          <label class="font-semibold mx-auto mt-2">Descripción:</label>
+          <textarea id="descripcion" rows="3" class="swal2-textarea mx-auto w-3/4" placeholder="Descripción"></textarea>
 
-            <label for="categoria_id" class="font-semibold mx-auto mt-2 mb-2">Categoría:</label>
-            <select id="categoria_id"
-                    class="mx-auto mt-1 w-3/4 p-2 rounded border border-slate-600 bg-slate-800 text-slate-100">
-              ${options}
-            </select>
+          <div class="mx-auto w-3/4 grid grid-cols-2 gap-3 mt-2">
+            <div>
+              <label class="font-semibold">Precio (venta):</label>
+              <input id="precio" type="number" step="0.01" min="0" class="swal2-input w-full" placeholder="0.00">
+            </div>
+            <div>
+              <label class="font-semibold">Costo proveedor:</label>
+              <input id="precio_proveedor" type="number" step="0.01" min="0" class="swal2-input w-full" placeholder="0.00">
+            </div>
           </div>
-        `,
-        focusConfirm: false,
-        showCancelButton: true,
-        confirmButtonText: "Agregar",
-        cancelButtonText: "Cancelar",
-        didOpen: () => {
-          // Añade clases al popup SIN sobrescribir el customClass del mixin
-          const $popup = Swal.getPopup();
-          $popup.classList.add('bg-slate-800','text-slate-100'); // lo que tenías en customClass.popup
-        },
-        preConfirm: () => {
-          const val = id => document.getElementById(id).value.trim();
-          const codigo = val("codigo");
-          const nombre = val("nombre");
-          const descripcion = val("descripcion");
-          const precio = parseFloat(val("precio"));
-          const stock = parseInt(val("stock"), 10);
-          const categoria_id = parseInt(val("categoria_id"), 10);
 
-          if (!codigo || !/^\d+$/.test(codigo)) return Swal.showValidationMessage("El código debe ser numérico.");
-          if (!nombre) return Swal.showValidationMessage("El nombre es obligatorio.");
-          if (!descripcion) return Swal.showValidationMessage("La descripción es obligatoria.");
-          if (isNaN(precio) || precio < 0) return Swal.showValidationMessage("Precio inválido.");
-          if (!Number.isInteger(stock) || stock < 0) return Swal.showValidationMessage("Stock inválido.");
-          if (isNaN(categoria_id)) return Swal.showValidationMessage("Selecciona una categoría.");
+          <label class="font-semibold mx-auto mt-2 mb-2">Proveedor:</label>
+          <select id="proveedor_id" class="mx-auto mt-1 w-3/4 p-2 rounded border border-slate-600 bg-slate-800 text-slate-100">
+            ${provOpts}
+          </select>
 
-          return { codigo, nombre, descripcion, precio, stock, categoria_id };
-        }
-      }).then(res => {
-        if (!res.isConfirmed) return;
-        fetch("../php/productos_controller.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(res.value)
-        })
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) swalSuccess.fire("Agregado", data.msg, "success").then(cargarProductos);
-          else swalError.fire("Error", data.error || "No se pudo agregar el producto");
-        });
+          <label class="font-semibold mx-auto mt-2 mb-2">Categoría:</label>
+          <select id="categoria_id" class="mx-auto mt-1 w-3/4 p-2 rounded border border-slate-600 bg-slate-800 text-slate-100">
+            ${catOpts}
+          </select>
+
+          <label class="font-semibold mx-auto mt-2">Stock inicial:</label>
+          <input id="stock" type="number" min="0" step="1" class="swal2-input mx-auto w-3/4" placeholder="0">
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: "Agregar",
+      cancelButtonText: "Cancelar",
+      didOpen: () => {
+        const $popup = Swal.getPopup();
+        $popup.classList.add('bg-slate-800','text-slate-100');
+      },
+      preConfirm: () => {
+        const val = id => document.getElementById(id).value.trim();
+        const codigo = val("codigo");
+        const nombre = val("nombre");
+        const descripcion = val("descripcion");
+        const precio = parseFloat(val("precio"));
+        const precio_proveedor = parseFloat(val("precio_proveedor") || "0");
+        const stock = parseInt(val("stock") || "0", 10);
+        const categoria_id = parseInt(val("categoria_id") || "0", 10);
+        const proveedor_id_str = val("proveedor_id");
+        const proveedor_id = proveedor_id_str ? parseInt(proveedor_id_str, 10) : null;
+
+        if (!codigo || !/^\d+$/.test(codigo)) return Swal.showValidationMessage("El código debe ser numérico.");
+        if (!nombre) return Swal.showValidationMessage("El nombre es obligatorio.");
+        if (!descripcion) return Swal.showValidationMessage("La descripción es obligatoria.");
+        if (isNaN(precio) || precio < 0) return Swal.showValidationMessage("Precio de venta inválido.");
+        if (isNaN(precio_proveedor) || precio_proveedor < 0) return Swal.showValidationMessage("Costo proveedor inválido.");
+        if (!Number.isInteger(stock) || stock < 0) return Swal.showValidationMessage("Stock inválido.");
+        if (isNaN(categoria_id) || categoria_id <= 0) return Swal.showValidationMessage("Selecciona una categoría.");
+
+        return { codigo, nombre, descripcion, precio, precio_proveedor, stock, categoria_id, proveedor_id };
+      }
+    }).then(res => {
+      if (!res.isConfirmed) return;
+      fetch("../php/productos_controller.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(res.value)
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) swalSuccess.fire("Agregado", data.msg, "success").then(()=>cargarProductos(1));
+        else swalError.fire("Error", data.error || "No se pudo agregar el producto");
       });
     });
+  });
 }
+
 
 
 
@@ -308,123 +335,110 @@ function editarProducto(id) {
 }
 
 function ejecutarEdicionProducto(id) {
-  fetch(`../php/productos_controller.php?id=${id}`)
-    .then((res) => res.json())
-    .then((producto) => {
-      fetch("../php/categorias_controller.php")
-        .then((res) => res.json())
-        .then((data) => {
-          const categoriasOptions = data.categorias
-            .map((cat) => {
-              return `<option value="${cat.id}" ${
-                cat.id == producto.categoria_id ? "selected" : ""
-              }>${cat.nombre}</option>`;
-            })
-            .join("");
+  // Traer producto, categorías y proveedores activos
+  Promise.all([
+    fetch(`../php/productos_controller.php?id=${id}`).then(r=>r.json()),
+    fetch("../php/categorias_controller.php").then(r=>r.json()),
+    fetch("../php/proveedores_controller.php?action=listar&activo=1&limit=200").then(r=>r.json())
+  ]).then(([producto, catData, provData]) => {
+    const categoriasOptions = (catData.categorias || [])
+      .map(cat => `<option value="${cat.id}" ${cat.id == producto.categoria_id ? 'selected':''}>${cat.nombre}</option>`)
+      .join("");
 
-          swalcard.fire({
-            title: "Editar Producto",
-            width: 650,
-            html: `
-            <div class="grid text-left text-sm text-white">
-              <label for="codigo" class="font-semibold mx-auto">Código de Barras:</label>
-              <input id="codigo" class="swal2-input mx-auto w-3/4" placeholder="Código de Barras" value="${producto.codigo}">
+    const provOptions = [
+      `<option value="">— Sin proveedor —</option>`,
+      ...(provData.proveedores || []).map(pr =>
+        `<option value="${pr.id}" ${pr.id == (producto.proveedor_id ?? '') ? 'selected':''}>${pr.nombre}</option>`
+      )
+    ].join("");
 
-              <label for="nombre" class="font-semibold mx-auto mt-2">Nombre del Producto:</label>
-              <input id="nombre" class="swal2-input mx-auto w-3/4" placeholder="Nombre del Producto" value="${producto.nombre}">
+    swalcard.fire({
+      title: "Editar Producto",
+      width: 680,
+      html: `
+        <div class="grid text-left text-sm text-white">
+          <label class="font-semibold mx-auto">Código de Barras:</label>
+          <input id="codigo" class="swal2-input mx-auto w-3/4" value="${producto.codigo||''}">
 
-              <label for="descripcion" class="font-semibold mx-auto mt-2">Descripción:</label>
-              <textarea id="descripcion" class="swal2-textarea mx-auto w-3/4" placeholder="Descripción" rows="2">${producto.descripcion}</textarea>
+          <label class="font-semibold mx-auto mt-2">Nombre del Producto:</label>
+          <input id="nombre" class="swal2-input mx-auto w-3/4" value="${producto.nombre||''}">
 
-              <label for="precio" class="font-semibold mx-auto mt-2">Precio:</label>
-              <input id="precio" type="number" step="0.01" class="swal2-input mx-auto w-3/4" placeholder="Precio" value="${producto.precio}">
+          <label class="font-semibold mx-auto mt-2">Descripción:</label>
+          <textarea id="descripcion" class="swal2-textarea mx-auto w-3/4" rows="2">${producto.descripcion||''}</textarea>
 
-              <label for="stock" class="font-semibold mx-auto mt-2">Stock:</label>
-              <input id="stock" type="number" min="0" class="swal2-input mx-auto w-3/4" placeholder="Stock" value="${producto.stock}" readonly>
-
-              <label for="categoria_id" class="font-semibold mx-auto mt-2 mb-2">Categoría:</label>
-              <select id="categoria_id" class="mx-auto mt-1 w-3/4 p-2 rounded border border-slate-600 bg-slate-800 text-slate-100">
-                <option disabled value="">Selecciona categoría</option>
-                ${categoriasOptions}
-              </select>
+          <div class="mx-auto w-3/4 grid grid-cols-2 gap-3 mt-2">
+            <div>
+              <label class="font-semibold">Precio (venta):</label>
+              <input id="precio" type="number" step="0.01" class="swal2-input w-full" value="${producto.precio||0}">
             </div>
-          `,
+            <div>
+              <label class="font-semibold">Costo proveedor:</label>
+              <input id="precio_proveedor" type="number" step="0.01" class="swal2-input w-full" value="${producto.precio_proveedor||0}">
+            </div>
+          </div>
 
-            confirmButtonText: "Guardar Cambios",
-            showCancelButton: true,
-            preConfirm: () => {
-  const codigo = document.getElementById("codigo").value.trim();
-  const nombre = document.getElementById("nombre").value.trim();
-  const descripcion = document.getElementById("descripcion").value.trim();
-  const precio = parseFloat(document.getElementById("precio").value);
-  const stock = parseInt(document.getElementById("stock").value);
-  const categoria_id = parseInt(document.getElementById("categoria_id").value);
+          <label class="font-semibold mx-auto mt-2 mb-2">Proveedor:</label>
+          <select id="proveedor_id" class="mx-auto mt-1 w-3/4 p-2 rounded border border-slate-600 bg-slate-800 text-slate-100">
+            ${provOptions}
+          </select>
 
-  if (!codigo || !nombre || !descripcion || isNaN(precio) || isNaN(stock) || isNaN(categoria_id)) {
-    Swal.showValidationMessage("Todos los campos son obligatorios.");
-    return false;
-  }
+          <label class="font-semibold mx-auto mt-2 mb-2">Categoría:</label>
+          <select id="categoria_id" class="mx-auto mt-1 w-3/4 p-2 rounded border border-slate-600 bg-slate-800 text-slate-100">
+            <option disabled value="">Selecciona categoría</option>
+            ${categoriasOptions}
+          </select>
 
-  if (!/^\d+$/.test(codigo)) {
-    Swal.showValidationMessage("El código debe contener solo números.");
-    return false;
-  }
+          <label class="font-semibold mx-auto mt-2">Stock (solo lectura):</label>
+          <input id="stock" type="number" min="0" class="swal2-input mx-auto w-3/4" value="${producto.stock||0}" readonly>
+        </div>
+      `,
+      confirmButtonText: "Guardar Cambios",
+      showCancelButton: true,
+      didOpen: () => Swal.getPopup().classList.add('bg-slate-800','text-slate-100'),
+      preConfirm: () => {
+        const codigo = document.getElementById("codigo").value.trim();
+        const nombre = document.getElementById("nombre").value.trim();
+        const descripcion = document.getElementById("descripcion").value.trim();
+        const precio = parseFloat(document.getElementById("precio").value);
+        const precio_proveedor = parseFloat(document.getElementById("precio_proveedor").value || "0");
+        const stock = parseInt(document.getElementById("stock").value);
+        const categoria_id = parseInt(document.getElementById("categoria_id").value);
+        const provSel = document.getElementById("proveedor_id").value;
+        const proveedor_id = provSel ? parseInt(provSel,10) : null;
 
-  if (precio < 0) {
-    Swal.showValidationMessage("El precio no puede ser negativo.");
-    return false;
-  }
+        if (!codigo || !/^\d+$/.test(codigo)) return Swal.showValidationMessage("Código inválido.");
+        if (!nombre) return Swal.showValidationMessage("El nombre es obligatorio.");
+        if (!descripcion) return Swal.showValidationMessage("La descripción es obligatoria.");
+        if (isNaN(precio) || precio < 0) return Swal.showValidationMessage("Precio inválido.");
+        if (isNaN(precio_proveedor) || precio_proveedor < 0) return Swal.showValidationMessage("Costo proveedor inválido.");
+        if (!Number.isInteger(stock) || stock < 0) return Swal.showValidationMessage("Stock inválido.");
+        if (isNaN(categoria_id)) return Swal.showValidationMessage("Selecciona una categoría.");
 
-  if (!Number.isInteger(stock) || stock < 0) {
-    Swal.showValidationMessage("El stock debe ser un número entero positivo.");
-    return false;
-  }
-
-  return {
-    id,
-    codigo,
-    nombre,
-    descripcion,
-    precio,
-    stock,
-    categoria_id
-  };
-}
-
-,
-          }).then((result) => {
-            if (result.isConfirmed) {
-              fetch("../php/productos_controller.php", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(result.value),
-              })
-                .then((res) => res.json())
-                .then((data) => {
-                  if (data.success) {
-                    swalSuccess.fire("Actualizado", data.msg, "success").then(
-                      cargarProductos
-                    );
-                  } else {
-                    swalError.fire(
-                      "Error",
-                      data.error || "No se pudo actualizar",
-                      "error"
-                    );
-                  }
-                });
-            }
-          });
-        });
+        return { id, codigo, nombre, descripcion, precio, precio_proveedor, stock, categoria_id, proveedor_id };
+      }
+    }).then((result) => {
+      if (!result.isConfirmed) return;
+      fetch("../php/productos_controller.php", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(result.value),
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) swalSuccess.fire("Actualizado", data.msg, "success").then(()=>cargarProductos(paginaActual));
+        else swalError.fire("Error", data.error || "No se pudo actualizar", "error");
+      });
     });
+  });
 }
+
 async function abrirModalMovimiento() {
   const html = `
     <div class="space-y-3 text-left text-sm">
       <label class="block text-slate-300 font-semibold">Buscar producto</label>
       <input id="mv-buscar" class="w-full p-2 rounded bg-slate-700 text-slate-100" placeholder="Código, nombre o descripción">
 
-      <div id="mv-resultados" class="max-h-56 overflow-auto mt-2 bg-slate-800 rounded border border-slate-700"></div>
+      <div id="mv-resultados" style="display:none" class="max-h-56 overflow-auto mt-2 bg-slate-800 rounded border border-slate-700"></div>
 
       <div id="mv-info" class="hidden mt-3 p-3 rounded-lg bg-slate-700 border border-slate-600">
         <div class="flex items-center justify-between">
@@ -477,76 +491,105 @@ async function abrirModalMovimiento() {
     focusConfirm: false,
     allowOutsideClick: false, // 👈 evita cierres al hacer click fuera
     didOpen: () => {
-      Swal.getPopup().classList.add('bg-slate-800','text-slate-100');
+  Swal.getPopup().classList.add('bg-slate-800','text-slate-100');
 
-      const $buscar = document.getElementById('mv-buscar');
-      const $res = document.getElementById('mv-resultados');
-      const $info = document.getElementById('mv-info');
+  const $buscar  = document.getElementById('mv-buscar');
+  const $res     = document.getElementById('mv-resultados');
+  const $info    = document.getElementById('mv-info');
 
-      const $id    = document.getElementById('mv-producto-id');
-      const $stock = document.getElementById('mv-stock-actual');
-      const $nombre= document.getElementById('mv-nombre');
-      const $codigo= document.getElementById('mv-codigo');
-      const $cat   = document.getElementById('mv-categoria');
-      const $stockLbl = document.getElementById('mv-stock');
-      const $op    = document.getElementById('mv-op');
-      const $cant  = document.getElementById('mv-cant');
-      const $preview = document.getElementById('mv-preview');
+  const $id       = document.getElementById('mv-producto-id');
+  const $stock    = document.getElementById('mv-stock-actual');
+  const $nombre   = document.getElementById('mv-nombre');
+  const $codigo   = document.getElementById('mv-codigo');
+  const $cat      = document.getElementById('mv-categoria');
+  const $stockLbl = document.getElementById('mv-stock');
+  const $op       = document.getElementById('mv-op');
+  const $cant     = document.getElementById('mv-cant');
+  const $preview  = document.getElementById('mv-preview');
 
-      let timer;
-      const pintarPreview = () => {
-        const actual = parseFloat($stock.value || '0');
-        const cant = parseFloat($cant.value || '0');
-        if (!cant || cant <= 0) { $preview.textContent = '—'; return; }
-        const signo = ($op.value === 'ingreso') ? +1 : -1;
-        const nuevo = actual + signo * cant;
-        $preview.textContent = (nuevo < 0) ? 'ERROR (negativo)' : nuevo.toString();
-      };
+  // helpers fuertes (ganan a Tailwind)
+  const showResults = () => { $res.style.display = 'block'; };
+  const hideResults = () => { $res.style.display = 'none'; };
 
-      $op.addEventListener('change', pintarPreview);
-      $cant.addEventListener('input', pintarPreview);
+  hideResults(); // arrancar oculto
 
-      $buscar.addEventListener('input', () => {
-        clearTimeout(timer);
-        const q = $buscar.value.trim();
-        timer = setTimeout(async () => {
-          if (!q) { $res.innerHTML = ''; return; }
-          const params = new URLSearchParams({ limit: 10, offset: 0, busqueda: q });
-          const data = await fetch(`../php/productos_controller.php?${params}`).then(r=>r.json());
-          if (!data.success || !data.productos.length) {
-            $res.innerHTML = `<div class="p-3 text-slate-400">Sin resultados</div>`; return;
-          }
-          $res.innerHTML = data.productos.map(p => `
-            <button type="button" data-id="${p.id}" data-codigo="${p.codigo}"
-              data-nombre="${p.nombre}" data-stock="${p.stock}" data-cat="${p.categoria ?? ''}"
-              class="w-full text-left px-3 py-2 hover:bg-slate-700">
-              <div class="font-semibold">${p.codigo} — ${p.nombre}</div>
-              <div class="text-xs text-slate-400">Stock: ${p.stock} · ${p.categoria ?? ''}</div>
-            </button>
-          `).join('');
+  let timer;
+  const pintarPreview = () => {
+    const actual = parseFloat($stock.value || '0');
+    const cant   = parseFloat($cant.value || '0');
+    if (!cant || cant <= 0) { $preview.textContent = '—'; return; }
+    const signo = ($op.value === 'ingreso') ? +1 : -1;
+    const nuevo = actual + signo * cant;
+    $preview.textContent = (nuevo < 0) ? 'ERROR (negativo)' : String(nuevo);
+  };
 
-          Array.from($res.querySelectorAll('button')).forEach(btn => {
-            btn.addEventListener('click', (e) => {
-              e.preventDefault(); e.stopPropagation(); // 👈 evita efectos colaterales
-              // set selección
-              $id.value      = btn.dataset.id;
-              $stock.value   = btn.dataset.stock;
-              $nombre.textContent = btn.dataset.nombre;
-              $codigo.textContent = `Código: ${btn.dataset.codigo}`;
-              $cat.textContent    = btn.dataset.cat ? `Categoría: ${btn.dataset.cat}` : '';
-              $stockLbl.textContent = btn.dataset.stock;
+  $op.addEventListener('change', pintarPreview);
+  $cant.addEventListener('input', pintarPreview);
 
-              // mostrar tarjeta de info
-              $info.classList.remove('hidden');
+  // buscar
+  $buscar.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = $buscar.value.trim();
 
-              // limpiar preview y cantidad
-              $cant.value = '';
-              $preview.textContent = '—';
-            });
-          });
-        }, 250);
+    if (!q) {
+      $res.innerHTML = '';
+      hideResults();
+      return;
+    }
+
+    showResults();
+
+    timer = setTimeout(async () => {
+      const params = new URLSearchParams({ limit: 10, offset: 0, busqueda: q });
+      const data = await fetch(`../php/productos_controller.php?${params}`).then(r=>r.json());
+
+      if (!data.success || !data.productos.length) {
+        $res.innerHTML = `<div class="p-3 text-slate-400">Sin resultados</div>`;
+        return;
+      }
+
+      $res.innerHTML = data.productos.map(p => `
+        <button type="button" data-id="${p.id}" data-codigo="${p.codigo}"
+          data-nombre="${p.nombre}" data-stock="${p.stock}" data-cat="${p.categoria ?? ''}"
+          class="w-full text-left px-3 py-2 hover:bg-slate-700">
+          <div class="font-semibold">${p.codigo} — ${p.nombre}</div>
+          <div class="text-xs text-slate-400">Stock: ${p.stock} · ${p.categoria ?? ''}</div>
+        </button>
+      `).join('');
+
+      // seleccionar producto
+      Array.from($res.querySelectorAll('button')).forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault(); e.stopPropagation();
+
+          $id.value             = btn.dataset.id;
+          $stock.value          = btn.dataset.stock;
+          $nombre.textContent   = btn.dataset.nombre;
+          $codigo.textContent   = `Código: ${btn.dataset.codigo}`;
+          $cat.textContent      = btn.dataset.cat ? `Categoría: ${btn.dataset.cat}` : '';
+          $stockLbl.textContent = btn.dataset.stock;
+
+          $info.classList.remove('hidden'); // muestra tarjeta
+
+          $cant.value = '';
+          $preview.textContent = '—';
+
+          // cerrar lista hasta nueva escritura
+          $buscar.value = `${btn.dataset.codigo} — ${btn.dataset.nombre}`; // opcional
+          $res.innerHTML = '';
+          hideResults();
+          $buscar.blur(); // opcional
+        });
       });
-    },
+    }, 250);
+  });
+
+  // cerrar con ESC
+  $buscar.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') { $res.innerHTML = ''; hideResults(); }
+  });
+},
+
     preConfirm: () => {
       const producto_id = parseInt(document.getElementById('mv-producto-id').value || '0', 10);
       const tipo = document.getElementById('mv-op').value;
@@ -711,6 +754,12 @@ await swalcard.fire({
 }
 
 function renderReporteMovimientos(data) {
+  const esc = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
   const cont = document.createElement('div');
   cont.className = 'max-h-[70vh] overflow-auto text-sm';
 
@@ -742,7 +791,7 @@ function renderReporteMovimientos(data) {
       <div class="flex items-center justify-between mb-2">
         <div>
           <div class="text-xs text-slate-300">Producto</div>
-          <div class="font-semibold">${p.codigo} — ${p.nombre}</div>
+          <div class="font-semibold">${esc(p.codigo)} — ${esc(p.nombre)}</div>
         </div>
         <div class="text-right">
           <div class="text-xs text-slate-300">Stock actual</div>
@@ -750,18 +799,30 @@ function renderReporteMovimientos(data) {
         </div>
       </div>
       <div class="overflow-x-auto">
-        <table class="min-w-full text-left">
-          <thead class="text-xs uppercase text-slate-300">
-            <tr><th class="py-1 pr-3">Fecha</th><th class="py-1 pr-3">Tipo</th><th class="py-1 pr-3">Cant.</th><th class="py-1 pr-3">Stock después</th><th class="py-1">Nota</th></tr>
-          </thead>
+        <!-- table-fixed para forzar wrapping y reparto de ancho -->
+        <table class="min-w-full text-left table-fixed">
+          <thead class="bg-slate-700">
+  <tr class="text-slate-300 text-sm uppercase">
+    <th class="p-3 text-left">Código</th>
+    <th class="p-3 text-left">Nombre</th>
+    <th class="p-3 text-left">Descripción</th>
+    <th class="p-3 text-left">Venta</th>
+    <th class="p-3 text-left">Costo Prov.</th>
+    <th class="p-3 text-left">Proveedor</th>
+    <th class="p-3 text-left">Stock</th>
+    <th class="p-3 text-center">Acciones</th>
+  </tr>
+</thead>
           <tbody class="text-slate-100">
             ${p.movimientos.map(m => `
-              <tr class="border-t border-slate-600">
-                <td class="py-1 pr-3 whitespace-nowrap">${m.fecha}</td>
-                <td class="py-1 pr-3">${m.tipo}</td>
-                <td class="py-1 pr-3">${parseFloat(m.cantidad).toFixed(2)}</td>
-                <td class="py-1 pr-3">${m.stock_despues}</td>
-                <td class="py-1">${m.nota || ''}</td>
+              <tr class="border-t border-slate-600 align-top">
+                <td class="py-1 pr-3 whitespace-nowrap">${esc(m.fecha)}</td>
+                <td class="py-1 pr-3 whitespace-nowrap">${esc(m.tipo)}</td>
+                <td class="py-1 pr-3 whitespace-nowrap">${parseFloat(m.cantidad).toFixed(2)}</td>
+                <td class="py-1 pr-3 whitespace-nowrap">${esc(m.stock_despues)}</td>
+                <td class="py-1 pr-3 whitespace-nowrap">${esc(m.usuario || '—')}</td>
+                <!-- wrap real + respeta saltos de línea del texto -->
+                <td class="py-1 whitespace-pre-wrap break-words">${esc(m.nota || '')}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -773,208 +834,304 @@ function renderReporteMovimientos(data) {
 
   return cont.outerHTML;
 }
+
 async function generarPDFInventarioMovs(data, meta) {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'pt', format: 'letter' }); // 612 x 792 pt aprox.
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' }); // 612 x 792
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const M = 40; // margen
+  const M = 40;                 // margen
+  const FS = { title: 13, meta: 9, th: 9, td: 9 };
+  const LH = { th: 16, td: 14 }; // line-heights
   let y = M;
 
-  // === Utilidades ===
+  // Utils
   const now = new Date();
-  const fechaCreacion = now.toLocaleString(); // local
+  const fechaCreacion = now.toLocaleString();
 
-  // Lee tamaño real de una dataURL
-const getImageSize = (src) => new Promise(resolve => {
-  const img = new Image();
-  img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-  img.src = src;
-});
+  // Lee tamaño de dataURI
+  const getImageSize = (src) => new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.src = src;
+  });
 
-// Convierte cualquier dataURL a PNG (para jsPDF)
-const toPNG = (dataURL) => new Promise(resolve => {
-  const img = new Image();
-  img.onload = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-    resolve(canvas.toDataURL('image/png'));
+  // Convierte a PNG si el mime no es PNG/JPEG
+  const toPNG = (dataURL) => new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.src = dataURL;
+  });
+
+  const getLogoReady = async () => {
+    try {
+      const r = await fetch('../php/obtener_logo.php', { cache: 'no-store' });
+      const j = await r.json();
+      if (!j.success || !j.base64) return null;
+      let dataURI = j.base64;
+      let mime = (j.mime || '').toLowerCase();
+      if (!/png|jpe?g/.test(mime)) { dataURI = await toPNG(dataURI); mime = 'image/png'; }
+      const { w, h } = await getImageSize(dataURI);
+      return { dataURI, mime, w, h };
+    } catch { return null; }
   };
-  img.src = dataURL;
-});
+// helper: 'YYYY-MM-DD' (o 'YYYY-MM-DD HH:mm:ss') -> 'dd/mm/yyyy'
+function formatDMY(iso) {
+  if (!iso) return '';
+  const s = String(iso).trim();
+  const datePart = s.includes(' ') ? s.split(' ')[0] : s; // quita hora si viene
+  const [Y, M, D] = datePart.split('-');
+  return `${D}/${M}/${Y}`;
+}
 
-// Obtiene logo (y si no es PNG/JPEG lo convierte), regresando también dimensiones
-const getLogoReady = async () => {
-  try {
-    const r = await fetch('../php/obtener_logo.php', { cache: 'no-store' });
-    const j = await r.json();
-    if (!j.success || !j.base64) return null;
+  // Header de página
+// --- HEADER con logo a la DERECHA ---
+const addHeader = (firstPage = false) => {
+  // barra superior suave
+  const headerH = 56;
+  doc.setFillColor(246, 248, 251);            // gris muy claro
+  doc.setDrawColor(220);
+  doc.rect(M, y, pageW - 2 * M, headerH, 'F');
 
-    let dataURI = j.base64;
-    let mime = (j.mime || '').toLowerCase();
+  // medidas y posiciones base
+  const paddingX = 12;
+  const textX = M + paddingX;
+  const textY = y + 16;
 
-    // jsPDF soporta PNG/JPEG; si viene WEBP u otro, conviértelo a PNG
-    if (!/png|jpeg|jpg/.test(mime)) {
-      dataURI = await toPNG(dataURI);
-      mime = 'image/png';
-    }
-    const { w, h } = await getImageSize(dataURI);
-    return { dataURI, mime, w, h };
-  } catch { return null; }
-};
-
-
-
-  const addHeader = (firstPage=false) => {
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-
-  let xText = M;      // posición de texto si no hay logo
-  let headerH = 0;    // altura efectiva del header
-
+  // dibuja logo a la DERECHA
+  let rightEdgeForText = pageW - M;           // límite derecho del bloque de texto
   if (window.__logoReporteInv) {
     const { dataURI, mime, w, h } = window.__logoReporteInv;
     const fmt = (mime.includes('jpeg') || mime.includes('jpg')) ? 'JPEG' : 'PNG';
-
-    // Escalado proporcional dentro de un máximo
-    const maxW = 160;   // ancho máximo del logo en puntos
-    const maxH = 48;    // alto máximo del logo en puntos
+    const maxH = 48, maxW = 160;
     const ratio = w / h;
+    const drawW = Math.min(maxW, maxH * ratio);
+    const drawH = drawW / ratio;
 
-    let drawW = Math.min(maxW, maxH * ratio);
-    let drawH = drawW / ratio;
+    const xLogo = pageW - M - drawW;          // 👉 alineado a la derecha
+    const yLogo = y + (headerH - drawH) / 2;  // centrado vertical en la barra
+    doc.addImage(dataURI, fmt, xLogo, yLogo, drawW, drawH);
 
-    doc.addImage(dataURI, fmt, M, y, drawW, drawH);
-
-    xText   = M + drawW + 12; // texto a la derecha del logo
-    headerH = drawH;
+    rightEdgeForText = xLogo - paddingX;      // deja aire antes del logo
   }
 
-  // Título y metadatos
-  doc.text('Reporte de movimientos de inventario', xText, y + 16);
+  // título + metadatos (acotados para no chocar con el logo)
+  const maxTextW = Math.max(100, rightEdgeForText - textX);
+
+  doc.setTextColor(20);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+  doc.text(doc.splitTextToSize('Reporte de movimientos de inventario', maxTextW), textX, textY);
+
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(`Creado: ${fechaCreacion}`, xText, y + 32);
-  doc.text(`${meta.etiquetaFiltro}  |  Ventana: ${meta.desde} → ${meta.hasta}`, xText, y + 48);
+  doc.text(`Creado: ${fechaCreacion}`, textX, textY + 16);
 
-  // Avance vertical: usa la altura del logo o un mínimo
-  y += Math.max(headerH, 52);
+  // si ya formateas dd/mm/yyyy en otro lado, reusa tus helpers/variables
+  const etiquetaLinea =
+  `${meta.etiquetaFiltro}    |    Ventana: ${meta.desde}  |  ${meta.hasta}`;
 
-  // Separador
-  doc.setLineWidth(0.5);
+  doc.text(doc.splitTextToSize(etiquetaLinea, maxTextW), textX, textY + 30);
+
+  // línea separadora y avance
+  y += headerH + 6;
+  doc.setDrawColor(210); doc.setLineWidth(0.6);
   doc.line(M, y, pageW - M, y);
-  y += 14;
+  y += 8;
 };
 
-
-  const ensureSpace = (lines = 0) => {
-    const need = y + lines * 14 + 40;
-    if (need > pageH - M) {
-      doc.addPage();
-      y = M;
-      addHeader(false);
+  // Auto salto si no cabe N px más
+  const ensureSpace = (needPx) => {
+    if (y + needPx > pageH - M) {
+      doc.addPage(); y = M; addHeader();
     }
   };
 
-  const printCellRow = (cols) => {
-    // cols: [{w, text, bold}]
-    const h = 16;
-    ensureSpace(2);
-    let x = M;
-    cols.forEach(c => {
-      if (c.bold) { doc.setFont('helvetica', 'bold'); } else { doc.setFont('helvetica', 'normal'); }
-      doc.setFontSize(10);
-      const txt = Array.isArray(c.text) ? c.text : [String(c.text ?? '')];
-      txt.forEach((line, i) => {
-        doc.text(line, x + 2, y + 12 + i*12);
-      });
-      x += c.w;
-    });
-    y += h;
+  // Dibuja encabezados de la tabla
+  const drawTableHeader = (cols) => {
+  ensureSpace(LH.th + 8);
+  // banda oscura
+  doc.setFillColor(30, 41, 59);    // slate-800
+  doc.setTextColor(255);
+  doc.rect(M, y, pageW - 2*M, LH.th, 'F');
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(FS.th);
+  let x = M;
+  cols.forEach(c => {
+    const tw = doc.getTextWidth(c.title);
+    doc.text(c.title, x + (c.w/2) - (tw/2), y + 11);  // <- centrado
+    x += c.w;
+  });
+  y += LH.th;
+  doc.setTextColor(0);
+};
+
+
+  // Dibuja una fila (alto dinámico por el wrap)
+  const drawRow = (cols, row, zebra) => {
+  const paddX = 6, paddY = 6;
+
+  // pre-wrap (centramos todo; “nota” sí puede ir en varias líneas)
+  const texts = cols.map(c => {
+    const val = (row[c.key] ?? '').toString();
+    if (c.key === 'nota') return doc.splitTextToSize(val, c.w - paddX*2);
+    return [val || ''];
+  });
+
+  const maxLines = Math.max(1, ...texts.map(t => t.length));
+  const h = paddY*2 + (maxLines * (FS.td + 3));
+  ensureSpace(h);
+
+  if (zebra) { doc.setFillColor(250); doc.rect(M, y, pageW - 2*M, h, 'F'); }
+
+  let x = M;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(FS.td);
+
+  // colores para el chip del tipo
+  const TYPE_COLORS = {
+    'ingreso':  [34,197,94],   // verde
+    'ajuste-':  [239,68,68],   // rojo
+    'ajuste+':  [34,197,94],
+    'devolucion+':[34,197,94],
+    'devolucion-':[239,68,68]
   };
 
-  if (!window.__logoReporteInv) {
-  window.__logoReporteInv = await getLogoReady(); // {dataURI,mime,w,h} | null
-  }
+  cols.forEach((c, i) => {
+    const lines = texts[i];
+
+    if (c.key === 'tipo') {
+      // dibuja "chip" centrado
+      const label = (row.tipo || '').toString();
+      const color = TYPE_COLORS[label] || [100,116,139]; // slate-500 fallback
+      const tw = doc.getTextWidth(label);
+      const chipW = tw + 14, chipH = FS.td + 6;
+      const cx = x + (c.w - chipW)/2;
+      const cy = y + (h - chipH)/2;
+
+      doc.setFillColor(color[0], color[1], color[2]);
+      if (doc.roundedRect) doc.roundedRect(cx, cy, chipW, chipH, 4, 4, 'F');
+      else doc.rect(cx, cy, chipW, chipH, 'F');
+
+      doc.setTextColor(255);
+      doc.setFont('helvetica','bold');
+      doc.text(label, x + (c.w/2) - (tw/2), cy + chipH/2 + 3); // centrado en el chip
+      doc.setTextColor(0);
+      doc.setFont('helvetica','normal');
+    } else {
+      // centrar horizontal y verticalmente
+      const blockH = (lines.length * (FS.td + 3)) - 3;
+      let yy = y + (h/2) - (blockH/2) + 9;
+      lines.forEach(l => {
+        const lw = doc.getTextWidth(l);
+        doc.text(l, x + (c.w/2) - (lw/2), yy);  // <- centrado
+        yy += (FS.td + 3);
+      });
+    }
+
+    x += c.w;
+  });
+
+  y += h;
+  doc.setDrawColor(230); doc.setLineWidth(0.3);
+  doc.line(M, y, pageW - M, y);
+  doc.setDrawColor(0);
+};
 
 
-  addHeader(true);
+  // Precarga logo una vez
+  if (!window.__logoReporteInv) window.__logoReporteInv = await getLogoReady();
 
-  // Recorre productos
+  addHeader();
+
+  // === Columnas (ancho pensado para que Nota tenga espacio) ===
+  // Suma fija: 120 + 70 + 60 + 95 + 120 = 465; resto para Nota
+  const fixedSum = 100 /*Fecha  << antes 120*/
+               + 80  /*Tipo*/
+               + 55  /*Cant. << antes 70*/
+               + 80  /*Stock << antes 100*/
+               + 120 /*Usuario (ajústalo a 110 si necesitas más aire)*/;
+
+const fudge = 6; // pequeño margen para evitar desbordes
+const notaW = pageW - (M * 2) - fixedSum - fudge;
+
+const COLS = [
+  { key:'fecha',          title:'Fecha',           w:100 },
+  { key:'tipo',           title:'Tipo',            w:80  },
+  { key:'cantidad',       title:'Cant.',           w:55  },
+  { key:'stock_despues',  title:'Stock después',   w:80  },
+  { key:'usuario',        title:'Usuario',         w:120 },
+  { key:'nota',           title:'Nota',            w:notaW } // ahora más ancha
+];
+
+  // === Por cada producto ===
   data.resumen.forEach((p, idx) => {
-    // Cabecera del producto
-    ensureSpace(4);
-    doc.setFont('helvetica','bold'); doc.setFontSize(11);
-    doc.text(`${p.codigo} — ${p.nombre}`, M, y);
-    doc.setFont('helvetica','normal'); doc.setFontSize(10);
-    const stockAct = (p.stock_actual === null || p.stock_actual === undefined) ? '—' : p.stock_actual;
-    doc.text(`Stock actual: ${stockAct}`, pageW - M - 140, y);
-    y += 8;
+    // Título de producto
+    ensureSpace(30);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text(`${p.codigo} — ${p.nombre}`, M, y + 10);
 
-    // Encabezado tabla
-    printCellRow([
-      { w: 140, text: 'Fecha', bold: true },
-      { w: 100, text: 'Tipo', bold: true },
-      { w: 70,  text: 'Cant.', bold: true },
-      { w: 110, text: 'Stock después', bold: true },
-      { w: pageW - (M*2) - (140+100+70+110), text: 'Nota', bold: true }
-    ]);
+    // "Stock actual" completamente a la derecha
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    const stockAct = (p.stock_actual ?? '—');
+    const label = `Stock actual: ${stockAct}`;
+    const labelW = doc.getTextWidth(label);
+    doc.text(label, pageW - M - labelW, y + 10);
+
+    y += 16;
+
+    // Encabezado de tabla
+    drawTableHeader(COLS);
 
     // Filas
-    p.movimientos.forEach(m => {
-      // nota envuelta
-      const notaWrapped = doc.splitTextToSize(m.nota || '', pageW - (M*2) - (140+100+70+110) - 6);
-      const lines = Math.max(1, notaWrapped.length);
-      ensureSpace(lines + 1);
-
-      printCellRow([
-        { w: 140, text: m.fecha },
-        { w: 100, text: m.tipo },
-        { w: 70,  text: parseFloat(m.cantidad).toFixed(2) },
-        { w: 110, text: String(m.stock_despues) },
-        { w: pageW - (M*2) - (140+100+70+110), text: notaWrapped }
-      ]);
+    p.movimientos.forEach((m, i) => {
+      drawRow(COLS, {
+        fecha: (m.fecha || ''),
+        tipo:  (m.tipo || ''),
+        cantidad: (parseFloat(m.cantidad || 0)).toFixed(2),
+        stock_despues: String(m.stock_despues ?? ''),
+        usuario: (m.usuario || '—'),
+        // Nota tal cual, con wrap interno (no se verá vertical)
+        nota: (m.nota || '')
+      }, i % 2 === 1); // zebra
     });
 
-    y += 8; // separación entre productos
+    y += 8;
     if (idx < data.resumen.length - 1) {
-      ensureSpace(2);
-      doc.setDrawColor(180); doc.setLineWidth(0.3);
+      ensureSpace(14);
+      doc.setDrawColor(180); doc.setLineWidth(0.6);
       doc.line(M, y, pageW - M, y);
       doc.setDrawColor(0);
       y += 10;
     }
   });
 
-  // Pie de página simple
+  // Pie con paginación
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     doc.setFont('helvetica','normal'); doc.setFontSize(9);
-    doc.text(`Página ${i} de ${totalPages}`, pageW - M - 80, pageH - M/2);
+    doc.setTextColor(100);
+    const t = `Página ${i} de ${totalPages}`;
+    doc.text(t, pageW - M - doc.getTextWidth(t), pageH - M/2);
+    doc.setTextColor(0);
   }
 
   const fileName = `reporte_inventario_${meta.desde}_a_${meta.hasta}.pdf`;
 
-try {
-  // Opción principal: abrir con URL de blob
-  const blob = doc.output('blob');
-  const url = URL.createObjectURL(blob);
-  const win = window.open(url, '_blank'); // abre el visor PDF del navegador
-
-  // Si el navegador bloquea el popup, usa el fallback de jsPDF
-  if (!win) {
-    doc.output('dataurlnewwindow', { filename: fileName });
+  try {
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) doc.output('dataurlnewwindow', { filename: fileName });
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    doc.save(fileName);
   }
+}
 
-  // Limpia el objeto URL después de un rato
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-} catch (e) {
-  // Último recurso: descarga
-  doc.save(fileName);
-}
-}
 
 
 

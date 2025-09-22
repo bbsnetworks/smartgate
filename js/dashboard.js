@@ -233,7 +233,7 @@ async function modalApiConfig() {
         <label class="text-sm text-slate-300 mt-2">User Secret</label>
         <input id="api_userSecret" type="password" class="swal2-input" placeholder="••••••••••" value="${escapeHtml(prev.userSecret || '')}">
         <label class="text-sm text-slate-300 mt-2">URL HikCentral API</label>
-        <input id="api_url" class="swal2-input" placeholder="http://127.0.0.1:9016" value="${escapeHtml(prev.urlHikCentralAPI || '')}">
+        <input id="api_url" class="swal2-input" placeholder="" value="${escapeHtml(prev.urlHikCentralAPI || 'http://127.0.0.1:9016')}">
         ${prev.updated_at ? `<small class="text-slate-400 mt-1">Última actualización: ${prev.updated_at}</small>` : '' }
       </div>
     `,
