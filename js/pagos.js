@@ -182,7 +182,12 @@ async function abrirModalPago() {
           <input id="descuento" type="number" min="0" value="0" class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
         </div>
       </div>
-
+      <div>
+  <label class="block mb-1 font-semibold">💵 Recibido (solo efectivo):</label>
+  <input id="recibido" type="number" min="0" step="0.01" placeholder="Ej. 700.00"
+         class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+  <p class="mt-1 text-xs text-slate-500" id="ayudaCambio"></p>
+</div>      
       <div>
         <label class="block mb-1 font-semibold">💳 Método de Pago:</label>
         <select id="metodo" class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
@@ -203,10 +208,10 @@ async function abrirModalPago() {
       confirmButtonText: "Guardar pago",
       preConfirm: () => {
         const seleccionado = document.querySelector(".cliente-seleccionado");
-  if (!seleccionado) {
-    Swal.showValidationMessage("Selecciona un cliente");
-    return false;
-  }
+        if (!seleccionado) {
+          Swal.showValidationMessage("Selecciona un cliente");
+          return false;
+        }
 
         const inicio = document.getElementById("fecha_inicio").value;
         const fin = document.getElementById("fecha_fin").value;
@@ -214,6 +219,7 @@ async function abrirModalPago() {
         const descuento =
           Number(document.getElementById("descuento").value) || 0;
         const metodo = document.getElementById("metodo").value;
+        const recibido = Number(document.getElementById("recibido").value) || 0;
 
         if (!inicio || !fin) {
           Swal.showValidationMessage("Debes seleccionar ambas fechas.");
@@ -239,18 +245,36 @@ async function abrirModalPago() {
           );
           return false;
         }
+        const total = Math.max(0, monto - descuento);
+
+        if (metodo === "efectivo") {
+          if (recibido <= 0) {
+            Swal.showValidationMessage("Ingresa el efectivo recibido.");
+            return false;
+          }
+          if (recibido < total) {
+            Swal.showValidationMessage(
+              `El efectivo recibido ($${recibido.toFixed(
+                2
+              )}) no alcanza el total ($${total.toFixed(2)}).`
+            );
+            return false;
+          }
+          const seleccionado = document.querySelector(".cliente-seleccionado");
+        }
 
         return {
-    cliente_id: Number(seleccionado.dataset.id),   // <-- NUEVO
-    nombre: seleccionado.dataset.nombre,
-    apellido: seleccionado.dataset.apellido,
-    telefono: seleccionado.dataset.telefono,
-    fecha_inicio: inicio,
-    fecha_fin: fin,
-    monto,
-    descuento,
-    metodo,
-  };
+          cliente_id: Number(seleccionado.dataset.id), // <-- NUEVO
+          nombre: seleccionado.dataset.nombre,
+          apellido: seleccionado.dataset.apellido,
+          telefono: seleccionado.dataset.telefono,
+          fecha_inicio: inicio,
+          fecha_fin: fin,
+          monto,
+          descuento,
+          metodo,
+          recibido: metodo === "efectivo" ? recibido : null,
+        };
       },
 
       didOpen: () => {
@@ -368,8 +392,52 @@ async function abrirModalPago() {
                       descuentoInput.value = m;
                     }
                   };
+
+                  const $monto = document.getElementById("monto");
+                  const $desc = document.getElementById("descuento");
+                  const $rec = document.getElementById("recibido");
+                  const $met = document.getElementById("metodo");
+                  const $help = document.getElementById("ayudaCambio");
+
+                  function totalACobrar() {
+                    const m = Number($monto.value) || 0;
+                    const d = Number($desc.value) || 0;
+                    return Math.max(0, m - d);
+                  }
+
+                  function toggleRecibido() {
+                    const esEfectivo = $met.value === "efectivo";
+                    $rec.disabled = !esEfectivo;
+                    $rec.placeholder = esEfectivo
+                      ? "Ej. 700.00"
+                      : "Solo para efectivo";
+                    if (!esEfectivo) {
+                      $rec.value = "";
+                      $help.textContent = "";
+                      return;
+                    }
+                    const total = totalACobrar();
+                    const rec = Number($rec.value) || 0;
+                    const cambio = rec - total;
+                    $help.textContent =
+                      total > 0
+                        ? `Total: $${total.toFixed(2)}${
+                            rec > 0
+                              ? " | Cambio: $" + Math.max(0, cambio).toFixed(2)
+                              : ""
+                          }`
+                        : "";
+                  }
+
+                  [$monto, $desc, $rec].forEach((el) =>
+                    el.addEventListener("input", toggleRecibido)
+                  );
+                  $met.addEventListener("change", toggleRecibido);
+                  toggleRecibido();
+
                   montoInput.addEventListener("input", syncMax);
                   descuentoInput.addEventListener("input", syncMax);
+
                   syncMax();
                 };
 
@@ -390,6 +458,16 @@ async function abrirModalPago() {
           .then((res) => res.json())
           .then(async (data) => {
             if (data.success) {
+              const total = Math.max(
+                0,
+                result.value.monto - result.value.descuento
+              );
+              const esEfectivo = result.value.metodo === "efectivo";
+              const recibido = esEfectivo
+                ? Number(result.value.recibido) || 0
+                : null;
+              const cambio = esEfectivo ? recibido - total : null;
+
               const datosTicket = {
                 nombre: result.value.nombre,
                 apellido: result.value.apellido,
@@ -401,12 +479,52 @@ async function abrirModalPago() {
                 descuento: result.value.descuento,
                 fecha_pago: new Date().toISOString(),
                 usuario: window.usuarioActual?.nombre || "Usuario desconocido",
+                // NUEVO:
+                recibido,
+                cambio,
               };
-              // Esperar a que se genere el ticket antes del reload
+
               await generarTicketPago(datosTicket);
-              swalSuccess
-                .fire("¡Éxito!", data.msg, "success")
-                .then(() => location.reload());
+
+              if (esEfectivo) {
+                await swalSuccess.fire({
+                  title: "¡Pago en efectivo registrado!",
+                  icon: "success",
+                  width: 700,
+                  backdrop: true,
+                  allowOutsideClick: false,
+                  html: `
+      <div class="text-left text-slate-200">
+        <div class="flex justify-between items-center mb-1">
+          <span class="opacity-80">Total:</span>
+          <strong class="text-white">$${total.toFixed(2)}</strong>
+        </div>
+        <div class="flex justify-between items-center mb-1">
+          <span class="opacity-80">Recibido:</span>
+          <strong class="text-white">$${recibido.toFixed(2)}</strong>
+        </div>
+      </div>
+
+      <div class="mt-4 border-t border-slate-600 pt-4 text-center">
+        <div class="text-lime-400 font-semibold tracking-wide">Cambio:</div>
+        <div class="text-lime-400 font-extrabold"
+             style="font-size: 40px; line-height: 1; margin-top: 6px;">
+          $${Math.max(0, cambio).toFixed(2)}
+        </div>
+      </div>
+    `,
+                  customClass: {
+                    popup: "bg-slate-800 text-white rounded-2xl",
+                    title: "text-3xl font-bold",
+                    confirmButton:
+                      "bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl",
+                  },
+                });
+              } else {
+                await swalSuccess.fire("¡Éxito!", data.msg, "success");
+              }
+
+              location.reload();
             } else {
               swalError.fire(
                 "Error",
@@ -510,6 +628,29 @@ async function abrirModalPagoConCliente(cliente) {
 
 
         </div>
+        <div>
+  <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+    <i data-lucide="banknote" class="w-4 h-4 text-green-400"></i> Recibido (solo efectivo):
+  </label>
+  <input
+    id="recibido"
+    type="text"
+    inputmode="decimal"
+    placeholder="Ej. 700.00"
+    class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+    onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+    oninput="
+      this.value = this.value
+        .replace(',', '.')
+        .replace(/[^\\d.]/g,'');
+      if ((this.value.match(/\\./g)||[]).length > 1) {
+        this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
+      }
+      this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+    "
+  >
+  <p class="mt-1 text-xs text-slate-500" id="ayudaCambio"></p>
+</div>
 
         <div>
             <label class="block mb-1 text-sm font-medium flex items-center gap-1">
@@ -557,6 +698,47 @@ async function abrirModalPagoConCliente(cliente) {
             descuentoInput.value = m;
           }
         };
+        const $monto = document.getElementById("monto");
+        const $desc = document.getElementById("descuento");
+        const $rec = document.getElementById("recibido");
+        const $met = document.getElementById("metodo");
+        const $help = document.getElementById("ayudaCambio");
+
+        function totalACobrar() {
+          return Math.max(
+            0,
+            (Number($monto.value) || 0) - (Number($desc.value) || 0)
+          );
+        }
+
+        function toggleRecibido() {
+          const esEfectivo = $met.value === "efectivo";
+          $rec.disabled = !esEfectivo;
+          $rec.placeholder = esEfectivo ? "Ej. 700.00" : "Solo para efectivo";
+          if (!esEfectivo) {
+            $rec.value = "";
+            $help.textContent = "";
+            return;
+          }
+          const total = totalACobrar();
+          const recNum = Number($rec.value) || 0;
+          const cambio = recNum - total;
+          $help.textContent =
+            total > 0
+              ? `Total: $${total.toFixed(2)}${
+                  recNum > 0
+                    ? " | Cambio: $" + Math.max(0, cambio).toFixed(2)
+                    : ""
+                }`
+              : "";
+        }
+
+        [$monto, $desc, $rec].forEach((el) =>
+          el.addEventListener("input", toggleRecibido)
+        );
+        $met.addEventListener("change", toggleRecibido);
+        toggleRecibido();
+
         montoInput.addEventListener("input", syncMax);
         descuentoInput.addEventListener("input", syncMax);
         syncMax();
@@ -568,6 +750,8 @@ async function abrirModalPagoConCliente(cliente) {
         const descuento =
           Number(document.getElementById("descuento").value) || 0;
         const metodo = document.getElementById("metodo").value;
+        const recibido =
+          Number(document.getElementById("recibido")?.value) || 0;
 
         if (!inicio || !fin) {
           Swal.showValidationMessage("Debes seleccionar ambas fechas.");
@@ -594,17 +778,34 @@ async function abrirModalPagoConCliente(cliente) {
           return false;
         }
 
+        const total = Math.max(0, monto - descuento);
+        if (metodo === "efectivo") {
+          if (recibido <= 0) {
+            Swal.showValidationMessage("Ingresa el efectivo recibido.");
+            return false;
+          }
+          if (recibido < total) {
+            Swal.showValidationMessage(
+              `El efectivo recibido ($${recibido.toFixed(
+                2
+              )}) no alcanza el total ($${total.toFixed(2)}).`
+            );
+            return false;
+          }
+        }
+
         return {
-    cliente_id: Number(cliente.id),    // <-- NUEVO
-    nombre: cliente.nombre,
-    apellido: cliente.apellido,
-    telefono: cliente.telefono,
-    fecha_inicio: inicio,
-    fecha_fin: fin,
-    monto,
-    descuento,
-    metodo,
-  };
+          cliente_id: Number(cliente.id),
+          nombre: cliente.nombre,
+          apellido: cliente.apellido,
+          telefono: cliente.telefono,
+          fecha_inicio: inicio,
+          fecha_fin: fin,
+          monto,
+          descuento,
+          metodo,
+          recibido: metodo === "efectivo" ? recibido : null,
+        };
       },
     })
     .then((result) => {
@@ -617,6 +818,16 @@ async function abrirModalPagoConCliente(cliente) {
           .then((res) => res.json())
           .then(async (data) => {
             if (data.success) {
+              const total = Math.max(
+                0,
+                result.value.monto - result.value.descuento
+              );
+              const esEfectivo = result.value.metodo === "efectivo";
+              const recibido = esEfectivo
+                ? Number(result.value.recibido) || 0
+                : null;
+              const cambio = esEfectivo ? recibido - total : null;
+
               const datosTicket = {
                 nombre: result.value.nombre,
                 apellido: result.value.apellido,
@@ -628,11 +839,51 @@ async function abrirModalPagoConCliente(cliente) {
                 descuento: result.value.descuento,
                 fecha_pago: new Date().toISOString(),
                 usuario: window.usuarioActual?.nombre || "Usuario desconocido",
+                recibido,
+                cambio,
               };
+
               await generarTicketPago(datosTicket);
-              swalSuccess
-                .fire("¡Éxito!", data.msg, "success")
-                .then(() => location.reload());
+
+              if (esEfectivo) {
+                await swalSuccess.fire({
+                  title: "¡Pago en efectivo registrado!",
+                  icon: "success",
+                  width: 700,
+                  backdrop: true,
+                  allowOutsideClick: false,
+                  html: `
+      <div class="text-left text-slate-200">
+        <div class="flex justify-between items-center mb-1">
+          <span class="opacity-80">Total:</span>
+          <strong class="text-white">$${total.toFixed(2)}</strong>
+        </div>
+        <div class="flex justify-between items-center mb-1">
+          <span class="opacity-80">Recibido:</span>
+          <strong class="text-white">$${recibido.toFixed(2)}</strong>
+        </div>
+      </div>
+
+      <div class="mt-4 border-t border-slate-600 pt-4 text-center">
+        <div class="text-lime-400 font-semibold tracking-wide">Cambio:</div>
+        <div class="text-lime-400 font-extrabold"
+             style="font-size: 40px; line-height: 1; margin-top: 6px;">
+          $${Math.max(0, cambio).toFixed(2)}
+        </div>
+      </div>
+    `,
+                  customClass: {
+                    popup: "bg-slate-800 text-white rounded-2xl",
+                    title: "text-3xl font-bold",
+                    confirmButton:
+                      "bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl",
+                  },
+                });
+              } else {
+                await swalSuccess.fire("¡Éxito!", data.msg, "success");
+              }
+
+              location.reload();
             } else {
               swalError.fire(
                 "Error",
@@ -914,8 +1165,6 @@ function verPagos(clienteId, nombreCompleto) {
             actualizarToggle($toggle, pagosVisibles, colapsado);
             actualizarBadge($badge, pagosVisibles);
           });
-
-          
 
           $toggle.addEventListener("click", () => {
             colapsado = !colapsado;

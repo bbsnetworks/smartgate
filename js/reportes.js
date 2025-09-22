@@ -378,8 +378,8 @@ const renderCajaPDF = () => {
   let yC = y + 12;
   const rightBound = boxX + boxW - 8;
 
-  yC = lineAmount(doc, boxX + 8, yC, "Efectivo esperado", esperado, rightBound);
-  yC = lineAmount(doc, boxX + 8, yC, "Dejado en caja", dejado, rightBound);
+  yC = lineAmount(doc, boxX + 8, yC, "Total General efectivo", esperado, rightBound);
+  yC = lineAmount(doc, boxX + 8, yC, "Caja", dejado, rightBound);
 
   doc.setDrawColor(...PALETTE.stroke);
   doc.setLineWidth(0.3);
@@ -817,15 +817,15 @@ function crearCajaHTML() {
   return `
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <div class="bg-slate-800 rounded-xl p-4">
-        <div class="text-sm text-slate-300">Efectivo esperado</div>
+        <div class="text-sm text-slate-300">Total General Efectivo</div>
         <div class="mt-1 text-3xl font-bold text-white" data-efectivo-esperado>$0.00</div>
         <div data-caja-warn class="mt-2 text-xs text-amber-400 hidden">
-          No se pudo calcular el efectivo esperado.
+          No se pudo calcular el total general.
         </div>
       </div>
 
       <div class="bg-slate-800 rounded-xl p-4">
-        <label for="monto_caja" class="text-sm text-slate-300">Dejado en caja</label>
+        <label for="monto_caja" class="text-sm text-slate-300">Caja</label>
         <div class="mt-1 flex items-center gap-2">
           <span class="text-slate-400">$</span>
           <input id="monto_caja" type="number" step="0.01" min="0"
