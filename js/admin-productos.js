@@ -31,7 +31,7 @@ function cargarProductos(pagina = 1) {
         renderPaginacion(); // ⬅️ esta parte es nueva
       } else {
         document.getElementById("tabla-productos").innerHTML =
-          '<tr><td colspan="8" class="text-center py-4">No se pudieron cargar productos</td></tr>';
+          '<tr><td colspan="9" class="text-center py-4">No se pudieron cargar productos</td></tr>';
       }
     });
 }
@@ -56,44 +56,50 @@ function mostrarProductosFiltrados(productos) {
   const tabla = document.getElementById("tabla-productos");
   tabla.innerHTML = "";
 
-  if (productos.length === 0) {
-    tabla.innerHTML = '<tr><td colspan="8" class="text-center py-4">No se encontraron productos</td></tr>';
+  if (!productos.length) {
+    tabla.innerHTML = '<tr><td colspan="9" class="text-center py-6 opacity-70">Sin resultados</td></tr>';
     return;
   }
 
   const fmt = n => `$${Number(n ?? 0).toFixed(2)}`;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
 
-  productos.forEach((p) => {
-    const descripcionCorta = (p.descripcion || '').length > 40
-      ? p.descripcion.slice(0, 30) + "..."
-      : (p.descripcion || '');
+  productos.forEach(p => {
+    const descFull  = p.descripcion || '';
+    const descCorta = descFull.length > 64 ? `${descFull.slice(0,64)}…` : descFull;
     const prov = p.proveedor_nombre || '—';
+    const cat  = p.categoria || '—';
 
-    const fila = document.createElement("tr");
-    fila.innerHTML = `
-      <td class="px-4 py-2">${p.codigo}</td>
-      <td class="px-4 py-2">${p.nombre}</td>
-      <td class="px-4 py-2">${descripcionCorta}</td>
-      <td class="px-4 py-2">${fmt(p.precio)}</td>
-      <td class="px-4 py-2">${fmt(p.precio_proveedor)}</td>
-      <td class="px-4 py-2">${prov}</td>
-      <td class="px-4 py-2">${p.stock}</td>
-      <td class="px-4 py-2 text-center space-x-2">
-        <button onclick="editarProducto(${p.id})"
-          class="text-yellow-400 hover:text-white border border-yellow-400 hover:bg-yellow-500 focus:ring-4 focus:outline-none focus:ring-yellow-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2">
-          ✏️ Editar
-        </button>
-        <button onclick="eliminarProducto(${p.id})"
-          class="text-red-700 hover:text-white border border-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2">
-          🗑️ Eliminar
-        </button>
+    const tr = document.createElement("tr");
+    tr.className = "hover:bg-slate-700/40";
+    tr.innerHTML = `
+      <td class="px-4 py-3 whitespace-nowrap">${esc(p.codigo)}</td>
+      <td class="px-4 py-3 whitespace-nowrap">${esc(p.nombre)}</td>
+      <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">${fmt(p.precio)}</td>
+      <td class="px-4 py-3 text-right tabular-nums whitespace-nowrap">${fmt(p.precio_proveedor)}</td>
+      <td class="px-4 py-3 whitespace-nowrap">${esc(prov)}</td>
+      <td class="px-4 py-3 text-right tabular-nums">${p.stock}</td>
+      <td class="px-4 py-3 whitespace-nowrap">${esc(cat)}</td>
+      <td class="px-4 py-3">
+        <div class="flex justify-center gap-2">
+          <button class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-yellow-500/15 text-yellow-300 border border-yellow-600 hover:bg-yellow-500 hover:text-slate-900 transition"
+                  onclick="editarProducto(${p.id})">
+            <i data-lucide="pencil" class="w-4 h-4"></i> Editar
+          </button>
+          <button class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-red-400 border border-red-600 hover:bg-red-600 hover:text-white transition"
+                  onclick="eliminarProducto(${p.id})">
+            <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar
+          </button>
+        </div>
       </td>
     `;
-    tabla.appendChild(fila);
+    tabla.appendChild(tr);
   });
+
+  if (window.lucide?.createIcons) lucide.createIcons();
 }
-
-
 
 
 
@@ -200,11 +206,6 @@ function abrirModalAgregar() {
     });
   });
 }
-
-
-
-
-
 
 function eliminarProducto(id) {
   if (tipoUsuario === "admin" || tipoUsuario === "root") {

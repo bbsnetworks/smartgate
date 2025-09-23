@@ -13,6 +13,16 @@
   <style>
     /* ≈ 20px como tu w-5 */
     .icon-20 { font-size: 20px; line-height: 1; }
+    .scrollbar-custom::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-custom::-webkit-scrollbar-track {
+  background: #1e293b; /* gris oscuro */
+}
+.scrollbar-custom::-webkit-scrollbar-thumb {
+  background-color: #FFB900; 
+  border-radius: 9999px;
+}
   </style>
 </head>
 
@@ -209,7 +219,7 @@
 
             <!-- Lista -->
             <ul id="lista-aniversarios"
-                class="mt-3 text-sm text-slate-300 space-y-1 flex-1 min-h-0 overflow-auto pr-1">
+                class="mt-3 text-sm text-slate-300 space-y-1 flex-1 min-h-0 overflow-auto pr-1 max-h-24 scrollbar-custom">
               <!-- Se llena por JS -->
             </ul>
 

@@ -89,104 +89,106 @@ switch ($method) {
 // === EXISTENTES (ajustados donde corresponde) ===
 
 function obtenerProductos($conexion) {
+  // Detalle por ID (para Editar)
   if (isset($_GET['id'])) {
     $id = intval($_GET['id']);
-    $stmt = $conexion->prepare("
-  SELECT p.id, p.codigo, p.nombre, p.descripcion, p.precio, p.precio_proveedor, p.stock,
-         p.categoria_id, p.proveedor_id
-  FROM productos p
-  WHERE p.id = ?
-");
+    $sql = "SELECT
+              p.id, p.codigo, p.nombre, p.descripcion,
+              p.precio, p.precio_proveedor, p.stock,
+              p.categoria_id, p.proveedor_id,
+              c.nombre  AS categoria,
+              pr.nombre AS proveedor_nombre
+            FROM productos p
+            LEFT JOIN categorias  c  ON c.id  = p.categoria_id
+            LEFT JOIN proveedores pr ON pr.id = p.proveedor_id
+            WHERE p.id = ?";
+    $stmt = $conexion->prepare($sql);
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $res = $stmt->get_result();
-    $producto = $res->fetch_assoc();
-    echo json_encode($producto ?: ["error" => "Producto no encontrado"]);
+    $row = $res->fetch_assoc();
+    echo json_encode($row ?: ["error" => "Producto no encontrado"]);
     return;
   }
 
-  $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 10;
-  $offset = isset($_GET['offset']) ? intval($_GET['offset']) : 0;
-  $busqueda = isset($_GET['busqueda']) ? trim($_GET['busqueda']) : '';
+  $limit    = isset($_GET['limit'])    ? max(1, intval($_GET['limit']))   : 10;
+  $offset   = isset($_GET['offset'])   ? max(0, intval($_GET['offset']))  : 0;
+  $busqueda = isset($_GET['busqueda']) ? trim($_GET['busqueda'])          : '';
 
   $productos = [];
-  $sql = "SELECT p.id, p.codigo, p.nombre, p.descripcion, p.stock,
-               p.precio, p.precio_proveedor,
-               c.nombre AS categoria,
-               pr.nombre AS proveedor_nombre
-        FROM productos p
-        LEFT JOIN categorias c  ON p.categoria_id = c.id
-        LEFT JOIN proveedores pr ON pr.id = p.proveedor_id";
+  $base = "FROM productos p
+           LEFT JOIN categorias  c  ON c.id  = p.categoria_id
+           LEFT JOIN proveedores pr ON pr.id = p.proveedor_id";
+
+  $where = "";
   $params = [];
-  $types = "";
+  $types  = "";
 
   if ($busqueda !== '') {
-    $sql .= " WHERE p.nombre LIKE ? OR p.descripcion LIKE ? OR p.codigo LIKE ? OR c.nombre LIKE ?";
-    $busquedaParam = "%$busqueda%";
-    $params = [$busquedaParam, $busquedaParam, $busquedaParam, $busquedaParam];
-    $types = "ssss";
+    $where = " WHERE p.nombre LIKE ? OR p.descripcion LIKE ? OR p.codigo LIKE ? OR c.nombre LIKE ? OR pr.nombre LIKE ?";
+    $like = "%$busqueda%";
+    $params = [$like,$like,$like,$like,$like];
+    $types  = "sssss";
   }
 
-  $sqlConLimite = $sql . " LIMIT ? OFFSET ?";
-  $params[] = $limit; $params[] = $offset;
-  $types .= "ii";
+  // datos
+  $sql = "SELECT
+            p.id, p.codigo, p.nombre, p.descripcion,
+            p.precio, p.precio_proveedor, p.stock,
+            c.nombre  AS categoria,
+            pr.nombre AS proveedor_nombre
+          $base
+          $where
+          LIMIT ? OFFSET ?";
 
-  $stmt = $conexion->prepare($sqlConLimite);
+  $params[] = $limit;  $params[] = $offset;
+  $types   .= "ii";
+
+  $stmt = $conexion->prepare($sql);
   $stmt->bind_param($types, ...$params);
   $stmt->execute();
   $res = $stmt->get_result();
   while ($row = $res->fetch_assoc()) { $productos[] = $row; }
 
-  $sqlTotal = "SELECT COUNT(*) as total
-             FROM productos p
-             LEFT JOIN categorias c  ON p.categoria_id = c.id
-             LEFT JOIN proveedores pr ON pr.id = p.proveedor_id";
-  if ($busqueda !== '') {
-    $sqlTotal .= " WHERE p.nombre LIKE ? OR p.descripcion LIKE ? OR p.codigo LIKE ? OR c.nombre LIKE ?";
-    $stmtTotal = $conexion->prepare($sqlTotal);
-    $stmtTotal->bind_param("ssss", $busquedaParam, $busquedaParam, $busquedaParam, $busquedaParam);
-  } else {
-    $stmtTotal = $conexion->prepare($sqlTotal);
-  }
-  $stmtTotal->execute();
-  $resTotal = $stmtTotal->get_result();
-  $total = (int)$resTotal->fetch_assoc()['total'];
+  // total
+  $sqlTot = "SELECT COUNT(*) AS total $base $where";
+  $stmtT = $conexion->prepare($sqlTot);
+  if ($busqueda !== '') { $stmtT->bind_param("sssss", $like,$like,$like,$like,$like); }
+  $stmtT->execute();
+  $total = (int)$stmtT->get_result()->fetch_assoc()['total'];
 
-  echo json_encode(["success" => true, "productos" => $productos, "total" => $total]);
+  echo json_encode(["success"=>true, "productos"=>$productos, "total"=>$total]);
 }
+
 
 
 function agregarProducto($conexion) {
   $data = json_decode(file_get_contents("php://input"), true);
 
-  $codigo = trim($data['codigo'] ?? '');
-  $nombre = trim($data['nombre'] ?? '');
-  $descripcion = trim($data['descripcion'] ?? '');
-  $precio = (float)($data['precio'] ?? -1);
-  $stock_inicial = (float)($data['stock'] ?? -1);
-  $categoria_id = intval($data['categoria_id'] ?? 0);
+  $codigo            = trim($data['codigo'] ?? '');
+  $nombre            = trim($data['nombre'] ?? '');
+  $descripcion       = trim($data['descripcion'] ?? '');
+  $precio            = (float)($data['precio'] ?? -1);            // venta
+  $precio_proveedor  = (float)($data['precio_proveedor'] ?? 0);   // costo
+  $stock_inicial     = (float)($data['stock'] ?? -1);
+  $categoria_id      = (int)($data['categoria_id'] ?? 0);
+  $proveedor_id      = (isset($data['proveedor_id']) && $data['proveedor_id'] !== '')
+                        ? (int)$data['proveedor_id'] : null;
 
-  if (!$codigo || !$nombre || !$descripcion || $precio <= 0 || $stock_inicial < 0 || $categoria_id <= 0) {
-    echo json_encode(["success" => false, "error" => "Todos los campos son obligatorios y deben ser válidos"]);
-    return;
+  if (!$codigo || !$nombre || !$descripcion || $precio < 0 || $stock_inicial < 0 || $categoria_id <= 0) {
+    echo json_encode(["success"=>false,"error"=>"Todos los campos son obligatorios y deben ser válidos"]); return;
   }
-  $precio_proveedor = (float)($data['precio_proveedor'] ?? 0);
-$proveedor_id = isset($data['proveedor_id']) && $data['proveedor_id'] !== '' ? (int)$data['proveedor_id'] : null;
-if ($precio_proveedor < 0) { echo json_encode(["success"=>false,"error"=>"Costo proveedor inválido"]); return; }
+  if ($precio_proveedor < 0) {
+    echo json_encode(["success"=>false,"error"=>"Costo proveedor inválido"]); return;
+  }
 
-// si viene proveedor_id, valida que exista (no forzamos activo=1 por si lo reactivan luego)
-if ($proveedor_id) {
-  $stmtP = $conexion->prepare("SELECT id FROM proveedores WHERE id = ?");
-  $stmtP->bind_param("i", $proveedor_id);
-  $stmtP->execute();
-  if ($stmtP->get_result()->num_rows === 0) { echo json_encode(["success"=>false,"error"=>"Proveedor no válido"]); return; }
-  $stmtP->close();
-}
   // Código único
   $stmt = $conexion->prepare("SELECT id FROM productos WHERE codigo = ?");
   $stmt->bind_param("s", $codigo);
   $stmt->execute();
-  if ($stmt->get_result()->num_rows > 0) { echo json_encode(["success"=>false,"error"=>"Ya existe un producto con ese código de barras"]); return; }
+  if ($stmt->get_result()->num_rows > 0) {
+    echo json_encode(["success"=>false,"error"=>"Ya existe un producto con ese código de barras"]); return;
+  }
   $stmt->close();
 
   // Categoría válida
@@ -196,30 +198,43 @@ if ($proveedor_id) {
   if ($stmt->get_result()->num_rows === 0) { echo json_encode(["success"=>false,"error"=>"Categoría inválida"]); return; }
   $stmt->close();
 
-  // === Transacción: insert + movimiento inicial (si aplica)
+  // Si viene proveedor, validar
+  if (!is_null($proveedor_id)) {
+    $stmt = $conexion->prepare("SELECT id FROM proveedores WHERE id = ?");
+    $stmt->bind_param("i", $proveedor_id);
+    $stmt->execute();
+    if ($stmt->get_result()->num_rows === 0) { echo json_encode(["success"=>false,"error"=>"Proveedor no válido"]); return; }
+    $stmt->close();
+  }
+
   $conexion->begin_transaction();
   try {
-    // 1) crea producto con stock=0
-    $stmt = $conexion->prepare("INSERT INTO productos (nombre, codigo, descripcion, precio, stock, categoria_id) VALUES (?, ?, ?, ?, 0, ?)");
-    $stmt->bind_param("sssdi", $nombre, $codigo, $descripcion, $precio, $categoria_id);
+    // INSERT con / sin proveedor
+    if (is_null($proveedor_id)) {
+      $sql = "INSERT INTO productos
+              (nombre, codigo, descripcion, precio, precio_proveedor, proveedor_id, stock, categoria_id)
+              VALUES (?, ?, ?, ?, ?, NULL, 0, ?)";
+      $stmt = $conexion->prepare($sql);
+      $stmt->bind_param("sssddi", $nombre, $codigo, $descripcion, $precio, $precio_proveedor, $categoria_id);
+    } else {
+      $sql = "INSERT INTO productos
+              (nombre, codigo, descripcion, precio, precio_proveedor, proveedor_id, stock, categoria_id)
+              VALUES (?, ?, ?, ?, ?, ?, 0, ?)";
+      $stmt = $conexion->prepare($sql);
+      $stmt->bind_param("sssddii", $nombre, $codigo, $descripcion, $precio, $precio_proveedor, $proveedor_id, $categoria_id);
+    }
     $stmt->execute();
     $producto_id = $conexion->insert_id;
 
-    // 2) si hay stock inicial, registra ingreso y actualiza stock
+    // movimiento inicial
     if ($stock_inicial > 0) {
       $nuevoStock = $stock_inicial;
-
       $sqlMov = "INSERT INTO inventario_movimientos
         (producto_id, producto_codigo, producto_nombre, tipo, cantidad, costo_unitario, stock_despues, ref_tabla, ref_id, usuario_id, almacen_id, nota)
         VALUES (?, ?, ?, 'ingreso', ?, NULL, ?, 'admin_productos', NULL, ?, NULL, 'Alta de producto')";
       $stmtI = $conexion->prepare($sqlMov);
       $uid = current_user_id();
       $stmtI->bind_param("issddi", $producto_id, $codigo, $nombre, $stock_inicial, $nuevoStock, $uid);
-
-      // tipos: i s s d d i s  -> "issddis"
-      // PHP exige exactitud; especificamos arriba: producto_id (i), codigo (s), nombre (s),
-      // cantidad (d), stock_despues (d), usuario_id (i)
-
       $stmtI->execute();
 
       $stmtU = $conexion->prepare("UPDATE productos SET stock = ? WHERE id = ?");
@@ -228,12 +243,14 @@ if ($proveedor_id) {
     }
 
     $conexion->commit();
-    echo json_encode(["success" => true, "msg" => "Producto agregado correctamente"]);
+    echo json_encode(["success"=>true,"msg"=>"Producto agregado correctamente"]);
   } catch (Exception $e) {
     $conexion->rollback();
-    echo json_encode(["success" => false, "error" => "Error al guardar el producto: ".$e->getMessage()]);
+    echo json_encode(["success"=>false,"error"=>"Error al guardar el producto: ".$e->getMessage()]);
   }
 }
+
+
 
 
 function ajustarStock($conexion) {
@@ -256,39 +273,86 @@ function ajustarStock($conexion) {
 function editarProducto($conexion) {
   $data = json_decode(file_get_contents("php://input"), true);
 
-  $id = intval($data['id'] ?? 0);
-  $codigo = trim($data['codigo'] ?? '');
-  $nombre = trim($data['nombre'] ?? '');
-  $descripcion = trim($data['descripcion'] ?? '');
-  $precio = (float)($data['precio'] ?? -1);
-  $stock = (int)($data['stock'] ?? -1);  // OJO: editar stock directo no genera movimiento
+  $id            = intval($data['id'] ?? 0);
+  $codigo        = trim($data['codigo'] ?? '');
+  $nombre        = trim($data['nombre'] ?? '');
+  $descripcion   = trim($data['descripcion'] ?? '');
+  $precio        = (float)($data['precio'] ?? -1);
+  $precio_proveedor = (float)($data['precio_proveedor'] ?? 0);
+  $stock         = (int)($data['stock'] ?? -1);   // editar stock directo no genera movimiento
+  $categoria_id  = intval($data['categoria_id'] ?? 0);
+
+  // Puede venir vacío para "sin proveedor"
+  $proveedor_id = array_key_exists('proveedor_id', $data) && $data['proveedor_id'] !== '' 
+                  ? (int)$data['proveedor_id'] 
+                  : null;
 
   if ($id <= 0) { echo json_encode(["success"=>false,"error"=>"ID inválido"]); return; }
+  if ($codigo === '') { echo json_encode(["success"=>false,"error"=>"Código requerido"]); return; }
+  if ($nombre === '' || strlen($nombre) > 100) { echo json_encode(["success"=>false,"error"=>"Nombre inválido"]); return; }
+  if ($descripcion === '' || strlen($descripcion) > 1000) { echo json_encode(["success"=>false,"error"=>"Descripción inválida"]); return; }
+  if ($precio < 0) { echo json_encode(["success"=>false,"error"=>"Precio debe ser mayor o igual a 0"]); return; }
+  if ($precio_proveedor < 0) { echo json_encode(["success"=>false,"error"=>"Costo proveedor inválido"]); return; }
+  if ($stock < 0) { echo json_encode(["success"=>false,"error"=>"Stock inválido"]); return; }
+  if ($categoria_id <= 0) { echo json_encode(["success"=>false,"error"=>"Categoría no válida"]); return; }
 
   // Código único en otro id
   $stmtCodigo = $conexion->prepare("SELECT id FROM productos WHERE codigo = ? AND id != ?");
   $stmtCodigo->bind_param("si", $codigo, $id);
   $stmtCodigo->execute();
-  if ($stmtCodigo->get_result()->num_rows > 0) { echo json_encode(["success"=>false,"error"=>"Este código ya está en uso por otro producto"]); return; }
+  if ($stmtCodigo->get_result()->num_rows > 0) {
+    echo json_encode(["success"=>false,"error"=>"Este código ya está en uso por otro producto"]); 
+    return;
+  }
   $stmtCodigo->close();
 
-  if ($nombre === '' || strlen($nombre) > 100) { echo json_encode(["success"=>false,"error"=>"Nombre inválido"]); return; }
-  if ($descripcion === '' || strlen($descripcion) > 1000) { echo json_encode(["success"=>false,"error"=>"Descripción inválida"]); return; }
-  if ($precio <= 0) { echo json_encode(["success"=>false,"error"=>"Precio debe ser mayor a 0"]); return; }
-
-  $categoria_id = intval($data['categoria_id'] ?? 0);
+  // Categoría válida
   $stmtCheck = $conexion->prepare("SELECT id FROM categorias WHERE id = ?");
   $stmtCheck->bind_param("i", $categoria_id);
   $stmtCheck->execute();
-  if ($stmtCheck->get_result()->num_rows === 0) { echo json_encode(["success"=>false,"error"=>"Categoría no válida"]); return; }
+  if ($stmtCheck->get_result()->num_rows === 0) {
+    echo json_encode(["success"=>false,"error"=>"Categoría no válida"]); 
+    return;
+  }
   $stmtCheck->close();
 
-  $stmt = $conexion->prepare("UPDATE productos SET codigo = ?, nombre = ?, descripcion = ?, precio = ?, stock = ?, categoria_id = ? WHERE id = ?");
-  $stmt->bind_param("sssdisi", $codigo, $nombre, $descripcion, $precio, $stock, $categoria_id, $id);
-  $stmt->execute();
+  // Si se envía proveedor_id, validar que exista
+  if (!is_null($proveedor_id)) {
+    $stmtP = $conexion->prepare("SELECT id FROM proveedores WHERE id = ?");
+    $stmtP->bind_param("i", $proveedor_id);
+    $stmtP->execute();
+    if ($stmtP->get_result()->num_rows === 0) {
+      echo json_encode(["success"=>false,"error"=>"Proveedor no válido"]);
+      return;
+    }
+    $stmtP->close();
+  }
+
+  // UPDATE (si no hay proveedor -> poner NULL)
+  if (is_null($proveedor_id)) {
+    $sql = "UPDATE productos
+            SET codigo = ?, nombre = ?, descripcion = ?, precio = ?, precio_proveedor = ?, stock = ?, categoria_id = ?, proveedor_id = NULL
+            WHERE id = ?";
+    $stmt = $conexion->prepare($sql);
+    // s s s d d i i i
+    $stmt->bind_param("sssddiii", $codigo, $nombre, $descripcion, $precio, $precio_proveedor, $stock, $categoria_id, $id);
+  } else {
+    $sql = "UPDATE productos
+            SET codigo = ?, nombre = ?, descripcion = ?, precio = ?, precio_proveedor = ?, stock = ?, categoria_id = ?, proveedor_id = ?
+            WHERE id = ?";
+    $stmt = $conexion->prepare($sql);
+    // s s s d d i i i i
+    $stmt->bind_param("sssddiiii", $codigo, $nombre, $descripcion, $precio, $precio_proveedor, $stock, $categoria_id, $proveedor_id, $id);
+  }
+
+  if (!$stmt->execute()) {
+    echo json_encode(["success"=>false,"error"=>"No se pudo actualizar: ".$stmt->error]);
+    return;
+  }
 
   echo json_encode(["success" => true, "msg" => "Producto actualizado"]);
 }
+
 
 
 function eliminarProducto($conexion) {
