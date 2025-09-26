@@ -160,8 +160,6 @@ function obtenerProductos($conexion) {
   echo json_encode(["success"=>true, "productos"=>$productos, "total"=>$total]);
 }
 
-
-
 function agregarProducto($conexion) {
   $data = json_decode(file_get_contents("php://input"), true);
 
@@ -169,7 +167,6 @@ function agregarProducto($conexion) {
   $nombre            = trim($data['nombre'] ?? '');
   $descripcion       = trim($data['descripcion'] ?? '');
   $precio            = (float)($data['precio'] ?? -1);            // venta
-  $precio_proveedor  = (float)($data['precio_proveedor'] ?? 0);   // costo
   $stock_inicial     = (float)($data['stock'] ?? -1);
   $categoria_id      = (int)($data['categoria_id'] ?? 0);
   $proveedor_id      = (isset($data['proveedor_id']) && $data['proveedor_id'] !== '')
@@ -177,9 +174,6 @@ function agregarProducto($conexion) {
 
   if (!$codigo || !$nombre || !$descripcion || $precio < 0 || $stock_inicial < 0 || $categoria_id <= 0) {
     echo json_encode(["success"=>false,"error"=>"Todos los campos son obligatorios y deben ser válidos"]); return;
-  }
-  if ($precio_proveedor < 0) {
-    echo json_encode(["success"=>false,"error"=>"Costo proveedor inválido"]); return;
   }
 
   // Código único
@@ -207,26 +201,31 @@ function agregarProducto($conexion) {
     $stmt->close();
   }
 
-  $conexion->begin_transaction();
+    $conexion->begin_transaction();
   try {
     // INSERT con / sin proveedor
     if (is_null($proveedor_id)) {
+      // proveedor NULL, costo proveedor forzado a 0, stock 0
       $sql = "INSERT INTO productos
               (nombre, codigo, descripcion, precio, precio_proveedor, proveedor_id, stock, categoria_id)
-              VALUES (?, ?, ?, ?, ?, NULL, 0, ?)";
+              VALUES (?, ?, ?, ?, 0, NULL, 0, ?)";
       $stmt = $conexion->prepare($sql);
-      $stmt->bind_param("sssddi", $nombre, $codigo, $descripcion, $precio, $precio_proveedor, $categoria_id);
+      $stmt->bind_param("sssdi", $nombre, $codigo, $descripcion, $precio, $categoria_id);
+
     } else {
+      // con proveedor, costo proveedor forzado a 0, stock 0
       $sql = "INSERT INTO productos
               (nombre, codigo, descripcion, precio, precio_proveedor, proveedor_id, stock, categoria_id)
-              VALUES (?, ?, ?, ?, ?, ?, 0, ?)";
+              VALUES (?, ?, ?, ?, 0, ?, 0, ?)";
       $stmt = $conexion->prepare($sql);
-      $stmt->bind_param("sssddii", $nombre, $codigo, $descripcion, $precio, $precio_proveedor, $proveedor_id, $categoria_id);
+      // s s s d i i
+      $stmt->bind_param("sssdii", $nombre, $codigo, $descripcion, $precio, $proveedor_id, $categoria_id);
     }
+
     $stmt->execute();
     $producto_id = $conexion->insert_id;
 
-    // movimiento inicial
+    // movimiento inicial (si trae stock_inicial)
     if ($stock_inicial > 0) {
       $nuevoStock = $stock_inicial;
       $sqlMov = "INSERT INTO inventario_movimientos
@@ -248,6 +247,7 @@ function agregarProducto($conexion) {
     $conexion->rollback();
     echo json_encode(["success"=>false,"error"=>"Error al guardar el producto: ".$e->getMessage()]);
   }
+
 }
 
 

@@ -1,9 +1,9 @@
-<?php 
+<?php
 include_once '../php/verificar_sesion.php';
 
 $dashboardPath = strpos($_SERVER['SCRIPT_NAME'], 'vistas/admin/') !== false
-    ? '../../dashboard.php'
-    : '../dashboard.php';
+  ? '../../dashboard.php'
+  : '../dashboard.php';
 
 if (isset($_GET['bloqueado'])) {
   echo <<<HTML
@@ -25,6 +25,7 @@ if (isset($_GET['bloqueado'])) {
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -32,9 +33,15 @@ if (isset($_GET['bloqueado'])) {
   <link rel="stylesheet" href="../src/output.css" />
   <script src="../js/sweetalert2@11.js"></script>
   <script src="../js/lucide.min.js"></script>
-  <script>window.tipoUsuario = "<?php echo $_SESSION['usuario']['rol'] ?? ''; ?>";</script>
+  <script>
+    window.tipoUsuario = "<?= $_SESSION['usuario']['rol'] ?? '' ?>";
+    window.SESSION_UID = <?= (int) ($_SESSION['usuario']['id'] ?? 0) ?>; // <-- NUEVO
+  </script>
+
 </head>
-<body class="bg-slate-900 text-slate-200 min-h-screen font-sans p-6 bg-[url('../img/black-paper.png')] bg-fixed bg-auto">
+
+<body
+  class="bg-slate-900 text-slate-200 min-h-screen font-sans p-6 bg-[url('../img/black-paper.png')] bg-fixed bg-auto">
   <?php include '../includes/navbar.php'; ?>
 
   <h1 class="text-3xl font-bold mb-6 mt-6 text-center text-slate-100 flex items-center justify-center gap-2">
@@ -48,6 +55,13 @@ if (isset($_GET['bloqueado'])) {
         class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg shadow transition">
         ➕ Agregar Proveedor
       </button>
+      <button id="btnHistorialGlobal"
+        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white shadow ml-2">
+        <i data-lucide="file-text" class="w-4 h-4"></i>
+        Historial de pedidos
+      </button>
+
+
     </div>
 
     <!-- Filtros (opcionales) -->
@@ -62,7 +76,8 @@ if (isset($_GET['bloqueado'])) {
       </select>
       <div class="flex gap-2">
         <button id="btnBuscar" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600">Buscar</button>
-        <button id="btnLimpiar" class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700">Limpiar</button>
+        <button id="btnLimpiar"
+          class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700">Limpiar</button>
       </div>
     </div>
   </div>
@@ -91,9 +106,11 @@ if (isset($_GET['bloqueado'])) {
   <div class="max-w-6xl mx-auto flex items-center justify-between mt-3">
     <div id="lblResumen" class="text-xs opacity-70">—</div>
     <div class="flex items-center gap-2">
-      <button id="btnPrev" class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 disabled:opacity-40">«</button>
+      <button id="btnPrev"
+        class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 disabled:opacity-40">«</button>
       <span id="lblPagina" class="px-2 text-xs opacity-80"></span>
-      <button id="btnNext" class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 disabled:opacity-40">»</button>
+      <button id="btnNext"
+        class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 disabled:opacity-40">»</button>
     </div>
   </div>
 
@@ -132,7 +149,8 @@ if (isset($_GET['bloqueado'])) {
           <input id="direccion" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
         </div>
         <div class="md:col-span-2 flex justify-end gap-2 mt-2">
-          <button type="button" id="btnCancelar" class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700">Cancelar</button>
+          <button type="button" id="btnCancelar"
+            class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700">Cancelar</button>
           <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">Guardar</button>
         </div>
       </form>
@@ -141,5 +159,7 @@ if (isset($_GET['bloqueado'])) {
 
   <script src="../js/swalConfig.js"></script>
   <script src="../js/proveedores.js"></script>
+  <script src="../js/jspdf.umd.min.js"></script>
 </body>
+
 </html>

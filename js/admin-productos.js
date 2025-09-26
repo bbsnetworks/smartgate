@@ -141,10 +141,6 @@ function abrirModalAgregar() {
               <label class="font-semibold">Precio (venta):</label>
               <input id="precio" type="number" step="0.01" min="0" class="swal2-input w-full" placeholder="0.00">
             </div>
-            <div>
-              <label class="font-semibold">Costo proveedor:</label>
-              <input id="precio_proveedor" type="number" step="0.01" min="0" class="swal2-input w-full" placeholder="0.00">
-            </div>
           </div>
 
           <label class="font-semibold mx-auto mt-2 mb-2">Proveedor:</label>
@@ -175,7 +171,6 @@ function abrirModalAgregar() {
         const nombre = val("nombre");
         const descripcion = val("descripcion");
         const precio = parseFloat(val("precio"));
-        const precio_proveedor = parseFloat(val("precio_proveedor") || "0");
         const stock = parseInt(val("stock") || "0", 10);
         const categoria_id = parseInt(val("categoria_id") || "0", 10);
         const proveedor_id_str = val("proveedor_id");
@@ -185,11 +180,10 @@ function abrirModalAgregar() {
         if (!nombre) return Swal.showValidationMessage("El nombre es obligatorio.");
         if (!descripcion) return Swal.showValidationMessage("La descripción es obligatoria.");
         if (isNaN(precio) || precio < 0) return Swal.showValidationMessage("Precio de venta inválido.");
-        if (isNaN(precio_proveedor) || precio_proveedor < 0) return Swal.showValidationMessage("Costo proveedor inválido.");
         if (!Number.isInteger(stock) || stock < 0) return Swal.showValidationMessage("Stock inválido.");
         if (isNaN(categoria_id) || categoria_id <= 0) return Swal.showValidationMessage("Selecciona una categoría.");
 
-        return { codigo, nombre, descripcion, precio, precio_proveedor, stock, categoria_id, proveedor_id };
+        return { codigo, nombre, descripcion, precio, stock, categoria_id, proveedor_id };
       }
     }).then(res => {
       if (!res.isConfirmed) return;
