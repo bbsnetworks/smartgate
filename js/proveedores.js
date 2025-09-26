@@ -678,130 +678,175 @@ async function cargarHistorialPedidos(proveedorId, mes) {
     )}</div>`;
   }
 }
+// Helper: fetch → dataURL (para el logo)
+async function imgToDataURL(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("No se pudo cargar el logo");
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
 async function generarPDFPedido(grupo) {
-  // 1) Abre la pestaña de inmediato (evita bloqueos de popups)
   const win = window.open("", "_blank");
 
-  // 2) Trae el detalle del pedido
-  const r = await fetch(
-    `${API}?action=detalle_pedido_grupo&grupo=${encodeURIComponent(grupo)}`
-  );
+  // Detalle
+  const r = await fetch(`${API}?action=detalle_pedido_grupo&grupo=${encodeURIComponent(grupo)}`);
   const j = await r.json();
-  if (!j?.success) {
-    if (win) win.close();
-    return Swal.fire(
-      "Error",
-      j?.error || "No se pudo obtener el detalle",
-      "error"
-    );
-  }
+  if (!j?.success) { if (win) win.close(); return Swal.fire("Error", j?.error || "No se pudo obtener el detalle", "error"); }
   const items = j.items || [];
-  if (!items.length) {
-    if (win) win.close();
-    return Swal.fire("Aviso", "Este pedido no tiene renglones", "info");
+  if (!items.length) { if (win) win.close(); return Swal.fire("Aviso","Este pedido no tiene renglones","info"); }
+
+  // Datos cabecera
+  const proveedorNombre = String(items[0].proveedor_nombre || "");
+  const creadoEn        = String(items[0].creado_en || "");
+
+  // Logo desde BD
+  let logoDataURL = null;
+  try {
+    logoDataURL = await imgToDataURL("../php/logo_branding.php");
+  } catch(e){ logoDataURL = null; }
+
+  // jsPDF
+  const JP = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : window.jsPDF;
+  if (!JP) { if (win) win.close(); return Swal.fire("Falta jsPDF","Incluye jspdf.umd.min.js","warning"); }
+
+  const doc = new JP({ unit:"mm", format:"letter" }); // 216x279
+  const left = 12, right = 200, top = 14, bottom = 270;
+  let y = top;
+
+  // Encabezado: título chip y logo a la DERECHA
+  doc.setFontSize(16);
+  doc.setTextColor(255,255,255);
+  doc.setFillColor(30,41,59);
+  const title = "Historial de pedido";
+  const tW = doc.getTextWidth(title)+8;
+  const tX = left;                       // a la izquierda para dejar sitio al logo
+  doc.roundedRect(tX-4, y-2, tW, 9, 2, 2, "F");
+  doc.text(title, tX, y+4);
+
+  // Logo a la derecha (28mm ancho)
+  if (logoDataURL){
+    const lw = 28;
+    const lx = right - lw;               // pegado al margen derecho
+    doc.addImage(logoDataURL, "PNG", lx, top-2, lw, 0);
   }
 
-  // 3) jsPDF UMD: toma el constructor correctamente
-  const JP =
-    window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : window.jsPDF;
-  if (!JP) {
-    if (win) win.close();
-    return Swal.fire(
-      "Falta jsPDF",
-      "Incluye jspdf.umd.min.js en tu HTML",
-      "warning"
-    );
-  }
-
-  // 4) Crea el doc y dibuja (mm, carta)
-  const doc = new JP({ unit: "mm", format: "letter" }); // 216x279mm
-  doc.setTextColor(0, 0, 0); // asegúrate de no dibujar “blanco”
-  doc.setFontSize(14);
-
-  let y = 18;
-  const left = 12,
-    right = 200; // márgenes aprox (carta en mm ~ 216mm ancho)
-  doc.text(`Pedido: ${grupo}`, left, y);
-  y += 7;
+  // Subcabecera
+  doc.setTextColor(0,0,0);
   doc.setFontSize(11);
-  doc.text(`Proveedor: ${items[0].proveedor_nombre || ""}`, left, y);
-  y += 6;
-  doc.text(`Fecha: ${items[0].creado_en || ""}`, left, y);
-  y += 6;
+  y += 12;
+  doc.text(`Proveedor: ${proveedorNombre}`, left, y); y += 6;
+  doc.text(`Grupo: ${grupo}`, left, y); y += 6;
+  doc.text(`Fecha: ${creadoEn}`, left, y); y += 4;
 
-  // Cabecera tabla
-  y += 4;
+  // Línea divisoria
+  doc.setDrawColor(60,72,88);
+  doc.line(left, y, right, y); y += 6;
+
+  // Encabezados de tabla (incluye % y Diferencia)
   doc.setFontSize(10);
-  doc.text("Código", left, y);
-  doc.text("Producto", left + 35, y);
-  doc.text("Cant.", right - 55, y, { align: "right" });
-  doc.text("Costo", right - 30, y, { align: "right" });
-  doc.text("Importe", right, y, { align: "right" });
-  y += 2;
-  doc.line(left, y, right, y);
-  y += 6;
+  doc.text("Código",     left,      y);
+  doc.text("Producto",   left+28,   y);
+  doc.text("Cant.",      right-86,  y, {align:"right"});
+  doc.text("Costo",      right-72,  y, {align:"right"});
+  doc.text("Venta",      right-58,  y, {align:"right"});
+  doc.text("Imp. Costo", right-38,  y, {align:"right"});
+  doc.text("Dif.",       right-22,  y, {align:"right"});
+  doc.text("%",          right,     y, {align:"right"});
+  y += 2; doc.line(left, y, right, y); y += 5;
 
-  // Filas
-  let total = 0;
-  const lineHeight = 6;
-  const maxY = 270; // evita escribir fuera de página (letter ~279mm)
-  items.forEach((it) => {
+  // Totales
+  let totalCompra = 0;
+  let totalVenta  = 0;
+  let totalGan    = 0;
+
+  const lineH = 6;
+  const prodW = (right - (left+28)) - 92;
+
+  items.forEach(it=>{
     const codigo = String(it.producto_codigo || "");
     const nombre = String(it.producto_nombre || "");
-    const cant = Number(it.cantidad || 0);
-    const costo = Number(it.precio_proveedor_ped || 0);
-    const imp = cant * costo;
-    total += imp;
+    const cant   = Number(it.cantidad || 0);
+    const pp     = Number(it.precio_proveedor_ped ?? it.precio_proveedor ?? 0);
+    const pv     = Number(it.precio_venta_ped     ?? it.precio_venta     ?? it.precio ?? 0);
 
-    // salto de página si se acaba el espacio
-    if (y > maxY) {
-      doc.addPage();
-      y = 18;
-    }
+    const impC   = cant * pp;           // importe costo
+    const impV   = cant * pv;           // importe venta
+    const dif    = Math.abs(impV - impC);            // diferencia POSITIVA solicitada
+    const pct    = pp>0 ? Math.abs(((pv-pp)/pp)*100) : 0; // % sobre costo (positivo)
 
+    totalCompra += impC;
+    totalVenta  += impV;
+    totalGan    += dif;
+
+    // salto de página
+    const lines = doc.splitTextToSize(nombre, prodW);
+    if (y + lineH > bottom){ doc.addPage(); y = top+6; }
+
+    doc.setFontSize(9);
     doc.text(codigo, left, y);
-    doc.text(nombre, left + 35, y);
-    doc.text(String(cant), right - 55, y, { align: "right" });
-    doc.text(costo.toFixed(2), right - 30, y, { align: "right" });
-    doc.text(imp.toFixed(2), right, y, { align: "right" });
-    y += lineHeight;
+    doc.text(lines, left+28, y);
+
+    // números
+    doc.text(String(cant),       right-86, y, {align:"right"});
+    doc.text(pp.toFixed(2),      right-72, y, {align:"right"});
+    doc.text(pv.toFixed(2),      right-58, y, {align:"right"});
+    doc.text(impC.toFixed(2),    right-38, y, {align:"right"});
+
+    // Diferencia y %
+    doc.setTextColor(12,132,199); // azul
+    doc.text(dif.toFixed(2),      right-22, y, {align:"right"});
+    doc.text(pct.toFixed(1)+"%",  right,    y, {align:"right"});
+    doc.setTextColor(0,0,0);
+
+    y += lineH;
   });
 
-  // Total
-  y += 2;
-  doc.line(right - 55, y, right, y);
-  y += 7;
-  doc.setFontSize(12);
-  doc.text("TOTAL", right - 30, y, { align: "right" });
-  doc.text(total.toFixed(2), right, y, { align: "right" });
+  // Totales
+  y += 2; doc.line(right-86, y, right, y); y += 7;
+  doc.setFontSize(11);
+  doc.text("Total compra:", right-86, y);           doc.setFont("helvetica","bold"); doc.text(`$${totalCompra.toFixed(2)}`, right, y, {align:"right"});
+  doc.setFont("helvetica","normal"); y += 6;
+  doc.text("Total venta:",  right-86, y);           doc.setFont("helvetica","bold"); doc.text(`$${totalVenta.toFixed(2)}`,  right, y, {align:"right"});
+  y += 6; doc.setFont("helvetica","normal");
 
-  // 5) Mostrar en nueva pestaña (NO descargar)
-  try {
-    const blob = doc.output("blob"); // genera el PDF
+  const margenSobreCosto = totalCompra>0 ? (totalGan/totalCompra)*100 : 0;
+  doc.text("Ganancia:",     right-86, y);
+  doc.setTextColor(12,132,199);
+  doc.setFont("helvetica","bold");
+  doc.text(`$${totalGan.toFixed(2)}  (${margenSobreCosto.toFixed(1)}%)`, right, y, {align:"right"});
+  doc.setTextColor(0,0,0);
+  doc.setFont("helvetica","normal");
+
+  // Mostrar
+  try{
+    const blob = doc.output("blob");
     const url = URL.createObjectURL(blob);
-    if (win) {
-      win.location.href = url; // navega a la URL del PDF
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } else {
-      // fallback si el navegador bloqueó la ventana
-      doc.output("dataurlnewwindow");
-    }
-  } catch (e) {
+    if (win){ win.location.href = url; setTimeout(()=>URL.revokeObjectURL(url), 60000); }
+    else { doc.output("dataurlnewwindow"); }
+  }catch(e){
     if (win) win.close();
-    doc.output("dataurlnewwindow"); // último recurso
+    doc.output("dataurlnewwindow");
   }
 }
+
 
 document
   .getElementById("btnHistorialGlobal")
   ?.addEventListener("click", abrirHistorialGlobal);
 
 async function abrirHistorialGlobal() {
-  // Cargar proveedores activos para el select
+  // Trae proveedores activos (o todos si así lo maneja tu API)
   const rProv = await fetch(`${API}?action=listar&activo=1&page=1&limit=999`);
   const jProv = await rProv.json();
   const provs = jProv?.success ? jProv.proveedores || [] : [];
 
+  // Arma opciones con "Todos"
   const opts = ['<option value="0">Todos los proveedores</option>']
     .concat(
       provs.map(
@@ -812,46 +857,51 @@ async function abrirHistorialGlobal() {
 
   swalcard.fire({
     title: "Historial de pedidos",
-    width: Math.min(window.innerWidth - 32, 980),
+    width: Math.min(window.innerWidth - 32, 760),
     html: `
       <div class="space-y-3 text-left">
-        <div class="grid grid-cols-12 gap-3">
-          <div class="col-span-12 md:col-span-4">
-            <label class="text-xs opacity-70">Proveedor</label>
-            <select id="fProv" class="w-full border rounded-lg p-2 bg-white/80 dark:bg-slate-800">
-              ${opts}
-            </select>
+        <div class="grid grid-cols-12 gap-2">
+          <div class="col-span-12 sm:col-span-4">
+            <label class="text-[11px] opacity-70">Proveedor</label>
+            <select id="fProv" class="w-full border rounded-md px-2 py-1.5 bg-white/80 dark:bg-slate-800"></select>
           </div>
-          <div class="col-span-6 md:col-span-3">
-            <label class="text-xs opacity-70">Desde</label>
-            <input id="fDesde" type="date" class="w-full border rounded-lg p-2 bg-white/80 dark:bg-slate-800">
+          <div class="col-span-6 sm:col-span-3">
+            <label class="text-[11px] opacity-70">Desde</label>
+            <input id="fDesde" type="date" class="w-full border rounded-md px-2 py-1.5 bg-white/80 dark:bg-slate-800">
           </div>
-          <div class="col-span-6 md:col-span-3">
-            <label class="text-xs opacity-70">Hasta</label>
-            <input id="fHasta" type="date" class="w-full border rounded-lg p-2 bg-white/80 dark:bg-slate-800">
+          <div class="col-span-6 sm:col-span-3">
+            <label class="text-[11px] opacity-70">Hasta</label>
+            <input id="fHasta" type="date" class="w-full border rounded-md px-2 py-1.5 bg-white/80 dark:bg-slate-800">
           </div>
-          <div class="col-span-12 md:col-span-2">
-            <label class="text-xs opacity-70">Buscar</label>
+          <div class="col-span-12 sm:col-span-2">
+            <label class="text-[11px] opacity-70">Buscar</label>
             <input id="fQ" type="text" placeholder="Grupo / código / nombre"
-                   class="w-full border rounded-lg p-2 bg-white/80 dark:bg-slate-800">
+                   class="w-full border rounded-md px-2 py-1.5 bg-white/80 dark:bg-slate-800">
           </div>
         </div>
 
         <div class="flex items-center gap-2">
-          <button id="btnBuscarPedidos" class="px-3 py-1.5 rounded-lg border hover:bg-slate-700 transition">Buscar</button>
-          <div id="lblResumenPedidos" class="text-xs opacity-70"></div>
+          <button id="btnBuscarPedidos"
+              class="inline-flex items-center gap-2 px-3.5 py-2 text-base rounded-lg border hover:bg-slate-700"
+              title="Buscar">
+              <i data-lucide="search" class="w-5 h-5"></i>
+            </button>
+          <div id="lblResumenPedidos" class="text-[11px] opacity-70"></div>
         </div>
 
-        <div id="wrapPedidosRango"
-             class="border rounded-lg divide-y dark:divide-slate-700 max-h-[60vh] overflow-auto">
-          <div class="p-4 text-sm opacity-70">Ajusta el rango y presiona “Buscar”.</div>
+        <div id="wrapPedidosRango" class="rounded-md border dark:border-slate-700 max-h-[60vh] overflow-auto">
+          <div class="p-3 text-sm opacity-70">Ajusta el rango y presiona “Buscar”.</div>
         </div>
       </div>
     `,
     showCancelButton: true,
     showConfirmButton: false,
     didOpen: () => {
-      // defaults: últimos 30 días
+      // Inserta opciones AQUÍ (antes quedaba vacío)
+      const $prov = document.getElementById("fProv");
+      $prov.innerHTML = opts;
+
+      // Rango por defecto: últimos 30 días
       const d2 = new Date();
       const d1 = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000);
       document.getElementById("fDesde").value = `${d1.getFullYear()}-${String(
@@ -864,12 +914,11 @@ async function abrirHistorialGlobal() {
       document
         .getElementById("btnBuscarPedidos")
         .addEventListener("click", () => cargarPedidosRango(1));
-      // búsqueda en Enter
       document.getElementById("fQ").addEventListener("keydown", (e) => {
         if (e.key === "Enter") cargarPedidosRango(1);
       });
 
-      // primera carga
+      // Primera carga
       cargarPedidosRango(1);
     },
   });
@@ -887,13 +936,13 @@ async function cargarPedidosRango(page = 1) {
     desde,
     hasta,
     q,
-    page: page,
+    page,
     limit: 50,
   });
 
   const wrap = document.getElementById("wrapPedidosRango");
   const lbl = document.getElementById("lblResumenPedidos");
-  wrap.innerHTML = `<div class="p-4 text-sm opacity-70">Cargando…</div>`;
+  wrap.innerHTML = `<div class="p-3 text-sm opacity-70">Cargando…</div>`;
   lbl.textContent = "";
 
   try {
@@ -902,80 +951,81 @@ async function cargarPedidosRango(page = 1) {
     if (!j?.success) throw new Error(j?.error || "No se pudo cargar");
 
     const rows = j.pedidos || [];
-    if (rows.length === 0) {
-      wrap.innerHTML = `<div class="p-4 text-sm opacity-70">Sin resultados para el rango indicado.</div>`;
-      lbl.textContent = `0 pedidos — del ${desde} al ${hasta}`;
-      return;
-    }
-
     const pages = Math.max(1, Math.ceil((j.total || rows.length) / j.limit));
     lbl.textContent = `${j.total} pedido(s) — del ${j.desde} al ${
       j.hasta
-    } — Total compra: $${Number(j.suma_total || 0).toFixed(2)} — Página ${
+    } — Total: $${Number(j.suma_total || 0).toFixed(2)} — Página ${
       j.page
     }/${pages}`;
+    lbl.className = "text-[11px] opacity-70";
 
-    const head = `
-      <div class="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-semibold bg-slate-50 dark:bg-slate-800/60 sticky top-0">
-        <div class="col-span-2">Fecha</div>
-        <div class="col-span-3">Grupo</div>
-        <div class="col-span-3">Proveedor</div>
-        <div class="col-span-1 text-right">Rengl.</div>
-        <div class="col-span-1 text-right">Pzs</div>
-        <div class="col-span-1 text-right">Total</div>
-        <div class="col-span-1 text-right">PDF</div>
-      </div>`;
+    if (rows.length === 0) {
+      wrap.innerHTML = `<div class="p-3 text-sm opacity-70">Sin resultados para el rango indicado.</div>`;
+      return;
+    }
 
-    const body = rows
-      .map(
-        (p) => `
-      <div class="grid grid-cols-12 gap-2 items-center px-4 py-2">
-        <div class="col-span-2 text-sm">${escHtml(p.fecha)}</div>
-        <div class="col-span-3 text-sm tabular-nums">${escHtml(
-          p.pedido_grupo
-        )}</div>
-        <div class="col-span-3">
-          <div class="text-sm font-medium">${escHtml(
+    // === Fila compacta con labels (sin encabezado) ===
+    const item = (p) => `
+      <div class="group flex items-start justify-between gap-3 px-3 py-2 border-b last:border-0 dark:border-slate-700 hover:bg-slate-700/30">
+        <!-- Columna izquierda: labels -->
+        <div class="min-w-0">
+          <div class="text-[11px] opacity-60">Fecha</div>
+          <div class="text-[13px] tabular-nums">${escHtml(p.fecha)}</div>
+
+          <div class="mt-1 text-[11px] opacity-60">Grupo</div>
+          <div class="text-[13px] font-medium truncate">${escHtml(
+            p.pedido_grupo
+          )}</div>
+
+          <div class="mt-1 text-[11px] opacity-60">Proveedor</div>
+          <div class="text-[13px] truncate">${escHtml(
             p.proveedor_nombre || ""
           )}</div>
         </div>
-        <div class="col-span-1 text-right text-sm">${p.renglones}</div>
-        <div class="col-span-1 text-right text-sm">${Number(
-          p.piezas || 0
-        )}</div>
-        <div class="col-span-1 text-right text-sm">$${Number(
-          p.total_compra || 0
-        ).toFixed(2)}</div>
-        <div class="col-span-1 text-right">
-          <button class="px-3 py-1.5 rounded-lg border hover:bg-slate-700 transition"
-                  onclick="generarPDFPedido('${p.pedido_grupo}')">PDF</button>
+
+        <!-- Columna derecha: métricas y PDF -->
+        <div class="flex flex-col items-end shrink-0 gap-2">
+          <div class="flex items-center gap-1">
+            <span class="px-2 py-0.5 rounded-md text-[11px] bg-white/10 border dark:border-slate-600">Rengl. <b class="tabular-nums">${
+              p.renglones
+            }</b></span>
+            <span class="px-2 py-0.5 rounded-md text-[11px] bg-white/10 border dark:border-slate-600">Pzs <b class="tabular-nums">${Number(
+              p.piezas || 0
+            )}</b></span>
+            <span class="px-2 py-0.5 rounded-md text-[11px] bg-emerald-500/15 border border-emerald-600 text-emerald-300">$${Number(
+              p.total_compra || 0
+            ).toFixed(2)}</span>
+          </div>
+          <button class="inline-flex items-center justify-center w-10 h-10 rounded-lg border hover:bg-slate-700"
+            title="Abrir PDF" onclick="generarPDFPedido('${p.pedido_grupo}')">
+            <i data-lucide="file-text" class="w-6 h-6"></i>
+          </button>
         </div>
       </div>
-    `
-      )
-      .join("");
+    `;
 
-    // Paginación simple (si la quieres)
+    const body = rows.map(item).join("");
+
     const pager =
       pages > 1
         ? `
-      <div class="flex items-center justify-between px-4 py-2 border-t dark:border-slate-700">
-        <button class="px-3 py-1.5 rounded-lg border disabled:opacity-40" ${
+      <div class="flex items-center justify-between px-3 py-1.5 text-[12px] bg-black/5 dark:bg-white/5">
+        <button class="px-2.5 py-1 rounded-md border disabled:opacity-40" ${
           j.page <= 1 ? "disabled" : ""
         }
                 onclick="cargarPedidosRango(${j.page - 1})">Anterior</button>
-        <div class="text-xs opacity-70">Página ${j.page} de ${pages}</div>
-        <button class="px-3 py-1.5 rounded-lg border disabled:opacity-40" ${
+        <div> Página ${j.page} de ${pages} </div>
+        <button class="px-2.5 py-1 rounded-md border disabled:opacity-40" ${
           j.page >= pages ? "disabled" : ""
         }
                 onclick="cargarPedidosRango(${j.page + 1})">Siguiente</button>
-      </div>
-    `
+      </div>`
         : "";
 
-    wrap.innerHTML = head + body + pager;
+    wrap.innerHTML = `<div class="divide-y dark:divide-slate-700">${body}</div>${pager}`;
+    if (window.lucide?.createIcons) lucide.createIcons();
   } catch (e) {
-    wrap.innerHTML = `<div class="p-4 text-red-500">${escHtml(
+    wrap.innerHTML = `<div class="p-3 text-red-500">${escHtml(
       e.message || e
     )}</div>`;
   }
