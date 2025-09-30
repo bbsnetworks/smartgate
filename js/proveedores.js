@@ -882,7 +882,7 @@ async function abrirHistorialGlobal() {
 
         <div class="flex items-center gap-2">
           <button id="btnBuscarPedidos"
-              class="inline-flex items-center gap-2 px-3.5 py-2 text-base rounded-lg border hover:bg-slate-700"
+              class="inline-flex items-center gap-2 px-3.5 p-2 text-base rounded-lg border hover:bg-slate-700"
               title="Buscar">
               <i data-lucide="search" class="w-5 h-5"></i>
             </button>
