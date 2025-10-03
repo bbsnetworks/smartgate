@@ -1,6 +1,7 @@
 <?php include_once './php/verificar_sesion.php'; ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,17 +13,24 @@
   <link rel="stylesheet" href="css/scroll.css">
   <style>
     /* ≈ 20px como tu w-5 */
-    .icon-20 { font-size: 20px; line-height: 1; }
+    .icon-20 {
+      font-size: 20px;
+      line-height: 1;
+    }
+
     .scrollbar-custom::-webkit-scrollbar {
-  width: 8px;
-}
-.scrollbar-custom::-webkit-scrollbar-track {
-  background: #1e293b; /* gris oscuro */
-}
-.scrollbar-custom::-webkit-scrollbar-thumb {
-  background-color: #FFB900; 
-  border-radius: 9999px;
-}
+      width: 8px;
+    }
+
+    .scrollbar-custom::-webkit-scrollbar-track {
+      background: #1e293b;
+      /* gris oscuro */
+    }
+
+    .scrollbar-custom::-webkit-scrollbar-thumb {
+      background-color: #FFB900;
+      border-radius: 9999px;
+    }
   </style>
 </head>
 
@@ -43,78 +51,126 @@
       <?php $rol = $_SESSION['usuario']['rol']; ?>
 
       <!-- Sección Clientes -->
-      <button onclick="toggleAccordion('clientesPanel')" class="w-full text-left text-sm font-semibold text-green-300 bg-green-900/40 px-4 py-3 rounded-lg hover:bg-green-800/50 transition">
+      <button onclick="toggleAccordion('clientesPanel')"
+        class="w-full text-left text-sm font-semibold text-green-300 bg-green-900/40 px-4 py-3 rounded-lg hover:bg-green-800/50 transition">
         👤 Gestión de Clientes
       </button>
       <div id="clientesPanel" class="mt-3 space-y-2">
-        <a href="vistas/pagos.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+        <a href="vistas/pagos.php"
+          class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
           <i class="bi bi-currency-dollar icon-20 text-green-400"></i><span>Registrar/Ver Pagos</span>
         </a>
-        <a href="vistas/agregar.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+        <a href="vistas/agregar.php"
+          class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
           <i class="bi bi-person-plus icon-20 text-green-400"></i><span>Agregar Personas</span>
         </a>
-        <a href="vistas/lista.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+        <a href="vistas/lista.php"
+          class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
           <i class="bi bi-card-list icon-20 text-green-400"></i><span>Administrar Clientes</span>
         </a>
       </div>
 
       <!-- Sección Productos -->
       <div class="mt-6">
-        <button onclick="toggleAccordion('productosPanel')" class="w-full text-left text-sm font-semibold text-indigo-300 bg-indigo-800/40 px-4 py-3 rounded-lg hover:bg-indigo-700/50 transition">
+        <button onclick="toggleAccordion('productosPanel')"
+          class="w-full text-left text-sm font-semibold text-indigo-300 bg-indigo-800/40 px-4 py-3 rounded-lg hover:bg-indigo-700/50 transition">
           🛒 Gestión de Productos
         </button>
         <div id="productosPanel" class="mt-3 space-y-2">
-          <a href="vistas/pagos-productos.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+          <a href="vistas/pagos-productos.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-cart icon-20 text-indigo-400"></i><span>Venta de Productos</span>
           </a>
-          <a href="vistas/admin-productos.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+          <a href="vistas/admin-productos.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-shop icon-20 text-indigo-400"></i><span>Administrar Productos</span>
           </a>
-          <a href="vistas/admin-categorias.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+          <a href="vistas/admin-categorias.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-tags icon-20 text-indigo-400"></i><span>Administrar Categorías</span>
           </a>
-          <a href="vistas/lista-pagos.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+          <a href="vistas/lista-pagos.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-receipt icon-20 text-indigo-400"></i><span>Lista de Pagos</span>
           </a>
-          <a href="vistas/proveedores.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+          <a href="vistas/proveedores.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-people-fill text-indigo-400"></i><span>Proveedores</span>
+          </a>
+        </div>
+      </div>
+      <!-- Sección Cafetería -->
+      <div class="mt-6">
+        <button onclick="toggleAccordion('cafeteriaPanel')"
+          class="w-full text-left text-sm font-semibold text-rose-300 bg-rose-900/40 px-4 py-3 rounded-lg hover:bg-rose-800/50 transition">
+          ☕ Cafetería
+        </button>
+
+        <div id="cafeteriaPanel" class="mt-3 space-y-2">
+          <a href="vistas/caf_pedido.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            <i class="bi bi-cup-hot icon-20 text-rose-400"></i>
+            <span>Nuevo pedido (táctil)</span>
+          </a>
+
+          <a href="vistas/caf_admin_productos.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            <i class="bi bi-shop icon-20 text-rose-400"></i><span>Administrar Productos</span>
+          </a>
+
+          <a href="vistas/caf_admin_categorias.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            <i class="bi bi-receipt icon-20 text-rose-400"></i>
+            <span>Administrar Categorías (Cafeteria)</span>
+          </a>
+
+          <a href="vistas/caf_pedidos.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            <i class="bi bi-receipt icon-20 text-rose-400"></i>
+            <span>Ver pedidos</span>
           </a>
         </div>
       </div>
 
       <!-- Sección Admin y Reportes -->
       <div class="mt-6">
-        <button onclick="toggleAccordion('adminPanel')" class="w-full text-left text-sm font-semibold text-amber-300 bg-amber-900/40 px-4 py-3 rounded-lg hover:bg-amber-800/50 transition">
+        <button onclick="toggleAccordion('adminPanel')"
+          class="w-full text-left text-sm font-semibold text-amber-300 bg-amber-900/40 px-4 py-3 rounded-lg hover:bg-amber-800/50 transition">
           🧑‍💼 Administración y Reportes
         </button>
         <div id="adminPanel" class="mt-3 space-y-2">
           <?php if ($rol === 'admin' || $rol === 'root'): ?>
-            <a href="vistas/empleados.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            <a href="vistas/empleados.php"
+              class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
               <i class="bi bi-person-vcard icon-20 text-amber-400"></i><span>Administrar Empleados / Gerencia</span>
             </a>
-            <a href="vistas/usuarios.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            <a href="vistas/usuarios.php"
+              class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
               <i class="bi bi-people-fill icon-20 text-amber-400"></i><span>Administrar Usuarios</span>
             </a>
             <?php if ($rol === 'root'): ?>
-              <a href="vistas/importar.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+              <a href="vistas/importar.php"
+                class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
                 <i class="bi bi-database icon-20 text-amber-400"></i><span>Importar</span>
               </a>
             <?php endif; ?>
-            <a onclick="modalSuscripcion()" class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
+            <a onclick="modalSuscripcion()"
+              class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
               <i class="bi bi-key icon-20 text-amber-400"></i><span>Administrar Suscripción</span>
             </a>
-            <a onclick="modalApiConfig()" 
+            <a onclick="modalApiConfig()"
               class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
               <i class="bi bi-gear-wide-connected icon-20 text-amber-400"></i>
               <span>Configurar API</span>
             </a>
           <?php endif; ?>
           <a onclick="modalBranding()"
-           class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
-          <i class="bi bi-brush icon-20 text-amber-400"></i>
-          <span>Configuración de Marca</span>
-        </a>
-          <a href="vistas/reportes.php" class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
+            <i class="bi bi-brush icon-20 text-amber-400"></i>
+            <span>Configuración de Marca</span>
+          </a>
+          <a href="vistas/reportes.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-file-text icon-20 text-amber-400"></i><span>Ver Reportes</span>
           </a>
         </div>
@@ -122,19 +178,20 @@
 
       <!-- Botones inferiores -->
       <div class="mt-auto pt-6 space-y-2">
-        <a id="menu-verificar-puertas" href="#"
-           class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70
+        <a id="menu-verificar-puertas" href="#" class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70
                   hover:bg-slate-700/60 flex items-center gap-3">
           <i class="bi bi-door-open icon-20 text-emerald-400"></i>
           <span>Verificar puertas</span>
         </a>
 
-        <a href="php/logout.php" class="flex items-center justify-center gap-2 bg-rose-500 hover:bg-rose-600 text-white px-4 py-3 rounded-xl shadow">
+        <a href="php/logout.php"
+          class="flex items-center justify-center gap-2 bg-rose-500 hover:bg-rose-600 text-white px-4 py-3 rounded-xl shadow">
           <i class="bi bi-box-arrow-right text-lg"></i>
           <span class="font-semibold">Salir</span>
         </a>
-        <a href="https://wa.me/5214451533504?text=Hola,%20necesito%20soporte%20del%20Gym%20Sport%20Fitness" target="_blank"
-           class="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-xl shadow">
+        <a href="https://wa.me/5214451533504?text=Hola,%20necesito%20soporte%20del%20Gym%20Sport%20Fitness"
+          target="_blank"
+          class="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-xl shadow">
           <i class="bi bi-whatsapp text-lg"></i>
           <span class="font-semibold">Soporte</span>
         </a>
@@ -152,7 +209,8 @@
             <span id="sidebarAppName" class="font-semibold text-slate-100 text-lg">Gym Admin</span>
           </div>
           <!-- Pill de usuario (derecha) -->
-          <div class="bg-slate-800/80 text-white px-4 py-2 rounded-full shadow-xl border border-white/10 backdrop-blur flex items-center gap-2">
+          <div
+            class="bg-slate-800/80 text-white px-4 py-2 rounded-full shadow-xl border border-white/10 backdrop-blur flex items-center gap-2">
             <i class="bi bi-person-circle text-xl text-green-400"></i>
             <span class="font-semibold"><?php echo $_SESSION['usuario']['nombre']; ?></span>
           </div>
@@ -164,29 +222,30 @@
             <!-- Se llena por JS -->
           </select>
         </div>
-      
+
         <!-- GRID de KPIs -->
         <section id="kpis" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-card">
           <!-- Activos -->
-           <!-- Caja -->
-<article id="card-caja" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
-  <div class="flex items-center justify-between">
-    <h3 class="font-semibold text-slate-300">Caja</h3>
-    <i class="bi bi-safe2 icon-20 text-emerald-400"></i>
-  </div>
+          <!-- Caja -->
+          <article id="card-caja" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-slate-300">Caja</h3>
+              <i class="bi bi-safe2 icon-20 text-emerald-400"></i>
+            </div>
 
-  <p id="kpi-caja-monto" class="mt-3 text-4xl font-extrabold">—</p>
-  <small id="kpi-caja-actualizado" class="block text-slate-400">—</small>
+            <p id="kpi-caja-monto" class="mt-3 text-4xl font-extrabold">—</p>
+            <small id="kpi-caja-actualizado" class="block text-slate-400">—</small>
 
-  <div class="mt-4">
-    <button id="btn-caja-editar"
-      class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
-      Editar monto
-    </button>
-  </div>
-</article>
+            <div class="mt-4">
+              <button id="btn-caja-editar"
+                class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
+                Editar monto
+              </button>
+            </div>
+          </article>
 
-          <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow" style="grid-auto-rows:minmax(180px,auto)">
+          <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow"
+            style="grid-auto-rows:minmax(180px,auto)">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-slate-300">Clientes activos</h3>
               <i class="bi bi-person-check icon-20 text-green-400"></i>
@@ -206,8 +265,7 @@
           </article>
 
           <!-- Aniversarios -->
-          <article id="card-aniversarios"
-            class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow
+          <article id="card-aniversarios" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow
                    h-full flex flex-col
                    xl:col-start-3 xl:row-span-2">
             <div class="flex items-center justify-between">
@@ -219,7 +277,7 @@
 
             <!-- Lista -->
             <ul id="lista-aniversarios"
-                class="mt-3 text-sm text-slate-300 space-y-1 flex-1 min-h-0 overflow-auto pr-1 max-h-24 scrollbar-custom">
+              class="mt-3 text-sm text-slate-300 space-y-1 flex-1 min-h-0 overflow-auto pr-1 max-h-24 scrollbar-custom">
               <!-- Se llena por JS -->
             </ul>
 
@@ -228,29 +286,31 @@
             </small>
           </article>
           <!-- Card: Stock bajo -->
-<!-- Card: Stock bajo -->
-<div class="bg-slate-800/40 border border-slate-600/30 rounded-xl p-4 flex flex-col">
-  <div class="flex items-center justify-between mb-3">
-    <span class="text-xs text-slate-400">Umbral: ≤ 5</span>
-    <h3 class="text-red-400 font-semibold flex items-center gap-2">
-      Stock bajo
-      <!-- icono opcional -->
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2h6v2m-7-4h8l1-9H5l1 9z" />
-      </svg>
-    </h3>
-  </div>
+          <!-- Card: Stock bajo -->
+          <div class="bg-slate-800/40 border border-slate-600/30 rounded-xl p-4 flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-slate-400">Umbral: ≤ 5</span>
+              <h3 class="text-red-400 font-semibold flex items-center gap-2">
+                Stock bajo
+                <!-- icono opcional -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 17v-2h6v2m-7-4h8l1-9H5l1 9z" />
+                </svg>
+              </h3>
+            </div>
 
-  <!-- Contenedor scrollable -->
-  <ul id="lista-stock-bajo" class="space-y-2 overflow-y-auto pr-1 flex-1 min-h-[100px] max-h-[250px]">
-    <!-- Items los llena JS -->
-  </ul>
+            <!-- Contenedor scrollable -->
+            <ul id="lista-stock-bajo" class="space-y-2 overflow-y-auto pr-1 flex-1 min-h-[100px] max-h-[250px]">
+              <!-- Items los llena JS -->
+            </ul>
 
-  <!-- Footer -->
-  <div id="stock-bajo-footer" class="mt-2 text-xs text-slate-400"></div>
-</div>
+            <!-- Footer -->
+            <div id="stock-bajo-footer" class="mt-2 text-xs text-slate-400"></div>
+          </div>
 
-    
+
           <!-- Ventas -->
           <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
             <div class="flex items-center justify-between">
@@ -260,14 +320,28 @@
             <p id="kpi-ventas" class="mt-3 text-4xl font-extrabold">—</p>
             <small id="kpi-ventas-det" class="text-slate-400"></small>
           </article>
-<!-- Abrir puerta -->
-          <article id="card-abrir-puerta" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow cursor-pointer hover:bg-slate-700/70 transition">
+          <!-- Abrir puerta -->
+          <article id="card-abrir-puerta"
+            class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow cursor-pointer hover:bg-slate-700/70 transition">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-slate-300">Abrir puerta</h3>
               <i class="bi bi-door-open icon-20 text-green-400"></i>
             </div>
             <p class="mt-3 text-sm text-slate-400">Click para enviar la orden.</p>
           </article>
+          <!-- Cafetería: nuevo pedido (táctil) -->
+          <article id="card-cafeteria"
+            class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow cursor-pointer hover:bg-slate-700/70 transition"
+            onclick="location.href='vistas/caf_pedido.php'">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-slate-300">Cafetería — Nuevo pedido</h3>
+              <i class="bi bi-cup-hot icon-20 text-rose-400"></i>
+            </div>
+            <p class="mt-3 text-sm text-slate-400">
+              Toca para abrir la ventana táctil y tomar pedidos por personCode.
+            </p>
+          </article>
+
           <!-- Inscripciones -->
           <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
             <div class="flex items-center justify-between">
@@ -278,7 +352,7 @@
             <small id="kpi-insc-det" class="text-slate-400"></small>
           </article>
 
-          
+
 
           <!-- NUEVA: Monto inscripciones (hoy) -->
           <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
@@ -338,8 +412,9 @@
   <script src="js/sweetalert2@11.js"></script>
   <script src="js/chart.js@4.4.1"></script>
   <script src="js/swalConfig.js"></script>
-  <script src="js/dashboard.js"></script>       <!-- tu script de suscripción/accordeones -->
-  <script src="js/puerta.js"></script>          <!-- sigue igual -->
-  <script src="js/dashboard-home.js"></script>  <!-- KPIs y gráfica -->
+  <script src="js/dashboard.js"></script> <!-- tu script de suscripción/accordeones -->
+  <script src="js/puerta.js"></script> <!-- sigue igual -->
+  <script src="js/dashboard-home.js"></script> <!-- KPIs y gráfica -->
 </body>
+
 </html>

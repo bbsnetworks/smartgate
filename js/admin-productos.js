@@ -783,47 +783,44 @@ function renderReporteMovimientos(data) {
     const stockAct = (p.stock_actual === null || p.stock_actual === undefined) ? '—' : p.stock_actual;
 
     card.innerHTML = `
-      <div class="flex items-center justify-between mb-2">
-        <div>
-          <div class="text-xs text-slate-300">Producto</div>
-          <div class="font-semibold">${esc(p.codigo)} — ${esc(p.nombre)}</div>
-        </div>
-        <div class="text-right">
-          <div class="text-xs text-slate-300">Stock actual</div>
-          <div class="font-bold">${stockAct}</div>
-        </div>
-      </div>
-      <div class="overflow-x-auto">
-        <!-- table-fixed para forzar wrapping y reparto de ancho -->
-        <table class="min-w-full text-left table-fixed">
-          <thead class="bg-slate-700">
-  <tr class="text-slate-300 text-sm uppercase">
-    <th class="p-3 text-left">Código</th>
-    <th class="p-3 text-left">Nombre</th>
-    <th class="p-3 text-left">Descripción</th>
-    <th class="p-3 text-left">Venta</th>
-    <th class="p-3 text-left">Costo Prov.</th>
-    <th class="p-3 text-left">Proveedor</th>
-    <th class="p-3 text-left">Stock</th>
-    <th class="p-3 text-center">Acciones</th>
+  <div class="flex items-center justify-between mb-2">
+    <div>
+      <div class="text-xs text-slate-300">Producto</div>
+      <div class="font-semibold">${esc(p.codigo)} — ${esc(p.nombre)}</div>
+    </div>
+    <div class="text-right">
+      <div class="text-xs text-slate-300">Stock actual</div>
+      <div class="font-bold">${stockAct}</div>
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-left table-fixed">
+    <thead class="bg-slate-700">
+      <tr class="text-slate-300 text-sm uppercase">
+      <th class="p-3 text-center">Fecha</th>
+      <th class="p-3 text-center">Tipo</th>
+      <th class="p-3 text-center">Cantidad</th>
+      <th class="p-3 text-center">Stock después</th>
+      <th class="p-3 text-center">Usuario</th>
+      <th class="p-3 text-center">Nota</th>
   </tr>
 </thead>
-          <tbody class="text-slate-100">
-            ${p.movimientos.map(m => `
-              <tr class="border-t border-slate-600 align-top">
-                <td class="py-1 pr-3 whitespace-nowrap">${esc(m.fecha)}</td>
-                <td class="py-1 pr-3 whitespace-nowrap">${esc(m.tipo)}</td>
-                <td class="py-1 pr-3 whitespace-nowrap">${parseFloat(m.cantidad).toFixed(2)}</td>
-                <td class="py-1 pr-3 whitespace-nowrap">${esc(m.stock_despues)}</td>
-                <td class="py-1 pr-3 whitespace-nowrap">${esc(m.usuario || '—')}</td>
-                <!-- wrap real + respeta saltos de línea del texto -->
-                <td class="py-1 whitespace-pre-wrap break-words">${esc(m.nota || '')}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
+      <tbody class="text-slate-100">
+        ${p.movimientos.map(m => `
+        <tr class="border-t border-slate-600 align-top">
+        <td class="py-1 px-2 text-center whitespace-nowrap">${esc(m.fecha)}</td>
+        <td class="py-1 px-2 text-center whitespace-nowrap">${esc(m.tipo)}</td>
+        <td class="py-1 px-2 text-center whitespace-nowrap">${parseFloat(m.cantidad).toFixed(2)}</td>
+        <td class="py-1 px-2 text-center whitespace-nowrap">${esc(m.stock_despues)}</td>
+        <td class="py-1 px-2 text-center whitespace-nowrap">${esc(m.usuario || '—')}</td>
+        <td class="py-1 px-2 text-center whitespace-pre-wrap break-words text-center">${esc(m.nota || '')}</td>
+    </tr>
+  `).join('')}
+</tbody>
+    </table>
+  </div>
+`;
+
     cont.appendChild(card);
   });
 
