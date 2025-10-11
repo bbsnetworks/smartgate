@@ -124,7 +124,7 @@
             <span>Administrar Categorías (Cafeteria)</span>
           </a>
 
-          <a href="vistas/caf_pedidos.php"
+          <a href="vistas/ver_pedidos.php"
             class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-receipt icon-20 text-rose-400"></i>
             <span>Ver pedidos</span>

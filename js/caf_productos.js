@@ -268,21 +268,30 @@ function cerrarModal(){ modal.classList.add("hidden"); }
 async function onSubmitForm(e){
   e.preventDefault();
 
-  // 1) Leer filas de tamaños del DOM
+  // 1) Leer filas de tamaños del DOM (solo las reales)
   const tamanos = [];
-  const rows = document.querySelectorAll('#sizesWrap .grid');
+  const rows = document.querySelectorAll('#sizesWrap .size-row');
 
   for (const r of rows) {
     const etiqueta = r.querySelector('.size-label').value.trim();
-    const precio   = Number(r.querySelector('.size-price').value || 0);
-    const orden    = Number(r.querySelector('.size-order').value || 0);
-    const activo   = r.querySelector('.size-active').checked ? 1 : 0;
+
+    // Precio: si está vacío toma 0; valida >= 0
+    const precioStr = r.querySelector('.size-price').value;
+    const precio = Number(precioStr === '' ? 0 : precioStr);
+
+    // Orden: si está vacío (''), autoasigna el índice actual
+    const ordenStr = r.querySelector('.size-order').value.trim();
+    let orden = ordenStr === '' ? NaN : Number(ordenStr);
+    if (Number.isNaN(orden)) orden = tamanos.length;   // << AQUÍ se autoasigna
+
+    const activo = r.querySelector('.size-active').checked ? 1 : 0;
 
     if (!etiqueta) continue;
     if (isNaN(precio) || precio < 0) {
       Swal.fire({icon:'warning', title:'Precio de tamaño inválido', text:`Revisa "${etiqueta}"`});
       return;
     }
+
     tamanos.push({ etiqueta, precio, orden, activo });
   }
 
@@ -308,7 +317,7 @@ async function onSubmitForm(e){
     return;
   }
 
-  // 4) Guardar (crear/actualizar)
+  // 3) Guardar (crear/actualizar)
   try{
     let res, data;
     if (prod_id.value) {
@@ -335,6 +344,7 @@ async function onSubmitForm(e){
     Swal.fire({icon:'error', title:'Error', text:err.message});
   }
 }
+
 
 
 
@@ -407,7 +417,16 @@ function confirmarEliminar(id){
   });
 }
 function renderSizeRows(){
-  sizesWrap.innerHTML = '';
+  sizesWrap.innerHTML = `
+    <div class="grid grid-cols-12 text-xs text-slate-400 px-1">
+      <div class="col-span-4">Tamaño</div>
+      <div class="col-span-3">Precio</div>
+      <div class="col-span-2">Orden</div>
+      <div class="col-span-2">Estado</div>
+      <div class="col-span-1"></div>
+    </div>
+  `;
+
   if (!SIZES_TMP.length) return;
 
   SIZES_TMP.forEach((s, idx) => {
@@ -416,11 +435,13 @@ function renderSizeRows(){
 
     row.innerHTML = `
       <input class="col-span-4 bg-slate-900/40 border border-slate-700 rounded-lg px-3 py-2 outline-none size-label"
-             placeholder="Etiqueta (p.ej. Chico)" value="${escapeHtml(s.etiqueta)}">
+             placeholder="Etiqueta (p.ej. Chico)" value="${escapeHtml(s.etiqueta || '')}">
       <input class="col-span-3 bg-slate-900/40 border border-slate-700 rounded-lg px-3 py-2 outline-none size-price"
-             type="number" step="0.01" min="0" value="${s.precio}">
+             type="number" step="0.01" min="0" inputmode="decimal" placeholder="Precio"
+             value="${(s.precio ?? '')}">
       <input class="col-span-2 bg-slate-900/40 border border-slate-700 rounded-lg px-3 py-2 outline-none size-order"
-             type="number" step="1" value="${s.orden}">
+             type="number" step="1" inputmode="numeric" placeholder="#"
+             value="${(s.orden ?? '')}">
       <label class="col-span-2 inline-flex items-center gap-2">
         <input type="checkbox" class="accent-emerald-500 size-active" ${s.activo? 'checked':''}>
         <span>Activo</span>
@@ -433,12 +454,19 @@ function renderSizeRows(){
     row.querySelector('.size-del').addEventListener('click', ()=>{
       SIZES_TMP.splice(idx, 1);
       renderSizeRows();
-      if (!SIZES_TMP.length) addSizeRow(); // siempre deja 1 como mínimo visible
+      if (!SIZES_TMP.length) addSizeRow();
     });
 
     sizesWrap.appendChild(row);
   });
+
+  // tip de orden bajo los tamaños
+  const tip = document.createElement('small');
+  tip.className = 'text-slate-400 text-xs block mt-1';
+  tip.textContent = 'Menor número = aparece primero.';
+  sizesWrap.appendChild(tip);
 }
+
 
 function addSizeRow(){
   SIZES_TMP.push({ etiqueta:'', precio:0, orden:SIZES_TMP.length, activo:1 });
