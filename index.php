@@ -100,6 +100,7 @@
         </div>
       </div>
       <!-- Sección Cafetería -->
+      <!-- 
       <div class="mt-6">
         <button onclick="toggleAccordion('cafeteriaPanel')"
           class="w-full text-left text-sm font-semibold text-rose-300 bg-rose-900/40 px-4 py-3 rounded-lg hover:bg-rose-800/50 transition">
@@ -129,9 +130,14 @@
             <i class="bi bi-receipt icon-20 text-rose-400"></i>
             <span>Ver pedidos</span>
           </a>
+          <a href="vistas/cocina.php"
+            class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+            <i class="bi bi-receipt icon-20 text-rose-400"></i>
+            <span>Pedidos (Cocina)</span>
+          </a>
         </div>
       </div>
-
+      -->
       <!-- Sección Admin y Reportes -->
       <div class="mt-6">
         <button onclick="toggleAccordion('adminPanel')"
@@ -330,6 +336,7 @@
             <p class="mt-3 text-sm text-slate-400">Click para enviar la orden.</p>
           </article>
           <!-- Cafetería: nuevo pedido (táctil) -->
+          <!-- 
           <article id="card-cafeteria"
             class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow cursor-pointer hover:bg-slate-700/70 transition"
             onclick="location.href='vistas/caf_pedido.php'">
@@ -341,7 +348,7 @@
               Toca para abrir la ventana táctil y tomar pedidos por personCode.
             </p>
           </article>
-
+          -->    
           <!-- Inscripciones -->
           <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
             <div class="flex items-center justify-between">

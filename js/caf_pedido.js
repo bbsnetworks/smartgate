@@ -591,7 +591,7 @@ async function crearPedido(){
       html:`<div class="text-slate-200">Código: <b class="text-emerald-400">${data.codigo || '(s/n)'}</b></div>`,
       timer:2000, showConfirmButton:false
     });
-
+    window.location.replace(window.location.pathname);
     resetFlowToPerson();
   }catch(err){
     toastErr(err.message);
