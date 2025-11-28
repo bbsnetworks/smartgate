@@ -20,7 +20,11 @@ if ($rol === 'worker') {
 $out['opciones'][] = ['value'=>'all', 'text'=>'Todos los usuarios'];
 
 // Tu tabla 'usuarios' tiene PK 'id'
-$sql = "SELECT id AS iduser, nombre FROM usuarios ORDER BY nombre ASC";
+$sql = "SELECT id AS iduser, nombre 
+        FROM usuarios 
+        WHERE rol IN ('admin', 'worker')
+        ORDER BY nombre ASC";
+
 $q = $conexion->query($sql);
 if (!$q) {
   http_response_code(500);

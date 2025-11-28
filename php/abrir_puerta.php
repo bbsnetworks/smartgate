@@ -37,54 +37,55 @@ if (empty($codes)) {
   exit;
 }
 
-/** Firma y headers */
-$urlService = "/artemis/api/acs/v1/door/doControl";
-$fullUrl    = $config->urlHikCentralAPI . $urlService;
-$contentToSign = "POST\n*/*\napplication/json\nx-ca-key:{$config->userKey}\n{$urlService}";
-$signature  = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+/**
+ * Encapsula la llamada a /door/doControl
+ */
+function doDoorControl($config, array $codes, int $controlType) {
+  $urlService = "/artemis/api/acs/v1/door/doControl";
+  $fullUrl    = $config->urlHikCentralAPI . $urlService;
 
-$headers = [
-  "x-ca-key: {$config->userKey}",
-  "x-ca-signature-headers: x-ca-key",
-  "x-ca-signature: {$signature}",
-  "Content-Type: application/json",
-  "Accept: */*"
-];
+  $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:{$config->userKey}\n{$urlService}";
+  $signature  = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
 
-$payload = json_encode([
-  "doorIndexCodes" => $codes,
-  "controlType"    => 0
-]);
+  $headers = [
+    "x-ca-key: {$config->userKey}",
+    "x-ca-signature-headers: x-ca-key",
+    "x-ca-signature: {$signature}",
+    "Content-Type: application/json",
+    "Accept: */*"
+  ];
 
-/** Llamada */
-$ch = curl_init();
-curl_setopt_array($ch, [
-  CURLOPT_URL => $fullUrl,
-  CURLOPT_RETURNTRANSFER => 1,
-  CURLOPT_TIMEOUT => Visitor::TIMEOUT,
-  CURLOPT_POST => 1,
-  CURLOPT_HTTPHEADER => $headers,
-  CURLOPT_POSTFIELDS => $payload,
-]);
-if (stripos($fullUrl, 'https://') !== 0) {
-  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-  curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+  $payload = json_encode([
+    "doorIndexCodes" => $codes,
+    "controlType"    => $controlType
+  ]);
+
+  $ch = curl_init();
+  curl_setopt_array($ch, [
+    CURLOPT_URL            => $fullUrl,
+    CURLOPT_RETURNTRANSFER => 1,
+    CURLOPT_TIMEOUT        => Visitor::TIMEOUT,
+    CURLOPT_POST           => 1,
+    CURLOPT_HTTPHEADER     => $headers,
+    CURLOPT_POSTFIELDS     => $payload,
+  ]);
+  if (stripos($fullUrl, 'https://') !== 0) {
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+  }
+
+  $response = curl_exec($ch);
+  $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  $err      = curl_error($ch);
+  curl_close($ch);
+
+  return [
+    'err'      => $err,
+    'httpCode' => $httpCode,
+    'body'     => $response,
+    'decoded'  => json_decode($response, true)
+  ];
 }
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$err      = curl_error($ch);
-curl_close($ch);
-
-if ($err) {
-  echo json_encode(["success"=>false, "error"=>"Error de cURL: $err"]);
-  exit;
-}
-if ($httpCode !== 200) {
-  echo json_encode(["success"=>false, "error"=>"HTTP $httpCode: $response"]);
-  exit;
-}
-
-$decoded = json_decode($response, true);
 
 /** --- Normalización de resultados --- */
 function extractControlResults($decoded) {
@@ -117,6 +118,19 @@ function extractControlResults($decoded) {
   return $out;
 }
 
+/* ===== 1) PRIMERA LLAMADA: ABRIR (controlType = 0) ===== */
+$openResp = doDoorControl($config, $codes, 0);
+
+if ($openResp['err']) {
+  echo json_encode(["success"=>false, "error"=>"Error de cURL (abrir): {$openResp['err']}"]);
+  exit;
+}
+if ($openResp['httpCode'] !== 200) {
+  echo json_encode(["success"=>false, "error"=>"HTTP {$openResp['httpCode']} (abrir): {$openResp['body']}"]);
+  exit;
+}
+
+$decoded = $openResp['decoded'];
 $apiCode = isset($decoded['code']) ? (string)$decoded['code'] : null;
 $results = extractControlResults($decoded);
 
@@ -126,16 +140,33 @@ $ok = ($apiCode === "0") && array_reduce($results, function($carry, $item){
 }, false);
 
 if ($ok) {
+
+  /* ===== 2) SEGUNDA LLAMADA: CERRAR / STOP (controlType = 1) ===== */
+  // Pequeña pausa opcional, por si el torniquete necesita un instante
+  usleep(150 * 1000); // 150ms
+
+  $closeResp = doDoorControl($config, $codes, 1);
+  $closeInfo = [
+    'sent'     => false,
+    'httpCode' => $closeResp['httpCode'],
+    'err'      => $closeResp['err'] ?: null,
+  ];
+
+  if (!$closeResp['err'] && $closeResp['httpCode'] === 200) {
+    $closeInfo['sent'] = true;
+  }
+
   echo json_encode([
-    "success" => true,
-    "msg"     => "Puerta abierta",
-    "puerta"  => $puerta,
-    "usando"  => $codes
+    "success"       => true,
+    "msg"           => "Puerta abierta",
+    "puerta"        => $puerta,
+    "usando"        => $codes,
+    "autoClose"     => $closeInfo  // info de la segunda llamada
   ]);
   exit;
 }
 
-// Si no pudimos confirmar éxito, devolvemos info de depuración
+// Si no pudimos confirmar éxito al abrir, devolvemos info de depuración
 $compactResults = array_map(function($i){
   return [
     'doorIndexCode'      => $i['doorIndexCode']      ?? null,
@@ -152,4 +183,3 @@ echo json_encode([
   "results" => $compactResults,
   "desc"    => $firstDesc
 ]);
-
