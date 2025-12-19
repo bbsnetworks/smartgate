@@ -42,11 +42,13 @@ function editarCliente(cliente) {
 
 
 
-  fetch("../php/get_organizations.php")
-    .then(res => res.json())
-    .then(data => {
-      const organizaciones = data.list || [];
-      const orgOptions = organizaciones
+  Promise.all([
+  fetch("../php/get_organizations.php").then(r => r.json()),
+  fetch("../php/get_groups.php").then(r => r.json())
+]).then(([orgData, grpData]) => {
+  const organizaciones = orgData.list || [];
+  const grupos = grpData.list || [];
+  const orgOptions = organizaciones
   .filter(o => o.parentOrgIndexCode !== "1")
   .map(org => `
     <option 
@@ -57,6 +59,16 @@ function editarCliente(cliente) {
       ${org.orgName}
     </option>
   `).join("");
+  const groupOptions = grupos.map(g => `
+  <option 
+    value="${g.privilegeGroupId}" 
+    ${String(g.privilegeGroupId) === String(cliente.grupo) ? "selected" : ""}
+    style="background-color: #1e293b; color: #f8fafc;"
+  >
+    ${g.privilegeGroupName || g.name || "Grupo"}
+  </option>
+`).join("");
+
 
       swalInfo.fire({
         title: 'Editar Cliente',
@@ -88,7 +100,14 @@ function editarCliente(cliente) {
       ${orgOptions}
     </select>
   </div>
-
+  <div class="flex flex-col text-center">
+  <label for="swal-grupo" class="mb-1 font-semibold text-slate-300">Grupo (Horario):</label>
+  <select id="swal-grupo" class="swal2-select bg-slate-800 text-slate-100 border border-slate-600 rounded px-3 py-2 appearance-none">
+    <option value="">Seleccione un grupo</option>
+    ${groupOptions}
+  </select>
+</div>
+      
   <div class="flex flex-col text-center">
     <label for="swal-emergencia" class="mb-1 font-semibold text-slate-300">Contacto de Emergencia:</label>
     <input id="swal-emergencia" class="swal2-input bg-slate-800 text-slate-100 placeholder-slate-400 border border-slate-600" placeholder="Contacto de Emergencia" value="${cliente.emergencia ?? ''}">
@@ -136,6 +155,7 @@ function editarCliente(cliente) {
           const telefono = document.getElementById('swal-telefono').value.trim();
           const email = document.getElementById('swal-email').value.trim();
           const orgIndexCode = document.getElementById('swal-orgIndexCode').value;
+          const grupo = document.getElementById('swal-grupo').value;
           const inicio = document.getElementById('swal-inicio').value;
           const fin = document.getElementById('swal-fin').value;
           const emergencia = document.getElementById('swal-emergencia').value.trim();
@@ -171,6 +191,11 @@ function editarCliente(cliente) {
             Swal.showValidationMessage("El correo electrónico no es válido.");
             return false;
           }
+          if (!nombre || !apellido || !telefono || !email || !inicio || !fin || !orgIndexCode || !grupo) {
+            Swal.showValidationMessage("Todos los campos son obligatorios.");
+          return false;
+          }
+
 
           const fechaInicio = new Date(inicio);
           const fechaFin = new Date(fin);
@@ -190,6 +215,7 @@ function editarCliente(cliente) {
           Inicio: inicio,
           Fin: fin,
           orgIndexCode,
+          grupo,
           orgName,
           emergencia,
           sangre,
@@ -215,7 +241,9 @@ function editarCliente(cliente) {
       });
     });
 }
-function mostrarInfoCliente(cliente) {
+async function mostrarInfoCliente(cliente) {
+  const nombreGrupo = await nombreGrupoPorId(cliente.grupo);
+
   swalcard.fire({
     title: `${cliente.nombre} ${cliente.apellido}`,
     html: `
@@ -223,8 +251,10 @@ function mostrarInfoCliente(cliente) {
         <img src="data:image/jpeg;base64,${cliente.face}" class="w-48 h-32 rounded-full shadow-md basis-full" alt="Foto">
 
         <div style="margin-top: 10px; text-align: left;">
-          <p class="mt-2"><strong>📅 Inicio:</strong> ${formateaFecha(cliente.Inicio)}</p>
-          <p class="mt-2"><strong>📅 Fin:</strong> ${formateaFecha(cliente.Fin)}</p>
+          <p class="mt-2"><strong>📅 Inicio:</strong> ${formateaFechaModal(cliente.Inicio)}</p>
+          <p class="mt-2"><strong>📅 Fin:</strong> ${formateaFechaModal(cliente.Fin)}</p>
+          <p class="mt-2"><strong>🕒 Grupo (Horario):</strong> ${nombreGrupo}</p>
+
           <p class="mt-2"><strong>📞 Teléfono:</strong> ${cliente.telefono}</p>
           <p class="mt-2"><strong>📧 Email:</strong> ${cliente.email}</p>
           <p class="mt-2"><strong>📞 Emergencia:</strong> ${cliente.emergencia ?? '<span style="color:gray">No especificado</span>'}</p>
@@ -237,11 +267,10 @@ function mostrarInfoCliente(cliente) {
     showCloseButton: true,
     showConfirmButton: false,
     width: 420,
-    customClass: {
-      popup: 'rounded-xl shadow-lg'
-    }
+    customClass: { popup: 'rounded-xl shadow-lg' }
   });
 }
+
 
 let paginaActual = 1;
 const limite = 20;
@@ -408,6 +437,43 @@ function formateaFecha(fechaSQL) {
   const hours = String(fecha.getHours()).padStart(2, '0');
   const minutes = String(fecha.getMinutes()).padStart(2, '0');
   return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+// 📅 SOLO para mostrar fechas en el modal de información (DD/MM/AAAA)
+function formateaFechaModal(fechaSQL) {
+  if (!fechaSQL) return '<span style="color:gray">No especificado</span>';
+
+  // Asegura compatibilidad con "YYYY-MM-DD HH:mm:ss"
+  const fecha = new Date(String(fechaSQL).replace(" ", "T"));
+  if (isNaN(fecha.getTime())) {
+    return '<span style="color:gray">Fecha inválida</span>';
+  }
+
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const anio = fecha.getFullYear();
+
+  return `${dia}/${mes}/${anio}`;
+}
+let cacheGrupos = null;
+
+async function cargarGrupos() {
+  if (cacheGrupos) return cacheGrupos;
+
+  const res = await fetch("../php/get_groups.php");
+  const data = await res.json();
+  cacheGrupos = data.list || [];
+  return cacheGrupos;
+}
+
+async function nombreGrupoPorId(groupId) {
+  if (!groupId) return '<span style="color:gray">No especificado</span>';
+
+  const grupos = await cargarGrupos();
+  const g = grupos.find(x => String(x.privilegeGroupId) === String(groupId));
+
+  return g
+    ? (g.privilegeGroupName || g.name || `Grupo ${groupId}`)
+    : `<span style="color:gray">No encontrado</span>`;
 }
 
 

@@ -66,13 +66,47 @@ try {
   $stmt2->fetch();
   $stmt2->close();
 
+
+    // Movimientos de caja (ingresos/egresos)
+  if ($usuario !== "todos") {
+    $stmt3 = $conexion->prepare("
+      SELECT 
+        COALESCE(SUM(CASE WHEN tipo='INGRESO' THEN monto ELSE 0 END),0) AS ingresos,
+        COALESCE(SUM(CASE WHEN tipo='EGRESO' THEN monto ELSE 0 END),0) AS egresos,
+        COUNT(*) AS cantidad
+      FROM caja_movimientos
+      WHERE usuario_id = ?
+        AND DATE(fecha) BETWEEN ? AND ?
+    ");
+    $stmt3->bind_param("iss", $usuario, $inicio, $fin);
+  } else {
+    $stmt3 = $conexion->prepare("
+      SELECT 
+        COALESCE(SUM(CASE WHEN tipo='INGRESO' THEN monto ELSE 0 END),0) AS ingresos,
+        COALESCE(SUM(CASE WHEN tipo='EGRESO' THEN monto ELSE 0 END),0) AS egresos,
+        COUNT(*) AS cantidad
+      FROM caja_movimientos
+      WHERE DATE(fecha) BETWEEN ? AND ?
+    ");
+    $stmt3->bind_param("ss", $inicio, $fin);
+  }
+
+  $stmt3->execute();
+  $stmt3->bind_result($caja_ingresos, $caja_egresos, $caja_cantidad);
+  $stmt3->fetch();
+  $stmt3->close();
+
   echo json_encode([
     "success" => true,
     "total_pagos" => $total_pagos ?? 0,
     "cantidad_pagos" => $cantidad_pagos ?? 0,
     "total_productos" => $total_productos ?? 0,
     "cantidad_productos" => $cantidad_productos ?? 0,
-    "total_general" => ($total_pagos ?? 0) + ($total_productos ?? 0)
+    "total_general" => ($total_pagos ?? 0) + ($total_productos ?? 0),
+    "caja_ingresos" => $caja_ingresos ?? 0,
+    "caja_egresos" => $caja_egresos ?? 0,
+    "caja_cantidad" => $caja_cantidad ?? 0,
+
   ]);
 } catch (Exception $e) {
   echo json_encode(["success" => false, "error" => "Error al consultar: " . $e->getMessage()]);

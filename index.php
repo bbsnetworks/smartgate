@@ -292,7 +292,6 @@
             </small>
           </article>
           <!-- Card: Stock bajo -->
-          <!-- Card: Stock bajo -->
           <div class="bg-slate-800/40 border border-slate-600/30 rounded-xl p-4 flex flex-col">
             <div class="flex items-center justify-between mb-3">
               <span class="text-xs text-slate-400">Umbral: ≤ 5</span>
@@ -348,7 +347,7 @@
               Toca para abrir la ventana táctil y tomar pedidos por personCode.
             </p>
           </article>
-          -->    
+          -->
           <!-- Inscripciones -->
           <article class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
             <div class="flex items-center justify-between">
@@ -369,6 +368,28 @@
             </div>
             <p id="kpi-inscripciones-monto" class="mt-3 text-4xl font-extrabold">—</p>
             <small id="kpi-insc-monto-det" class="text-slate-400"></small>
+          </article>
+          <!-- Movimientos de caja -->
+          <article id="card-caja-mov" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-slate-300">Movimientos de caja (hoy)</h3>
+              <i class="bi bi-arrow-left-right icon-20 text-sky-400"></i>
+            </div>
+
+            <p id="kpi-mov-neto" class="mt-3 text-4xl font-extrabold">—</p>
+            <small id="kpi-mov-det" class="block text-slate-400">—</small>
+
+            <div class="mt-4 flex items-center gap-2">
+              <button id="btn-mov-nuevo"
+                class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="bi bi-plus-circle mr-1"></i> Nuevo
+              </button>
+
+              <button id="btn-mov-ver"
+                class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="bi bi-list-ul mr-1"></i> Ver
+              </button>
+            </div>
           </article>
 
         </section>

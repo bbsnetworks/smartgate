@@ -281,14 +281,14 @@ function modalBranding() {
       const rq = await fetch(BRANDING.SAVE_URL, { method: "POST", body: formData });
       const data = await rq.json();
       if (data.ok) {
-        await Swal.fire("✔️ Guardado", "Configuración actualizada", "success");
+        await swalSuccess.fire("✔️ Guardado", "Configuración actualizada", "success");
         // refrescar vista sin recargar toda la página
         await cargarBranding();
       } else {
-        Swal.fire("Error", data.msg || "No se pudo actualizar", "error");
+        swalError.fire("Error", data.msg || "No se pudo actualizar", "error");
       }
     } catch (e) {
-      Swal.fire("Error", "Fallo la petición: " + e, "error");
+      swalError.fire("Error", "Fallo la petición: " + e, "error");
     }
   });
 }
@@ -328,6 +328,8 @@ async function cargarTodo() {
   await cargarSerie('insc', document.getElementById('res-insc')?.value || 'mes', 'chart-insc');
   await cargarSerie('prod', document.getElementById('res-prod')?.value || 'mes', 'chart-prod');
   await cargarCajaCard(); 
+  await cargarMovimientosCard();
+
 }
 
 // === Caja ===
@@ -454,13 +456,169 @@ function abrirModalEditarCaja(montoActual) {
       const data = await rq.json();
 
       if (data.ok) {
-        await Swal.fire('✔️ Guardado', 'Monto de caja actualizado', 'success');
+        await swalSuccess.fire('✔️ Guardado', 'Monto de caja actualizado', 'success');
         await cargarCajaCard();
       } else {
-        Swal.fire('Error', data.error || 'No se pudo guardar', 'error');
+        swalError.fire('Error', data.error || 'No se pudo guardar', 'error');
       }
     } catch (e) {
-      Swal.fire('Error', 'Fallo la petición', 'error');
+      swalError.fire('Error', 'Fallo la petición', 'error');
     }
   });
+}
+async function cargarMovimientosCard() {
+  const netoEl = document.getElementById('kpi-mov-neto');
+  const detEl  = document.getElementById('kpi-mov-det');
+  const btnNew = document.getElementById('btn-mov-nuevo');
+  const btnVer = document.getElementById('btn-mov-ver');
+
+  if (!netoEl || !detEl || !btnNew || !btnVer) return;
+
+  // Igual que Caja: si es ALL, no aplica
+  if (USER_FILTER === 'all') {
+    netoEl.textContent = '—';
+    detEl.textContent  = 'Selecciona un usuario';
+    btnNew.disabled = true;
+    btnVer.disabled = true;
+    return;
+  }
+
+  const url = new URL('smartgate/php/caja_movimientos_controller.php', location.origin);
+  url.searchParams.set('action', 'resumen_hoy'); // resumen de HOY del usuario seleccionado
+  url.searchParams.set('user', USER_FILTER);     // 'me' o id
+
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error');
+
+    const ingreso = Number(d.ingreso || 0);
+    const egreso  = Number(d.egreso  || 0);
+    const neto    = ingreso - egreso;
+
+    netoEl.textContent = formatoMonedaMX(neto);
+    detEl.textContent  = `Ingresos: ${formatoMonedaMX(ingreso)} · Egresos: ${formatoMonedaMX(egreso)} · Movs: ${d.cantidad || 0}`;
+
+    btnNew.disabled = false;
+    btnNew.onclick  = () => abrirModalMovimientoCajaSimple();
+
+    btnVer.disabled = false;
+    btnVer.onclick  = () => abrirModalListadoMovHoy();
+
+  } catch (e) {
+    console.error(e);
+    netoEl.textContent = '—';
+    detEl.textContent  = 'Error al cargar';
+    btnNew.disabled = true;
+    btnVer.disabled = true;
+  }
+}
+
+
+function abrirModalMovimientoCajaSimple() {
+  swalcard.fire({
+    title: 'Nuevo movimiento',
+    html: `
+      <div class="text-left space-y-2">
+        <label class="block text-sm text-slate-300">Tipo</label>
+        <select id="movTipo" class="swal2-input !w-full">
+          <option value="EGRESO">Egreso (sale dinero)</option>
+          <option value="INGRESO">Ingreso (entra dinero)</option>
+        </select>
+
+        <label class="block text-sm text-slate-300">Monto (MXN)</label>
+        <input id="movMonto" type="text" class="swal2-input !w-full" placeholder="0.00">
+
+        <label class="block text-sm text-slate-300">Concepto</label>
+        <input id="movConcepto" type="text" class="swal2-input !w-full" placeholder="Pago a proveedor, insumos, etc">
+
+        <label class="block text-sm text-slate-300">Observaciones (opcional)</label>
+        <textarea id="movObs" class="swal2-textarea !w-full" placeholder="Detalle / folio / nota"></textarea>
+
+        <p class="text-xs text-slate-400 mt-2">
+          Se guardará como movimiento para reportes. No modifica la card “Caja”.
+        </p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'Guardar',
+    cancelButtonText: 'Cancelar',
+    focusConfirm: false,
+    preConfirm: () => {
+      const tipo = document.getElementById('movTipo').value;
+      const monto = validarMontoStr(document.getElementById('movMonto').value);
+      const concepto = (document.getElementById('movConcepto').value || '').trim();
+      const observaciones = (document.getElementById('movObs').value || '').trim();
+
+      if (!concepto) {
+        Swal.showValidationMessage('Ingresa un concepto');
+        return false;
+      }
+      if (monto === null || monto <= 0) {
+        Swal.showValidationMessage('Ingresa un monto válido mayor a 0 (ej. 250.00)');
+        return false;
+      }
+      return { tipo, monto, concepto, observaciones };
+    }
+  }).then(async (res) => {
+    if (!res.isConfirmed) return;
+
+    try {
+      const body = new FormData();
+      body.append('action', 'crear');
+      body.append('user', USER_FILTER); // 'me' o id
+      body.append('tipo', res.value.tipo);
+      body.append('monto', String(res.value.monto));
+      body.append('concepto', res.value.concepto);
+      body.append('observaciones', res.value.observaciones);
+
+      const rq = await fetch('php/caja_movimientos_controller.php', { method: 'POST', body });
+      const d = await rq.json();
+
+      if (d.ok) {
+        await swalSuccess.fire('✔️ Guardado', 'Movimiento registrado', 'success');
+        await cargarMovimientosCard();
+      } else {
+        swalError.fire('Error', d.error || 'No se pudo guardar', 'error');
+      }
+    } catch (e) {
+      swalError.fire('Error', 'Fallo la petición', 'error');
+    }
+  });
+}
+
+async function abrirModalListadoMovHoy() {
+  try {
+    const url = new URL('smartgate/php/caja_movimientos_controller.php', location.origin);
+    url.searchParams.set('action', 'listar_hoy');
+    url.searchParams.set('user', USER_FILTER);
+
+    const r = await fetch(url, { cache: 'no-store' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error');
+
+    const rows = Array.isArray(d.items) ? d.items : [];
+    const html = rows.length ? `
+      <div class="text-left max-h-80 overflow-auto pr-1 scrollbar-custom">
+        ${rows.map(x => `
+          <div class="mb-2 p-2 rounded-lg border border-slate-600/40 bg-slate-700/30">
+            <div class="flex justify-between">
+              <span class="${x.tipo==='INGRESO'?'text-green-300':'text-rose-300'} font-semibold">${x.tipo}</span>
+              <span class="font-semibold">${formatoMonedaMX(x.monto)}</span>
+            </div>
+            <div class="text-xs text-slate-300 mt-1">${escapeHtml(x.concepto || '')}</div>
+            <div class="text-xs text-slate-400">${escapeHtml(x.fecha || '')}</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : `<p class="text-slate-300">Sin movimientos hoy.</p>`;
+
+    swalcard.fire({
+      title: 'Movimientos de hoy',
+      html,
+      confirmButtonText: 'Cerrar'
+    });
+  } catch (e) {
+    swalError.fire('Error', 'No se pudo cargar el listado');
+  }
 }

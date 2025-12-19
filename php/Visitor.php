@@ -95,6 +95,47 @@ class Visitor {
     
         return json_decode($response, true);
     }
+    public static function removeUserFromGroup($config, $privilegeGroupId, $userId) {
+    $urlService = "/artemis/api/acs/v1/privilege/group/single/deletePersons"; // <- si tu doc usa otra, cámbiala aquí
+    $fullUrl = $config->urlHikCentralAPI . $urlService;
+
+    $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+    $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+
+    $headers = [
+        "x-ca-key: " . $config->userKey,
+        "x-ca-signature-headers: x-ca-key",
+        "x-ca-signature: " . $signature,
+        "Content-Type: application/json",
+        "Accept: */*"
+    ];
+
+    $payload = [
+        "privilegeGroupId" => (string)$privilegeGroupId,
+        "type" => 1,
+        "list" => [
+            ["id" => strval($userId)]
+        ]
+    ];
+
+    $data = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $fullUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    return json_decode($response, true);
+}
+
     public static function getGroups($config, $payload) {
         $urlService = "/artemis/api/acs/v1/privilege/group";
         $fullUrl = $config->urlHikCentralAPI . $urlService;
