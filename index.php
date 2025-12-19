@@ -370,6 +370,7 @@
             <small id="kpi-insc-monto-det" class="text-slate-400"></small>
           </article>
           <!-- Movimientos de caja -->
+           <?php if ($rol !== 'root'): ?>
           <article id="card-caja-mov" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-slate-300">Movimientos de caja (hoy)</h3>
@@ -391,7 +392,7 @@
               </button>
             </div>
           </article>
-
+          <?php endif; ?>
         </section>
 
         <!-- GRÁFICAS -->
