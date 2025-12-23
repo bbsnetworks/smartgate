@@ -27,6 +27,11 @@ function resolveTargetUid($rolSes, $uidSes, $raw) {
 if ($method === 'GET' && $action === 'get') {
   $userParam = $_GET['user'] ?? 'me';
   $targetUid = resolveTargetUid($rolSes, $uidSes, $userParam);
+
+  // Fecha objetivo: si viene ?date=YYYY-MM-DD úsala, si no usa HOY
+  date_default_timezone_set('America/Mexico_City');
+  $targetDate = $_GET['date'] ?? date('Y-m-d'); // YYYY-MM-DD
+
   if ($targetUid === null) {
     echo json_encode(['ok'=>true, 'allowEdit'=>false, 'reason'=>'Modo "all"', 'data'=>null]);
     exit;
@@ -39,6 +44,8 @@ if ($method === 'GET' && $action === 'get') {
   $row = $res->fetch_assoc();
 
   $allowEdit = isAdminLike($rolSes) || ($targetUid === $uidSes);
+
+  // Si no hay registro → 0
   if (!$row) {
     echo json_encode([
       'ok'=>true,
@@ -46,22 +53,48 @@ if ($method === 'GET' && $action === 'get') {
       'data'=>[
         'usuario_id'=>$targetUid,
         'monto'=>0.00,
-        'fecha_actualizacion'=>null
+        'fecha_actualizacion'=>null,
+        'stale'=>true,
+        'targetDate'=>$targetDate
       ]
     ]);
-  } else {
+    exit;
+  }
+
+  // 🔥 Si existe pero NO es del día objetivo → 0
+  $fechaRow = $row['fecha_actualizacion'];           // DATETIME
+  $fechaRowDia = $fechaRow ? substr($fechaRow, 0, 10) : null; // YYYY-MM-DD
+
+  if (!$fechaRowDia || $fechaRowDia !== $targetDate) {
     echo json_encode([
       'ok'=>true,
       'allowEdit'=>$allowEdit,
       'data'=>[
         'usuario_id'=>$targetUid,
-        'monto'=> (float)$row['monto'],
-        'fecha_actualizacion'=> $row['fecha_actualizacion']
+        'monto'=>0.00,
+        'fecha_actualizacion'=>$fechaRow,
+        'stale'=>true,            // indica que había monto pero era de otro día
+        'targetDate'=>$targetDate
       ]
     ]);
+    exit;
   }
+
+  // ✅ Es del día objetivo → regresa el monto real
+  echo json_encode([
+    'ok'=>true,
+    'allowEdit'=>$allowEdit,
+    'data'=>[
+      'usuario_id'=>$targetUid,
+      'monto'=>(float)$row['monto'],
+      'fecha_actualizacion'=>$fechaRow,
+      'stale'=>false,
+      'targetDate'=>$targetDate
+    ]
+  ]);
   exit;
 }
+
 
 if ($method === 'POST' && $action === 'save') {
   // JSON o x-www-form-urlencoded

@@ -6,7 +6,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard - Gym Admin</title>
-  <!-- Tailwind (browser build) -->
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico">
   <link rel="stylesheet" href="src/output.css">
   <!-- Bootstrap Icons (local) -->
   <link rel="stylesheet" href="fonts/bootstrap-icons.css">

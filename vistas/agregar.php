@@ -32,6 +32,7 @@ endif;
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agregar Usuario - Smart Gate</title>
   <link rel="stylesheet" href="../src/output.css">
+  <link rel="icon" type="image/x-icon" href="../img/favicon.ico">
   <script src="../js/sweetalert2@11.js"></script>
   <script src="../js/lucide.min.js"></script>
   <script src="../js/jspdf.umd.min.js"></script>

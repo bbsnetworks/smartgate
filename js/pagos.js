@@ -1217,7 +1217,7 @@ async function generarTicketPago(data) {
     format: [58, 170],
   });
 
-  const logo = await cargarImagenBase64("../img/logo.webp");
+  const logo = await cargarImagenBase64("../img/logo-black.webp");
 
   const fechaPago = new Date(data.fecha_pago);
   const fecha = fechaPago.toLocaleDateString("es-MX", {
@@ -1303,7 +1303,7 @@ async function generarTicketPago(data) {
   doc.setFont("courier", "bold");
   doc.text("Síguenos en redes:", 29, (y += 8), { align: "center" });
   doc.setFont("courier", "normal");
-  doc.text("@HaloGymOficial", 29, (y += 4), { align: "center" });
+  doc.text("@BBSNetworks", 29, (y += 4), { align: "center" });
 
   doc.setFont("courier", "italic");
   doc.text("¡Gracias por tu pago!", 29, (y += 8), { align: "center" });

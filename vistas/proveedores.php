@@ -30,6 +30,7 @@ if (isset($_GET['bloqueado'])) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Administrar Proveedores</title>
+  <link rel="icon" type="image/x-icon" href="../img/favicon.ico">
   <link rel="stylesheet" href="../src/output.css" />
   <script src="../js/sweetalert2@11.js"></script>
   <script src="../js/lucide.min.js"></script>

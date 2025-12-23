@@ -134,7 +134,7 @@ try {
         } elseif ($orgName === 'empleados') {
             $tipo = 'empleados';
         }
-        $orgPadre = "Gym Zero"; // Puedes cambiar esto si usas otra organización raíz
+        $orgPadre = "Smartgate"; // Puedes cambiar esto si usas otra organización raíz
         $department = "All Departments/{$orgPadre}/" . ucfirst($tipo);
         $fechaIngreso = date("Y-m-d");
         $face_icon = $userData["faces"][0]["faceIconData"] ?? '';

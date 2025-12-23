@@ -205,7 +205,7 @@ async function generarTicketVenta(data, productos, pagoInfo = { pagado: 0, cambi
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: [58, 130 + productos.length * 10] });
 
-  const logo = await cargarImagenBase64("../img/logo.webp");
+  const logo = await cargarImagenBase64("../img/logo-black.webp");
 
   const fechaCompleta = new Date(data.fecha_pago);
   const fecha = fechaCompleta.toLocaleDateString("es-MX");

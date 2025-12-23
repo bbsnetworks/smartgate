@@ -30,6 +30,7 @@ endif;
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Reportes - Gym Admin</title>
+  <link rel="icon" type="image/x-icon" href="../img/favicon.ico">
   <link rel="stylesheet" href="../src/output.css">
   <script src="../js/lucide.min.js"></script>
   <script src="../js/sweetalert2@11.js"></script>
@@ -95,7 +96,7 @@ endif;
       </div>
 
       <div class="flex items-end">
-        <button onclick="buscarReportes()" class="w-full bg-blue-600 hover:bg-blue-700 transition text-white font-semibold py-2 px-4 rounded-md shadow">
+        <button id="btnBuscarReporte" onclick="buscarReportes()" class="w-full bg-blue-600 hover:bg-blue-700 transition text-white font-semibold py-2 px-4 rounded-md shadow">
           🔍 Buscar Reporte
         </button>
       </div>

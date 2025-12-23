@@ -442,7 +442,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
       timeStyle: "short"
     });
   
-    const imgBase64 = await cargarImagenComoBase64('../img/logo.webp');
+    const imgBase64 = await cargarImagenComoBase64('../img/logo-black.webp');
     doc.addImage(imgBase64, 'PNG', 12, 5, 24, 24); // centrado
   
     doc.setFont("courier", "bold");
@@ -499,7 +499,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
     doc.text("Síguenos en redes:", 24, y, { align: "center" });
     y += 5;
     doc.setFont("courier", "normal");
-    doc.text("@HaloGymOficial", 24, y, { align: "center" });
+    doc.text("@BBSNetworks", 24, y, { align: "center" });
   
     y += 8;
     doc.setFont("courier", "italic");

@@ -29,6 +29,7 @@ endif;
 <head>
   <meta charset="UTF-8">
   <title>Recuperar Contraseña</title>
+  <link rel="icon" type="image/x-icon" href="../img/favicon.ico">
   <link rel="stylesheet" href="../src/output.css">
   <script src="../js/sweetalert2@11.js"></script>
   <style>

@@ -8,6 +8,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function buscarReportes() {
+
+  const btn = document.getElementById("btnBuscarReporte");
+  if (btn?.disabled) return; // evita doble click
+
+  lockBuscarReporte();
+  
   const usuario = document.getElementById("usuario").value;
   const tipo = document.getElementById("tipoPeriodo").value;
   const container = document.getElementById("reporteContainer");
@@ -924,25 +930,27 @@ try {
     wrap.classList.add("text-emerald-400");
   };
 
-  // Carga el monto de caja según selección y rol
-  const cargarMontoCaja = async () => {
-    const selVal = selUsuario.value; // 'todos' o id
-    if (esWorker) {
-      const { monto } = await getCajaMontoFromController(selVal, true);
-      $dejado.value = Number(monto || 0).toFixed(2);
-      setEditMode(false); // worker no edita
+const cargarMontoCaja = async () => {
+  const selVal = selUsuario.value;
+  const fechaDia = (params.tipo === "dia" ? params.fecha : ""); // ✅
+
+  if (esWorker) {
+    const { monto } = await getCajaMontoFromController(selVal, true, fechaDia);
+    $dejado.value = Number(monto || 0).toFixed(2);
+    setEditMode(false);
+  } else {
+    if (selVal === "todos") {
+      $dejado.value = "0.00";
+      setEditMode(true);
     } else {
-      if (selVal === "todos") {
-        $dejado.value = "0.00"; // “Todos” arranca en 0
-        setEditMode(true); // admin/root sí edita
-      } else {
-        const { monto } = await getCajaMontoFromController(selVal, false);
-        $dejado.value = Number(monto || 0).toFixed(2);
-        setEditMode(true);
-      }
+      const { monto } = await getCajaMontoFromController(selVal, false, fechaDia);
+      $dejado.value = Number(monto || 0).toFixed(2);
+      setEditMode(true);
     }
-    recalc();
-  };
+  }
+  recalc();
+};
+
 
   // Eventos
   $dejado.addEventListener("input", recalc);
@@ -1014,28 +1022,82 @@ function crearCajaHTML(modoTodos = false) {
 }
 
 // ==== CAJA: obtener monto desde caja_controller.php ====
-async function getCajaMontoFromController(userValue, esWorker) {
-  // userValue puede ser 'todos' o un id numérico (o el id del worker)
+async function getCajaMontoFromController(userValue, esWorker, fechaDia = "") {
   let userParam = "me";
   if (!esWorker) {
     if (String(userValue) === "todos") userParam = "all";
     else userParam = String(userValue);
   }
 
-  const url = `../php/caja_controller.php?action=get&user=${encodeURIComponent(
-    userParam
-  )}`;
+  const qs = new URLSearchParams({
+    action: "get",
+    user: userParam,
+  });
+
+  // ✅ solo si es reporte por día
+  if (fechaDia) qs.set("date", fechaDia);
+
+  const url = `../php/caja_controller.php?${qs.toString()}`;
   const res = await fetch(url);
   const data = await res.json().catch(() => null);
 
   if (!data || data.ok !== true) {
     console.warn("caja_controller:get fallo", data);
-    // Para “todos” devolvemos 0; para errores también 0
-    return { monto: 0, from: "fallback" };
+    return { monto: 0, from: "fallback", stale: true };
   }
 
-  // Si viene sin data (modo all), dejamos 0
-  if (!data.data) return { monto: 0, from: "all" };
+  if (!data.data) return { monto: 0, from: "all", stale: true };
 
-  return { monto: Number(data.data.monto || 0), from: "db" };
+  return {
+    monto: Number(data.data.monto || 0),
+    from: "db",
+    stale: !!data.data.stale,
+    fecha_actualizacion: data.data.fecha_actualizacion || null,
+  };
 }
+// ===== Bloqueo / desbloqueo del botón Buscar Reporte =====
+function lockBuscarReporte() {
+  const btn = document.getElementById("btnBuscarReporte");
+  if (!btn) return;
+
+  btn.disabled = true;
+  btn.classList.add("opacity-60", "cursor-not-allowed");
+  btn.classList.remove("hover:bg-blue-700");
+  btn.dataset.locked = "1";
+}
+
+function unlockBuscarReporte() {
+  const btn = document.getElementById("btnBuscarReporte");
+  if (!btn) return;
+
+  btn.disabled = false;
+  btn.classList.remove("opacity-60", "cursor-not-allowed");
+  btn.classList.add("hover:bg-blue-700");
+  btn.dataset.locked = "0";
+}
+
+function initBuscarReporteLock() {
+  const ids = [
+    "usuario",
+    "tipoPeriodo",
+    "fecha_dia",
+    "fecha_mes",
+    "fecha_anio",
+    "rango_inicio",
+    "rango_fin",
+  ];
+
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // change para selects, input para fechas (por si teclean)
+    el.addEventListener("change", unlockBuscarReporte);
+    el.addEventListener("input", unlockBuscarReporte);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initBuscarReporteLock();
+});
+
