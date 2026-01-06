@@ -151,53 +151,153 @@ function renderPaginacionClientes(total, limit, paginaActual) {
 }
 
 async function abrirModalPago() {
-  let html = `
-  <div class="space-y-4 text-left text-gray-700">
-    <div>
-      <input id="buscar-cliente" class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="🔍 Buscar cliente por nombre o apellido">
+  let html = `<div id="formulario-pago" class="space-y-5">
+
+  <!-- FILA 1: Inicio / Fin -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    <!-- Fecha Inicio -->
+    <div class="w-full">
+      <label class="block mb-1 text-sm font-medium flex items-center justify-between gap-2">
+        <span class="flex items-center gap-1">
+          <i data-lucide="calendar-check" class="w-4 h-4 text-blue-400"></i> Fecha de Inicio:
+        </span>
+
+        <button id="btnUnlockInicio" type="button"
+          class="hidden text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200">
+          Desbloquear
+        </button>
+      </label>
+
+      <div class="relative">
+        <input id="fecha_inicio" type="date"
+          class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+                 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+        <!-- Overlay: SOLO cuando está bloqueado -->
+        <button id="lockInicioOverlay" type="button"
+          class="hidden absolute inset-0 rounded-lg"
+          style="background: transparent;"
+          aria-label="Desbloquear fecha inicio"></button>
+      </div>
+
+      <p id="hintInicio" class="mt-1 text-xs text-slate-500 hidden"></p>
     </div>
-    <div id="resultado-cliente" class="max-h-60 overflow-y-auto space-y-2"></div>
 
-    <div id="formulario-pago" class="hidden space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block mb-1 font-semibold">📅 Fecha de Inicio:</label>
-          <input id="fecha_inicio" type="date" class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" value="${new Date()
-            .toISOString()
-            .slice(0, 10)}">
-        </div>
-        <div>
-          <label class="block mb-1 font-semibold">📅 Fecha de Fin:</label>
-          <input id="fecha_fin" type="date" class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block mb-1 font-semibold">💵 Monto Total:</label>
-          <input id="monto" type="number" min="0" value="0" class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-        </div>
-        <div>
-          <label class="block mb-1 font-semibold">🎁 Descuento:</label>
-          <input id="descuento" type="number" min="0" value="0" class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-        </div>
-      </div>
-      <div>
-  <label class="block mb-1 font-semibold">💵 Recibido (solo efectivo):</label>
-  <input id="recibido" type="number" min="0" step="0.01" placeholder="Ej. 700.00"
-         class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
-  <p class="mt-1 text-xs text-slate-500" id="ayudaCambio"></p>
-</div>      
-      <div>
-        <label class="block mb-1 font-semibold">💳 Método de Pago:</label>
-        <select id="metodo" class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-          <option value="efectivo">Efectivo</option>
-          <option value="transferencia">Transferencia</option>
-          <option value="tarjeta">Tarjeta</option>
-        </select>
-      </div>
+    <!-- Fecha Fin -->
+    <div class="w-full">
+      <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+        <i data-lucide="calendar-clock" class="w-4 h-4 text-rose-400"></i> Fecha de Fin:
+      </label>
+      <input id="fecha_fin" type="date"
+        class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+               focus:outline-none focus:ring-2 focus:ring-rose-500">
     </div>
   </div>
+
+  <!-- PANEL AUTORIZACIÓN: ANCHO COMPLETO (no rompe el grid) -->
+  <div id="authPanel"
+    class="hidden w-full p-4 rounded-xl border border-slate-600 bg-slate-900/80 shadow-lg">
+    <div class="flex items-center gap-2 mb-3">
+      <i data-lucide="shield-check" class="w-5 h-5 text-amber-400"></i>
+      <div class="text-sm font-semibold text-slate-100">Autorización requerida</div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
+      <div class="md:col-span-8">
+        <input id="authCode" type="password" placeholder="Código de administrador"
+          class="w-full h-11 border border-slate-600 bg-slate-950 text-slate-100 px-3 rounded-lg
+                 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+      </div>
+
+      <div class="md:col-span-4 flex gap-2">
+        <button id="authValidate" type="button"
+          class="flex-1 h-11 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+          Validar
+        </button>
+
+        <button id="authCancel" type="button"
+          class="flex-1 h-11 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+    <p id="authMsg" class="mt-3 text-xs text-slate-400"></p>
+  </div>
+
+  <!-- FILA 2: Monto / Descuento -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    <div>
+      <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+        <i data-lucide="dollar-sign" class="w-4 h-4 text-yellow-400"></i> Monto Total:
+      </label>
+      <input id="monto" type="text" inputmode="decimal" value="0"
+        class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+               focus:outline-none focus:ring-2 focus:ring-yellow-500"
+        onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+        oninput="
+          this.value = this.value.replace(',', '.').replace(/[^\d.]/g,'');
+          if ((this.value.match(/\./g)||[]).length > 1) this.value = this.value.replace(/\.(?=.*\.)/g,'');
+          this.value = this.value.replace(/^(\d*)(?:\.(\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+        ">
+    </div>
+
+    <div>
+      <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+        <i data-lucide="gift" class="w-4 h-4 text-pink-400"></i> Descuento:
+      </label>
+      <input id="descuento" type="text" inputmode="decimal" value="0"
+        class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+               focus:outline-none focus:ring-2 focus:ring-pink-500"
+        onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+        oninput="
+          this.value = this.value.replace(',', '.').replace(/[^\d.]/g,'');
+          if ((this.value.match(/\./g)||[]).length > 1) this.value = this.value.replace(/\.(?=.*\.)/g,'');
+          this.value = this.value.replace(/^(\d*)(?:\.(\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+        ">
+    </div>
+
+  </div>
+
+  <!-- FILA 3: Recibido / Método -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    <div>
+      <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+        <i data-lucide="banknote" class="w-4 h-4 text-green-400"></i> Recibido (solo efectivo):
+      </label>
+      <input id="recibido" type="text" inputmode="decimal" placeholder="Ej. 700.00"
+        class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+               focus:outline-none focus:ring-2 focus:ring-green-500"
+        onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+        oninput="
+          this.value = this.value.replace(',', '.').replace(/[^\d.]/g,'');
+          if ((this.value.match(/\./g)||[]).length > 1) this.value = this.value.replace(/\.(?=.*\.)/g,'');
+          this.value = this.value.replace(/^(\d*)(?:\.(\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+        ">
+      <p class="mt-1 text-xs text-slate-500" id="ayudaCambio"></p>
+    </div>
+
+    <div>
+      <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+        <i data-lucide="credit-card" class="w-4 h-4 text-cyan-400"></i> Método de Pago:
+      </label>
+      <select id="metodo"
+        class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+               focus:outline-none focus:ring-2 focus:ring-cyan-500">
+        <option value="efectivo">Efectivo</option>
+        <option value="transferencia">Transferencia</option>
+        <option value="tarjeta">Tarjeta</option>
+      </select>
+    </div>
+
+  </div>
+
+</div>
+
+
 `;
 
   swalcard
@@ -304,6 +404,8 @@ async function abrirModalPago() {
                 div.dataset.nombre = c.nombre;
                 div.dataset.apellido = c.apellido;
                 div.dataset.telefono = c.telefono;
+                div.dataset.comentarios = c.comentarios || ""; // o c.comentario
+
 
                 // log de inspección
                 logImagenCliente("busqueda", c);
@@ -357,6 +459,21 @@ async function abrirModalPago() {
                                       </div>
                                   </div>
                                 `;
+                               const comentario = (div.dataset.comentarios || "").trim();
+
+resultadoCliente.innerHTML += `
+  <div class="mt-3 flex items-start gap-2 p-3 rounded-xl
+              bg-slate-900/60 border border-slate-600/80">
+    <i data-lucide="sticky-note" class="w-4 h-4 text-amber-300 mt-0.5"></i>
+    <div class="text-sm text-slate-100 whitespace-pre-wrap">
+      ${comentario ? comentario : `<span class="text-slate-400">— Sin comentario —</span>`}
+    </div>
+  </div>
+`;
+lucide.createIcons();
+
+
+
 
                   // 🔁 Aquí consultamos la última fecha pagada del cliente
                   // 🔁 Aquí consultamos la última fecha pagada del cliente
@@ -537,10 +654,12 @@ async function abrirModalPago() {
     });
 }
 async function abrirModalPagoConCliente(cliente) {
-  // log de inspección
-  logImagenCliente("modal_directo", cliente);
+  // log de inspección (si lo tienes)
+  try {
+    logImagenCliente("modal_directo", cliente);
+  } catch (_) {}
 
-  // normaliza y elige mejor fuente
+  // normaliza y elige mejor fuente de imagen
   let imagenMostrar = null;
   if (cliente.foto_icono)
     imagenMostrar = normalizeImageInput(cliente.foto_icono);
@@ -548,156 +667,368 @@ async function abrirModalPagoConCliente(cliente) {
     imagenMostrar = await reducirImagenBase64Smart(cliente.foto, 80);
   if (!imagenMostrar)
     imagenMostrar = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
+  const comentarioRaw = (cliente.comentarios || cliente.comentario || "").trim();
+  const comentario = escapeHtml(comentarioRaw);
 
-  let html = `
-<div class="space-y-4 text-left text-slate-200">
-    <div id="cliente-info" class="flex items-center gap-3 p-4 bg-slate-700 rounded-lg shadow cliente-seleccionado"
-         data-id="${cliente.id}" data-nombre="${cliente.nombre}" data-apellido="${cliente.apellido}" data-telefono="${cliente.telefono}">
-        <img src="${imagenMostrar}" class="w-10 h-10 rounded-full object-cover border" />
-        <div>
-            <div class="text-lg font-bold text-white">${cliente.nombre} ${cliente.apellido}</div>
-            <div class="text-sm text-slate-400">${cliente.telefono}</div>
-        </div>
+  const html = `
+  <div class="relative space-y-4 text-left text-slate-200">
+
+    <!-- INFO CLIENTE -->
+    <div id="cliente-info"
+      class="flex items-center gap-3 p-4 bg-slate-700 rounded-lg shadow cliente-seleccionado"
+      data-id="${cliente.id}"
+      data-nombre="${cliente.nombre}"
+      data-apellido="${cliente.apellido}"
+      data-telefono="${cliente.telefono}">
+      <img src="${imagenMostrar}" class="w-10 h-10 rounded-full object-cover border" />
+      <div>
+        <div class="text-lg font-bold text-white">${cliente.nombre} ${cliente.apellido}</div>
+        <div class="text-sm text-slate-400">${cliente.telefono}</div>
+      </div>
     </div>
 
-    <div id="formulario-pago" class="space-y-4">
+    <!-- FORM (contenedor relativo para overlay interno) -->
+    <div id="formularioWrap" class="relative">
+
+      <!-- Overlay para congelar el FORM (NO debe tapar authPanel) -->
+      <div id="freezeForm"
+        class="hidden absolute inset-0 rounded-xl z-10 pointer-events-auto"
+        style="background: rgba(0,0,0,.35);">
+      </div>
+
+      <div id="formulario-pago" class="space-y-5 relative z-0">
+
+        <!-- FILA 1: Inicio / Fin -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-                    <i data-lucide="calendar-check" class="w-4 h-4 text-blue-400"></i> Fecha de Inicio:
-                </label>
-                <input id="fecha_inicio" type="date"
-                    class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+          <!-- Fecha Inicio -->
+          <div class="w-full">
+            <label class="block mb-1 text-sm font-medium flex items-center justify-between gap-2">
+              <span class="flex items-center gap-1">
+                <i data-lucide="calendar-check" class="w-4 h-4 text-blue-400"></i>
+                Fecha de Inicio:
+              </span>
+
+              <button id="btnUnlockInicio" type="button"
+                class="hidden text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200">
+                Desbloquear
+              </button>
+            </label>
+
+            <div class="relative">
+              <input id="fecha_inicio" type="date"
+                class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+                       focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+              <!-- Overlay: SOLO cuando está bloqueado -->
+              <button id="lockInicioOverlay" type="button"
+                class="hidden absolute inset-0 rounded-lg"
+                style="background: transparent;"
+                aria-label="Desbloquear fecha inicio"></button>
             </div>
-            <div>
-                <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-                    <i data-lucide="calendar-clock" class="w-4 h-4 text-rose-400"></i> Fecha de Fin:
-                </label>
-                <input id="fecha_fin" type="date"
-                    class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500">
-            </div>
-        </div>
 
-        <div>
-  <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-    <i data-lucide="dollar-sign" class="w-4 h-4 text-yellow-400"></i> Monto Total:
-  </label>
-  <input
-    id="monto"
-    type="text"
-    inputmode="decimal"
-    value="0"
-    class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-    onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
-    oninput="
-      this.value = this.value
-        .replace(',', '.')          /* coma → punto */
-        .replace(/[^\\d.]/g,'');    /* deja solo dígitos y punto */
-      if ((this.value.match(/\\./g)||[]).length > 1) {
-        this.value = this.value.replace(/\\.(?=.*\\.)/g,''); /* un solo punto */
-      }
-      this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); }); /* 2 decimales */
-    "
-  >
-</div>
+            <p id="hintInicio" class="mt-1 text-xs text-slate-500 hidden"></p>
+          </div>
 
-<div>
-  <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-    <i data-lucide="gift" class="w-4 h-4 text-pink-400"></i> Descuento:
-  </label>
-  <input
-    id="descuento"
-    type="text"
-    inputmode="decimal"
-    value="0"
-    class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
-    onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
-    oninput="
-      this.value = this.value
-        .replace(',', '.')
-        .replace(/[^\\d.]/g,'');
-      if ((this.value.match(/\\./g)||[]).length > 1) {
-        this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
-      }
-      this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
-    "
-  >
-</div>
-
-
-
-
-        </div>
-        <div>
-  <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-    <i data-lucide="banknote" class="w-4 h-4 text-green-400"></i> Recibido (solo efectivo):
-  </label>
-  <input
-    id="recibido"
-    type="text"
-    inputmode="decimal"
-    placeholder="Ej. 700.00"
-    class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-    onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
-    oninput="
-      this.value = this.value
-        .replace(',', '.')
-        .replace(/[^\\d.]/g,'');
-      if ((this.value.match(/\\./g)||[]).length > 1) {
-        this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
-      }
-      this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
-    "
-  >
-  <p class="mt-1 text-xs text-slate-500" id="ayudaCambio"></p>
-</div>
-
-        <div>
+          <!-- Fecha Fin -->
+          <div class="w-full">
             <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-                <i data-lucide="credit-card" class="w-4 h-4 text-cyan-400"></i> Método de Pago:
+              <i data-lucide="calendar-clock" class="w-4 h-4 text-rose-400"></i>
+              Fecha de Fin:
+            </label>
+            <input id="fecha_fin" type="date"
+              class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+                     focus:outline-none focus:ring-2 focus:ring-rose-500">
+          </div>
+        </div>
+
+        <!-- FILA 2: Monto / Descuento -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <div>
+            <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+              <i data-lucide="dollar-sign" class="w-4 h-4 text-yellow-400"></i>
+              Monto Total:
+            </label>
+            <input id="monto" type="text" inputmode="decimal" value="0"
+              class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+                     focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+              oninput="
+                this.value = this.value.replace(',', '.').replace(/[^\\d.]/g,'');
+                if ((this.value.match(/\\./g)||[]).length > 1) this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
+                this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+              ">
+          </div>
+
+          <div>
+            <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+              <i data-lucide="gift" class="w-4 h-4 text-pink-400"></i>
+              Descuento:
+            </label>
+            <input id="descuento" type="text" inputmode="decimal" value="0"
+              class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+                     focus:outline-none focus:ring-2 focus:ring-pink-500"
+              onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+              oninput="
+                this.value = this.value.replace(',', '.').replace(/[^\\d.]/g,'');
+                if ((this.value.match(/\\./g)||[]).length > 1) this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
+                this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+              ">
+          </div>
+
+        </div>
+
+        <!-- FILA 3: Recibido / Método -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <div>
+            <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+              <i data-lucide="banknote" class="w-4 h-4 text-green-400"></i>
+              Recibido (solo efectivo):
+            </label>
+            <input id="recibido" type="text" inputmode="decimal" placeholder="Ej. 700.00"
+              class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+                     focus:outline-none focus:ring-2 focus:ring-green-500"
+              onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+              oninput="
+                this.value = this.value.replace(',', '.').replace(/[^\\d.]/g,'');
+                if ((this.value.match(/\\./g)||[]).length > 1) this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
+                this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+              ">
+            <p class="mt-1 text-xs text-slate-500" id="ayudaCambio"></p>
+          </div>
+
+          <div>
+            <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+              <i data-lucide="credit-card" class="w-4 h-4 text-cyan-400"></i>
+              Método de Pago:
             </label>
             <select id="metodo"
-                class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                <option value="efectivo">Efectivo</option>
-                <option value="transferencia">Transferencia</option>
-                <option value="tarjeta">Tarjeta</option>
+              class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+                     focus:outline-none focus:ring-2 focus:ring-cyan-500">
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
             </select>
+          </div>
+
         </div>
+
+
+      </div>
+
+      <!-- PANEL AUTORIZACIÓN: encima del overlay -->
+      <div id="authPanel"
+        class="hidden w-full mt-4 p-4 rounded-xl border border-slate-600 bg-slate-900/90 shadow-lg relative z-20">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="shield-check" class="w-5 h-5 text-amber-400"></i>
+          <div class="text-sm font-semibold text-slate-100">Autorización requerida</div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
+          <div class="md:col-span-8">
+            <input id="authCode" type="password" placeholder="Código de administrador"
+              class="w-full h-11 border border-slate-600 bg-slate-950 text-slate-100 px-3 rounded-lg
+                     focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          </div>
+
+          <div class="md:col-span-4 flex gap-2">
+            <button id="authValidate" type="button"
+              class="flex-1 h-11 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+              Validar
+            </button>
+
+            <button id="authCancel" type="button"
+              class="flex-1 h-11 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">
+              Cancelar
+            </button>
+          </div>
+        </div>
+
+        <p id="authMsg" class="mt-3 text-xs text-slate-400">
+          Ingresa el código para desbloquear la fecha de inicio.
+        </p>
+      </div>
+
     </div>
-</div>`;
+  </div>
+  <!-- COMENTARIO DEL CLIENTE -->
+<div class="p-3 rounded-lg border border-slate-600 bg-slate-900/70">
+  <div class="text-xs uppercase tracking-wide text-slate-400 mb-1 flex items-center gap-2">
+    <i data-lucide="message-square" class="w-4 h-4"></i>
+    Comentario del cliente
+  </div>
+  <div class="text-sm text-slate-100 whitespace-pre-wrap">
+    ${comentario ? comentario : "— Sin comentario —"}
+  </div>
+</div>
+
+`;
 
   swalInfo
     .fire({
       title: "Registrar Pago",
-      html: html,
+      html,
       width: "800px",
       confirmButtonText: "Guardar pago",
+      showCloseButton: true,
+
       didOpen: async () => {
-        // Obtener última fecha aplicada (opcional)
+        // ====== 1) cargar última fecha aplicada en Fecha Inicio ======
+        let inicioOriginal = "";
         try {
           const res = await fetch(`../php/ultimo_pago.php?id=${cliente.id}`);
           const json = await res.json();
-
+          const hoy = new Date().toISOString().slice(0, 10);
           const fechaInput = document.getElementById("fecha_inicio");
+
           if (json.success && json.ultima_fecha) {
             fechaInput.value = json.ultima_fecha;
+            inicioOriginal = json.ultima_fecha;
           } else {
-            fechaInput.value = new Date().toISOString().slice(0, 10);
+            fechaInput.value = hoy;
+            inicioOriginal = hoy;
           }
-        } catch (error) {
-          console.error("Error al obtener última fecha:", error);
+        } catch (e) {
+          const hoy = new Date().toISOString().slice(0, 10);
+          const fechaInput = document.getElementById("fecha_inicio");
+          if (fechaInput) fechaInput.value = hoy;
+          inicioOriginal = hoy;
         }
 
-        const montoInput = document.getElementById("monto");
-        const descuentoInput = document.getElementById("descuento");
+        const tipoUsuario = window.usuarioActual?.tipo; // "admin" | "root" | "worker"
+        const $inicio = document.getElementById("fecha_inicio");
+        const $btnUnlock = document.getElementById("btnUnlockInicio");
+        const $overlay = document.getElementById("lockInicioOverlay");
+        const $hint = document.getElementById("hintInicio");
 
-        const syncMax = () => {
-          const m = Number(montoInput.value) || 0;
-          descuentoInput.max = m;
-          if (Number(descuentoInput.value) > m) {
-            descuentoInput.value = m;
+        let inicioAutorizado =
+          tipoUsuario === "admin" || tipoUsuario === "root";
+
+        function aplicarEstadoInicio() {
+          if (!$inicio) return;
+
+          if (inicioAutorizado) {
+            $inicio.readOnly = false;
+
+            $btnUnlock?.classList.add("hidden");
+            $btnUnlock && ($btnUnlock.disabled = true);
+
+            $overlay?.classList.add("hidden");
+            $overlay && ($overlay.disabled = true);
+
+            document.getElementById("authPanel")?.classList.add("hidden");
+            document.getElementById("freezeForm")?.classList.add("hidden");
+          } else {
+            $inicio.readOnly = true;
+            $inicio.classList.add("opacity-60");
+
+            if ($btnUnlock) {
+              $btnUnlock.classList.remove("hidden");
+              $btnUnlock.disabled = false;
+              $btnUnlock.classList.remove("pointer-events-none", "opacity-50");
+            }
+
+            $overlay?.classList.remove("hidden");
+
+            if ($hint) {
+              $hint.classList.remove("hidden");
+              $hint.textContent =
+                "Worker: requiere código para modificar la fecha de inicio.";
+            }
           }
-        };
+        }
+
+        aplicarEstadoInicio();
+
+        // ====== 2) Panel interno de autorización (SIN otro swal) ======
+        const $authPanel = document.getElementById("authPanel");
+        const $freeze = document.getElementById("freezeForm");
+        const $code = document.getElementById("authCode");
+        const $btnVal = document.getElementById("authValidate");
+        const $btnCan = document.getElementById("authCancel");
+        const $msg = document.getElementById("authMsg");
+
+        function abrirPanelAuth() {
+          // ✅ si ya está autorizado, no hacer nada
+          if (inicioAutorizado) return;
+
+          $authPanel?.classList.remove("hidden");
+          $freeze?.classList.remove("hidden");
+          if ($authPanel) $authPanel.style.zIndex = "20";
+          if ($freeze) $freeze.style.zIndex = "10";
+          if ($msg)
+            $msg.textContent =
+              "Ingresa el código para desbloquear la fecha de inicio.";
+          if ($code) $code.value = "";
+          setTimeout(() => $code?.focus(), 0);
+        }
+
+        function cerrarPanelAuth() {
+          $authPanel?.classList.add("hidden");
+          $freeze?.classList.add("hidden");
+          if ($msg) $msg.textContent = "";
+        }
+
+        async function validarCodigoInterno() {
+          const codigo = ($code?.value || "").trim();
+          if (!codigo) {
+            if ($msg) $msg.textContent = "Debes ingresar un código.";
+            return;
+          }
+
+          if ($btnVal) {
+            $btnVal.disabled = true;
+            $btnVal.classList.add("opacity-70");
+          }
+          if ($msg) $msg.textContent = "Validando...";
+
+          try {
+            const res = await fetch("../php/validar_codigo_admin.php", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ codigo }),
+            });
+            const j = await res.json();
+
+            if (!j.success) {
+              if ($msg) $msg.textContent = "Código inválido o no autorizado.";
+              return;
+            }
+
+            inicioAutorizado = true;
+            aplicarEstadoInicio();
+            cerrarPanelAuth();
+
+            // ✅ por seguridad: si existe, fuerza ocultar overlay
+            $overlay?.classList.add("hidden");
+
+            // ✅ opcional: enfoca el input y abre selector
+            $inicio?.focus();
+            $inicio?.showPicker?.();
+          } catch (e) {
+            if ($msg) $msg.textContent = "Error al validar. Intenta de nuevo.";
+          } finally {
+            if ($btnVal) {
+              $btnVal.disabled = false;
+              $btnVal.classList.remove("opacity-70");
+            }
+          }
+        }
+
+        // click en desbloquear (botón o overlay)
+        $btnUnlock?.addEventListener("click", abrirPanelAuth);
+        $overlay?.addEventListener("click", abrirPanelAuth);
+
+        $btnVal?.addEventListener("click", validarCodigoInterno);
+        $btnCan?.addEventListener("click", cerrarPanelAuth);
+        $code?.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") validarCodigoInterno();
+          if (ev.key === "Escape") cerrarPanelAuth();
+        });
+
+        // ====== 3) Cambio / total ======
         const $monto = document.getElementById("monto");
         const $desc = document.getElementById("descuento");
         const $rec = document.getElementById("recibido");
@@ -715,14 +1046,17 @@ async function abrirModalPagoConCliente(cliente) {
           const esEfectivo = $met.value === "efectivo";
           $rec.disabled = !esEfectivo;
           $rec.placeholder = esEfectivo ? "Ej. 700.00" : "Solo para efectivo";
+
           if (!esEfectivo) {
             $rec.value = "";
             $help.textContent = "";
             return;
           }
+
           const total = totalACobrar();
           const recNum = Number($rec.value) || 0;
           const cambio = recNum - total;
+
           $help.textContent =
             total > 0
               ? `Total: $${total.toFixed(2)}${
@@ -739,10 +1073,14 @@ async function abrirModalPagoConCliente(cliente) {
         $met.addEventListener("change", toggleRecibido);
         toggleRecibido();
 
-        montoInput.addEventListener("input", syncMax);
-        descuentoInput.addEventListener("input", syncMax);
-        syncMax();
+        // (Opcional) guarda referencia si quieres “blindar” inicio
+        window.__pagoInicioOriginal = inicioOriginal;
+        window.__pagoInicioAutorizado = inicioAutorizado;
+
+        // icons
+        lucide.createIcons();
       },
+
       preConfirm: () => {
         const inicio = document.getElementById("fecha_inicio").value;
         const fin = document.getElementById("fecha_fin").value;
@@ -809,90 +1147,96 @@ async function abrirModalPagoConCliente(cliente) {
       },
     })
     .then((result) => {
-      if (result.isConfirmed) {
-        fetch("../php/registrar_pago_nombre.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(result.value),
+      if (!result.isConfirmed) return;
+
+      fetch("../php/registrar_pago_nombre.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(result.value),
+      })
+        .then((res) => res.json())
+        .then(async (data) => {
+          if (!data.success) {
+            swalError.fire("Error", data.error || "Error desconocido", "error");
+            return;
+          }
+
+          const total = Math.max(
+            0,
+            result.value.monto - result.value.descuento
+          );
+          const esEfectivo = result.value.metodo === "efectivo";
+          const recibido = esEfectivo
+            ? Number(result.value.recibido) || 0
+            : null;
+          const cambio = esEfectivo ? recibido - total : null;
+
+          const datosTicket = {
+            nombre: result.value.nombre,
+            apellido: result.value.apellido,
+            telefono: result.value.telefono,
+            fecha_inicio: result.value.fecha_inicio,
+            fecha_fin: result.value.fecha_fin,
+            metodo: result.value.metodo,
+            monto: result.value.monto,
+            descuento: result.value.descuento,
+            fecha_pago: new Date().toISOString(),
+            usuario: window.usuarioActual?.nombre || "Usuario desconocido",
+            recibido,
+            cambio,
+          };
+
+          await generarTicketPago(datosTicket);
+
+          if (esEfectivo) {
+            await swalSuccess.fire({
+              title: "¡Pago en efectivo registrado!",
+              icon: "success",
+              width: 700,
+              backdrop: true,
+              allowOutsideClick: false,
+              html: `
+              <div class="text-left text-slate-200">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="opacity-80">Total:</span>
+                  <strong class="text-white">$${total.toFixed(2)}</strong>
+                </div>
+                <div class="flex justify-between items-center mb-1">
+                  <span class="opacity-80">Recibido:</span>
+                  <strong class="text-white">$${(recibido || 0).toFixed(
+                    2
+                  )}</strong>
+                </div>
+              </div>
+
+              <div class="mt-4 border-t border-slate-600 pt-4 text-center">
+                <div class="text-lime-400 font-semibold tracking-wide">Cambio:</div>
+                <div class="text-lime-400 font-extrabold"
+                     style="font-size: 40px; line-height: 1; margin-top: 6px;">
+                  $${Math.max(0, cambio).toFixed(2)}
+                </div>
+              </div>
+            `,
+              customClass: {
+                popup: "bg-slate-800 text-white rounded-2xl",
+                title: "text-3xl font-bold",
+                confirmButton:
+                  "bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl",
+              },
+            });
+          } else {
+            await swalSuccess.fire("¡Éxito!", data.msg, "success");
+          }
+
+          location.reload();
         })
-          .then((res) => res.json())
-          .then(async (data) => {
-            if (data.success) {
-              const total = Math.max(
-                0,
-                result.value.monto - result.value.descuento
-              );
-              const esEfectivo = result.value.metodo === "efectivo";
-              const recibido = esEfectivo
-                ? Number(result.value.recibido) || 0
-                : null;
-              const cambio = esEfectivo ? recibido - total : null;
-
-              const datosTicket = {
-                nombre: result.value.nombre,
-                apellido: result.value.apellido,
-                telefono: result.value.telefono,
-                fecha_inicio: result.value.fecha_inicio,
-                fecha_fin: result.value.fecha_fin,
-                metodo: result.value.metodo,
-                monto: result.value.monto,
-                descuento: result.value.descuento,
-                fecha_pago: new Date().toISOString(),
-                usuario: window.usuarioActual?.nombre || "Usuario desconocido",
-                recibido,
-                cambio,
-              };
-
-              await generarTicketPago(datosTicket);
-
-              if (esEfectivo) {
-                await swalSuccess.fire({
-                  title: "¡Pago en efectivo registrado!",
-                  icon: "success",
-                  width: 700,
-                  backdrop: true,
-                  allowOutsideClick: false,
-                  html: `
-      <div class="text-left text-slate-200">
-        <div class="flex justify-between items-center mb-1">
-          <span class="opacity-80">Total:</span>
-          <strong class="text-white">$${total.toFixed(2)}</strong>
-        </div>
-        <div class="flex justify-between items-center mb-1">
-          <span class="opacity-80">Recibido:</span>
-          <strong class="text-white">$${recibido.toFixed(2)}</strong>
-        </div>
-      </div>
-
-      <div class="mt-4 border-t border-slate-600 pt-4 text-center">
-        <div class="text-lime-400 font-semibold tracking-wide">Cambio:</div>
-        <div class="text-lime-400 font-extrabold"
-             style="font-size: 40px; line-height: 1; margin-top: 6px;">
-          $${Math.max(0, cambio).toFixed(2)}
-        </div>
-      </div>
-    `,
-                  customClass: {
-                    popup: "bg-slate-800 text-white rounded-2xl",
-                    title: "text-3xl font-bold",
-                    confirmButton:
-                      "bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl",
-                  },
-                });
-              } else {
-                await swalSuccess.fire("¡Éxito!", data.msg, "success");
-              }
-
-              location.reload();
-            } else {
-              swalError.fire(
-                "Error",
-                data.error || "Error desconocido",
-                "error"
-              );
-            }
-          });
-      }
+        .catch(() =>
+          swalError.fire(
+            "Error",
+            "No se pudo conectar con el servidor",
+            "error"
+          )
+        );
     });
 }
 
@@ -914,62 +1258,6 @@ async function abrirModalPagoCliente(clienteId) {
   // Simular el mismo comportamiento del modal normal, pero con cliente preseleccionado
   abrirModalPagoConCliente(datos);
 }
-
-// Función auxiliar para reducir imagen en base64
-// async function reducirImagenBase64(base64Image, maxSize = 100) {
-//     return new Promise((resolve) => {
-//         const img = new Image();
-//         img.src = base64Image;
-//         img.onload = () => {
-//             const canvas = document.createElement('canvas');
-//             const ctx = canvas.getContext('2d');
-
-//             let width = img.width;
-//             let height = img.height;
-
-//             // Redimensionar manteniendo aspecto
-//             if (width > height) {
-//                 if (width > maxSize) {
-//                     height *= maxSize / width;
-//                     width = maxSize;
-//                 }
-//             } else {
-//                 if (height > maxSize) {
-//                     width *= maxSize / height;
-//                     height = maxSize;
-//                 }
-//             }
-
-//             canvas.width = width;
-//             canvas.height = height;
-
-//             ctx.drawImage(img, 0, 0, width, height);
-//             const resizedBase64 = canvas.toDataURL('image/jpeg');
-//             resolve(resizedBase64);
-//         };
-//     });
-// }
-
-// async function reducirImagenBase64(base64, nuevoAncho = 60, nuevoAlto = 60) {
-//     return new Promise((resolve) => {
-//         const img = new Image();
-//         img.onload = function() {
-//             const canvas = document.createElement('canvas');
-//             canvas.width = nuevoAncho;
-//             canvas.height = nuevoAlto;
-//             const ctx = canvas.getContext('2d');
-//             ctx.drawImage(img, 0, 0, nuevoAncho, nuevoAlto);
-//             const miniBase64 = canvas.toDataURL('image/jpeg');
-//             resolve(miniBase64);
-//         };
-//         img.onerror = function() {
-//             // Si falla el base64 original, ponemos una imagen default
-//             console.warn("Imagen corrupta o incompleta, usando imagen default.");
-//             resolve('https://cdn-icons-png.flaticon.com/512/847/847969.png'); // ícono de usuario genérico
-//         };
-//         img.src = base64;
-//     });
-// }
 
 function eliminarPago(idPago, clienteId, nombreCompleto) {
   console.log("DELETE pago ->", { idPago, clienteId });
@@ -1217,7 +1505,9 @@ async function generarTicketPago(data) {
     format: [58, 170],
   });
 
-  const logo = await cargarImagenBase64("../img/logo-black.webp");
+  const logoSrc = await obtenerLogoMarca();
+const logo = await cargarImagenBase64(logoSrc);
+
 
   const fechaPago = new Date(data.fecha_pago);
   const fecha = fechaPago.toLocaleDateString("es-MX", {
@@ -1565,4 +1855,27 @@ async function reducirImagenBase64Smart(value, maxSize = 80) {
     };
     img.src = src;
   });
+}
+async function obtenerLogoMarca() {
+  try {
+    const res = await fetch("../php/obtener_logo.php");
+    const json = await res.json();
+
+    if (json.success && json.base64) {
+      return json.base64; // data:image/...;base64,...
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar el logo desde BD:", e);
+  }
+
+  // Fallback si algo falla
+  return "../img/logo-black.webp";
+}
+function escapeHtml(str = "") {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

@@ -10,7 +10,7 @@ if (empty($q)) {
 }
 
 $stmt = $conexion->prepare("
-  SELECT id, nombre, apellido, telefono, face, face_icon
+  SELECT id, nombre, apellido, telefono, face, face_icon,comentarios
   FROM clientes
   WHERE tipo = 'clientes'
     AND (
@@ -31,6 +31,7 @@ while ($c = $resultado->fetch_assoc()) {
   "nombre" => $c["nombre"],
   "apellido" => $c["apellido"],
   "telefono" => $c["telefono"],
+  "comentarios" => $c["comentarios"],
   "foto" => !empty($c["face"]) ? "data:image/jpeg;base64,".$c["face"] : null,
   "foto_icono" => !empty($c["face_icon"]) ? "data:image/jpeg;base64,".$c["face_icon"] : null,
 ];

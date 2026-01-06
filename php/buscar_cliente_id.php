@@ -27,6 +27,7 @@ echo json_encode([
         "apellido" => $cliente["apellido"],
         "telefono" => $cliente["telefono"],
         "foto" => "" . $cliente["face"],
+        "comentarios" => $cliente["comentarios"] ? "" . $cliente["comentarios"] : null,
         "foto_icono" => $cliente["face_icon"] ? "" . $cliente["face_icon"] : null
     ]
 ]);
