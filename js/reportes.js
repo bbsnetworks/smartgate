@@ -8,12 +8,11 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function buscarReportes() {
-
   const btn = document.getElementById("btnBuscarReporte");
   if (btn?.disabled) return; // evita doble click
 
   lockBuscarReporte();
-  
+
   const usuario = document.getElementById("usuario").value;
   const tipo = document.getElementById("tipoPeriodo").value;
   const container = document.getElementById("reporteContainer");
@@ -79,6 +78,8 @@ async function buscarReportes() {
       total_productos,
       cantidad_pagos,
       cantidad_productos,
+      visitas_cantidad,
+      visitas_total,
       total_general,
     } = data;
 
@@ -111,7 +112,22 @@ async function buscarReportes() {
       "text-green-500",
       "bg-stone-200"
     );
+    // ✅ VISITAS (separadas, no mezcladas con productos)
+    container.innerHTML += crearCard(
+      "Visitas Registradas",
+      parseInt(visitas_cantidad || 0, 10),
+      "bi-person-walking",
+      "text-purple-600",
+      "bg-purple-100"
+    );
 
+    container.innerHTML += crearCard(
+      "Total en Visitas",
+      `$${parseFloat(visitas_total || 0).toFixed(2)}`,
+      "bi-ticket-perforated",
+      "text-purple-500",
+      "bg-purple-100"
+    );
     container.innerHTML += crearCard(
       "Total General",
       `$${parseFloat(total_general).toFixed(2)}`,
@@ -119,48 +135,50 @@ async function buscarReportes() {
       "text-indigo-600",
       "bg-green-200"
     );
-    
 
-// ===== Movimientos de caja (desde DETALLE) =====
-if (tipo === "dia" && String(usuario) !== "todos") {
-  // ===== Movimientos de caja (desde DETALLE) =====
-  let cajaIngresos = 0, cajaEgresos = 0, cajaCantidad = 0;
+    // ===== Movimientos de caja (desde DETALLE) =====
+    if (tipo === "dia" && String(usuario) !== "todos") {
+      // ===== Movimientos de caja (desde DETALLE) =====
+      let cajaIngresos = 0,
+        cajaEgresos = 0,
+        cajaCantidad = 0;
 
-  try {
-    const detRes = await fetch(`../php/obtener_reportes_detalle.php?${params.toString()}`);
-    const det = await detRes.json();
+      try {
+        const detRes = await fetch(
+          `../php/obtener_reportes_detalle.php?${params.toString()}`
+        );
+        const det = await detRes.json();
 
-    if (det.success) {
-      cajaIngresos  = parseFloat(det.caja_ingresos || 0);
-      cajaEgresos   = parseFloat(det.caja_egresos || 0);
-      cajaCantidad  = (det.movimientos_caja || []).length;
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar movimientos de caja", e);
-  }
+        if (det.success) {
+          cajaIngresos = parseFloat(det.caja_ingresos || 0);
+          cajaEgresos = parseFloat(det.caja_egresos || 0);
+          cajaCantidad = (det.movimientos_caja || []).length;
+        }
+      } catch (e) {
+        console.warn("No se pudo cargar movimientos de caja", e);
+      }
 
-  const netoCaja = (cajaIngresos || 0) - (cajaEgresos || 0);
+      const netoCaja = (cajaIngresos || 0) - (cajaEgresos || 0);
 
-  container.innerHTML += crearCard(
-    "Movimientos de caja",
-    `<div class="text-xl font-bold text-gray-800">$${netoCaja.toFixed(2)}</div>
+      container.innerHTML += crearCard(
+        "Movimientos de caja",
+        `<div class="text-xl font-bold text-gray-800">$${netoCaja.toFixed(
+          2
+        )}</div>
      <div class="text-sm text-gray-600 mt-1">
        Ingresos: $${(cajaIngresos || 0).toFixed(2)} ·
        Egresos: $${(cajaEgresos || 0).toFixed(2)} ·
        Movs: ${parseInt(cajaCantidad || 0, 10)}
      </div>`,
-    "bi-arrow-left-right",
-    "text-amber-600",
-    "bg-amber-100"
-  );
-}
-
-
+        "bi-arrow-left-right",
+        "text-amber-600",
+        "bg-amber-100"
+      );
+    }
 
     if (tipo === "dia") {
-  await renderCaja({ usuario, tipo, fecha, inicio, fin });
-}
-
+      await renderCaja({ usuario, tipo, fecha, inicio, fin });
+    }
 
     agregarBotonPDF();
   } catch (error) {
@@ -179,7 +197,6 @@ function crearCard(titulo, valor, icono, iconColor, bgColor) {
     </div>
   `;
 }
-
 
 function mostrarFiltros() {
   document.getElementById("fecha_dia").classList.add("hidden");
@@ -228,7 +245,9 @@ async function generarPDFReporte() {
   const usuarioId = document.getElementById("usuario").value;
   const tipo = document.getElementById("tipoPeriodo").value;
 
-  let fecha = "", inicio = "", fin = "";
+  let fecha = "",
+    inicio = "",
+    fin = "";
   if (tipo === "dia") fecha = document.getElementById("fecha_dia").value;
   else if (tipo === "mes") fecha = document.getElementById("fecha_mes").value;
   else if (tipo === "anio") fecha = document.getElementById("fecha_anio").value;
@@ -246,11 +265,17 @@ async function generarPDFReporte() {
   });
 
   // Trae TODO desde detalle (pagos, ventas, métodos, caja)
-  const res = await fetch(`../php/obtener_reportes_detalle.php?${params.toString()}`);
+  const res = await fetch(
+    `../php/obtener_reportes_detalle.php?${params.toString()}`
+  );
   const data = await res.json();
 
   if (!data.success) {
-    swalError.fire("Error", data.error || "No se pudo generar el PDF.", "error");
+    swalError.fire(
+      "Error",
+      data.error || "No se pudo generar el PDF.",
+      "error"
+    );
     return;
   }
 
@@ -276,15 +301,15 @@ async function generarPDFReporte() {
   // 3) Paleta + utilidades
   // =========================
   const PALETTE = {
-    title: [45, 55, 72],     // slate-700
-    text: [31, 41, 55],      // slate-800
-    mute: [107, 114, 128],   // gray-500
-    box: [248, 250, 252],    // slate-50
+    title: [45, 55, 72], // slate-700
+    text: [31, 41, 55], // slate-800
+    mute: [107, 114, 128], // gray-500
+    box: [248, 250, 252], // slate-50
     stroke: [203, 213, 225], // slate-300
-    sub: [2, 132, 199],      // sky-600
-    sub2: [234, 88, 12],     // orange-600
-    ok: [16, 185, 129],      // emerald-500
-    bandBg: [15, 23, 42],    // slate-900
+    sub: [2, 132, 199], // sky-600
+    sub2: [234, 88, 12], // orange-600
+    ok: [16, 185, 129], // emerald-500
+    bandBg: [15, 23, 42], // slate-900
     bandTx: [255, 255, 255],
   };
 
@@ -298,7 +323,15 @@ async function generarPDFReporte() {
     return y;
   }
 
-  function lineAmount(doc, x, y, label, amount, rightBound, color = PALETTE.text) {
+  function lineAmount(
+    doc,
+    x,
+    y,
+    label,
+    amount,
+    rightBound,
+    color = PALETTE.text
+  ) {
     doc.setTextColor(...color);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
@@ -312,7 +345,10 @@ async function generarPDFReporte() {
     let labelShown = label;
 
     if (doc.getTextWidth(labelShown) > maxLabelW) {
-      while (labelShown.length > 1 && doc.getTextWidth(labelShown + "…") > maxLabelW) {
+      while (
+        labelShown.length > 1 &&
+        doc.getTextWidth(labelShown + "…") > maxLabelW
+      ) {
         labelShown = labelShown.slice(0, -1);
       }
       labelShown += "…";
@@ -368,10 +404,26 @@ async function generarPDFReporte() {
     if (tipo === "dia") textoRango = `Fecha: ${formatearFechaLocal(fecha)}`;
     else if (tipo === "mes") {
       const [anio, mes] = fecha.split("-");
-      const meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+      const meses = [
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+      ];
       textoRango = `Mes: ${meses[parseInt(mes, 10) - 1]} de ${anio}`;
     } else if (tipo === "anio") textoRango = `Año: ${fecha}`;
-    else if (tipo === "rango") textoRango = `Desde: ${formatearFecha(inicio)}  hasta: ${formatearFecha(fin)}`;
+    else if (tipo === "rango")
+      textoRango = `Desde: ${formatearFecha(inicio)}  hasta: ${formatearFecha(
+        fin
+      )}`;
 
     doc.setTextColor(80, 80, 80);
     doc.text(textoRango, 10, y);
@@ -401,7 +453,9 @@ async function generarPDFReporte() {
       const montoOriginal = parseFloat(p.monto || 0);
       const montoFinal = montoOriginal - descuento;
 
-      const texto = `• ${cliente} el ${fechaFormat}${descuento > 0 ? ` (-$${descuento.toFixed(2)} descuento)` : ""}`;
+      const texto = `• ${cliente} el ${fechaFormat}${
+        descuento > 0 ? ` (-$${descuento.toFixed(2)} descuento)` : ""
+      }`;
       const montoTexto = `$${montoFinal.toFixed(2)}`;
 
       const maxTextWidth = 190 - 12 - doc.getTextWidth(montoTexto) - 4;
@@ -446,7 +500,11 @@ async function generarPDFReporte() {
       doc.setFont("helvetica", "normal");
       doc.setTextColor(0);
 
-      doc.text(`• Venta #${v.venta_id} por ${v.usuario} el ${fechaFormat}`, 12, y);
+      doc.text(
+        `• Venta #${v.venta_id} por ${v.usuario} el ${fechaFormat}`,
+        12,
+        y
+      );
       y += 6;
 
       let totalVenta = 0;
@@ -538,14 +596,39 @@ async function generarPDFReporte() {
     let yC = y + 16;
     const leftRight = leftX + cardW - 6;
 
-    yC = lineAmount(doc, leftX + 6, yC, "Efectivo", totalSuscripcionesPorMetodo.efectivo || 0, leftRight);
-    yC = lineAmount(doc, leftX + 6, yC, "Tarjeta", totalSuscripcionesPorMetodo.tarjeta || 0, leftRight);
-    yC = lineAmount(doc, leftX + 6, yC, "Transferencia", totalSuscripcionesPorMetodo.transferencia || 0, leftRight);
+    yC = lineAmount(
+      doc,
+      leftX + 6,
+      yC,
+      "Efectivo",
+      totalSuscripcionesPorMetodo.efectivo || 0,
+      leftRight
+    );
+    yC = lineAmount(
+      doc,
+      leftX + 6,
+      yC,
+      "Tarjeta",
+      totalSuscripcionesPorMetodo.tarjeta || 0,
+      leftRight
+    );
+    yC = lineAmount(
+      doc,
+      leftX + 6,
+      yC,
+      "Transferencia",
+      totalSuscripcionesPorMetodo.transferencia || 0,
+      leftRight
+    );
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...PALETTE.ok);
     doc.setFontSize(11);
-    doc.text(`TOTAL: ${fmtMoney(totalSuscripciones)}`, leftX + 6, y + cardH - 6);
+    doc.text(
+      `TOTAL: ${fmtMoney(totalSuscripciones)}`,
+      leftX + 6,
+      y + cardH - 6
+    );
 
     // --- Card VENTAS ---
     doc.setDrawColor(...PALETTE.stroke);
@@ -562,7 +645,14 @@ async function generarPDFReporte() {
 
     yR = lineAmount(doc, rightX + 6, yR, "Efectivo", ventaEfectivo, rightRight);
     yR = lineAmount(doc, rightX + 6, yR, "Tarjeta", ventaTarjeta, rightRight);
-    yR = lineAmount(doc, rightX + 6, yR, "Transferencia", ventaTransferencia, rightRight);
+    yR = lineAmount(
+      doc,
+      rightX + 6,
+      yR,
+      "Transferencia",
+      ventaTransferencia,
+      rightRight
+    );
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...PALETTE.ok);
@@ -571,15 +661,63 @@ async function generarPDFReporte() {
 
     // Debajo de las 2 cards
     y += cardH + 10;
+// --- Card VISITAS (compacta y consistente) ---
+const visitasTotal = Number(data.visitas_total || 0);
+const visitasCantidad = Number(data.visitas_cantidad || 0);
+const visitasMetodo = data.visitas_por_metodo || {};
+
+const vEfe = Number(visitasMetodo.efectivo || 0);
+const vTar = Number(visitasMetodo.tarjeta || 0);
+const vTra = Number(visitasMetodo.transferencia || 0);
+
+const boxXv = 10, boxWv = 190, boxHv = 34; // ✅ altura correcta
+y = ensureSpace(doc, y, boxHv + 10);
+
+doc.setDrawColor(...PALETTE.stroke);
+doc.setFillColor(250, 245, 255);
+doc.roundedRect(boxXv, y, boxWv, boxHv, 3, 3, "FD");
+
+// Título
+doc.setFont("helvetica", "bold");
+doc.setFontSize(11);
+doc.setTextColor(124, 58, 237);
+doc.text("VISITAS (código 1)", boxXv + 6, y + 9);
+
+// Cantidad (lado izquierdo)
+doc.setFont("helvetica", "bold");
+doc.setFontSize(16);
+doc.setTextColor(...PALETTE.title);
+doc.text(String(visitasCantidad), boxXv + 6, y + 22);
+
+// Total (lado derecho)
+doc.setFont("helvetica", "bold");
+doc.setFontSize(14);
+doc.setTextColor(...PALETTE.ok);
+const totalTxt = fmtMoney(visitasTotal);
+doc.text(totalTxt, boxXv + boxWv - 6 - doc.getTextWidth(totalTxt), y + 22);
+
+// Mini desglose (una sola línea, no estorba)
+doc.setFont("helvetica", "normal");
+doc.setFontSize(9);
+doc.setTextColor(...PALETTE.mute);
+const mini = `Efe: ${fmtMoney(vEfe)}  ·  Tar: ${fmtMoney(vTar)}  ·  Trans: ${fmtMoney(vTra)}`;
+doc.text(mini, boxXv + 6, y + 31);
+
+y += boxHv + 10;
+
+
 
     // --- Card CAJA (solo si es día) ---
     if (tipo === "dia" && String(usuarioId) !== "todos") {
-      const efectivoEsperado = (totalSuscripcionesPorMetodo.efectivo || 0) + (ventaEfectivo || 0);
+      const efectivoEsperado =
+        (totalSuscripcionesPorMetodo.efectivo || 0) + (ventaEfectivo || 0);
       const netoMovs = parseFloat(data.caja_neto || 0);
       const dejado = Number(document.getElementById("monto_caja")?.value || 0);
       const totalEntregar = efectivoEsperado + netoMovs + dejado;
 
-      const boxX = 10, boxW = 190, boxH = 56; // más alta
+      const boxX = 10,
+        boxW = 190,
+        boxH = 56; // más alta
       y = ensureSpace(doc, y, boxH + 10);
 
       doc.setDrawColor(...PALETTE.stroke);
@@ -594,8 +732,22 @@ async function generarPDFReporte() {
       let yK = y + 20;
       const rb = boxX + boxW - 8;
 
-      yK = lineAmount(doc, boxX + 8, yK, "Total General efectivo", efectivoEsperado, rb);
-      yK = lineAmount(doc, boxX + 8, yK, "Movimientos (ingresos - egresos)", netoMovs, rb);
+      yK = lineAmount(
+        doc,
+        boxX + 8,
+        yK,
+        "Total General efectivo",
+        efectivoEsperado,
+        rb
+      );
+      yK = lineAmount(
+        doc,
+        boxX + 8,
+        yK,
+        "Movimientos (ingresos - egresos)",
+        netoMovs,
+        rb
+      );
       yK = lineAmount(doc, boxX + 8, yK, "Caja", dejado, rb);
 
       doc.setDrawColor(...PALETTE.stroke);
@@ -622,15 +774,15 @@ async function generarPDFReporte() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
 
-    let totalGeneral = totalVentasCalc + totalSuscripciones;
+    let totalGeneral = totalVentasCalc + totalSuscripciones + (Number(data.visitas_total || 0));
 
-// SOLO cuando es por día y un usuario específico:
-// sumar movimientos netos + lo dejado en caja
-if (tipo === "dia" && String(usuarioId) !== "todos") {
-  const netoMovs = parseFloat(data.caja_neto || 0);
-  const dejado = Number(document.getElementById("monto_caja")?.value || 0);
-  totalGeneral += (netoMovs || 0) + (dejado || 0);
-}
+    // SOLO cuando es por día y un usuario específico:
+    // sumar movimientos netos + lo dejado en caja
+    if (tipo === "dia" && String(usuarioId) !== "todos") {
+      const netoMovs = parseFloat(data.caja_neto || 0);
+      const dejado = Number(document.getElementById("monto_caja")?.value || 0);
+      totalGeneral += (netoMovs || 0) + (dejado || 0);
+    }
 
     doc.text("TOTAL GENERAL", 14, y + 10);
 
@@ -677,14 +829,25 @@ if (tipo === "dia" && String(usuarioId) !== "todos") {
       // Soporta fecha/hora separados o fecha full
       const fechaTxt = m.fecha
         ? formatearFechaLocal(m.fecha)
-        : (m.fecha_full ? formatearFechaLocal(m.fecha_full) : "");
+        : m.fecha_full
+        ? formatearFechaLocal(m.fecha_full)
+        : "";
 
-      const horaTxt = m.hora ? m.hora : (m.fecha_full ? new Date(m.fecha_full).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}) : "");
+      const horaTxt = m.hora
+        ? m.hora
+        : m.fecha_full
+        ? new Date(m.fecha_full).toLocaleTimeString("es-MX", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "";
 
       const concepto = (m.concepto || "").trim();
       const usuario = (m.usuario || "").trim();
 
-      const linea = `• ${horaTxt} ${fechaTxt} · ${tipoMov} · ${concepto}${usuario ? ` · ${usuario}` : ""}`;
+      const linea = `• ${horaTxt} ${fechaTxt} · ${tipoMov} · ${concepto}${
+        usuario ? ` · ${usuario}` : ""
+      }`;
       const montoTxt = fmtMoney(monto);
 
       // Color por tipo
@@ -721,9 +884,15 @@ if (tipo === "dia" && String(usuarioId) !== "todos") {
 
   // 1) Suscripciones
   const pagos = {
-    efectivo: (data.pagos || []).filter((p) => (p.metodo || "").toLowerCase() === "efectivo"),
-    tarjeta: (data.pagos || []).filter((p) => (p.metodo || "").toLowerCase() === "tarjeta"),
-    transferencia: (data.pagos || []).filter((p) => (p.metodo || "").toLowerCase() === "transferencia"),
+    efectivo: (data.pagos || []).filter(
+      (p) => (p.metodo || "").toLowerCase() === "efectivo"
+    ),
+    tarjeta: (data.pagos || []).filter(
+      (p) => (p.metodo || "").toLowerCase() === "tarjeta"
+    ),
+    transferencia: (data.pagos || []).filter(
+      (p) => (p.metodo || "").toLowerCase() === "transferencia"
+    ),
   };
 
   renderPagos("Pagos por Efectivo:", pagos.efectivo, "efectivo");
@@ -732,16 +901,22 @@ if (tipo === "dia" && String(usuarioId) !== "todos") {
 
   // 2) Productos
   const ventas = {
-    efectivo: (data.ventas || []).filter((v) => (v.metodo_pago || "").toLowerCase() === "efectivo"),
-    tarjeta: (data.ventas || []).filter((v) => (v.metodo_pago || "").toLowerCase() === "tarjeta"),
-    transferencia: (data.ventas || []).filter((v) => (v.metodo_pago || "").toLowerCase() === "transferencia"),
+    efectivo: (data.ventas || []).filter(
+      (v) => (v.metodo_pago || "").toLowerCase() === "efectivo"
+    ),
+    tarjeta: (data.ventas || []).filter(
+      (v) => (v.metodo_pago || "").toLowerCase() === "tarjeta"
+    ),
+    transferencia: (data.ventas || []).filter(
+      (v) => (v.metodo_pago || "").toLowerCase() === "transferencia"
+    ),
   };
 
   renderVentas("Ventas de Productos - Efectivo:", ventas.efectivo);
   renderVentas("Ventas de Productos - Tarjeta:", ventas.tarjeta);
   renderVentas("Ventas de Productos - Transferencia:", ventas.transferencia);
 
-   // 4) Detalle caja al final
+  // 4) Detalle caja al final
   if (tipo === "dia" && String(usuarioId) !== "todos") {
     renderMovimientosCajaPDF();
   }
@@ -749,14 +924,9 @@ if (tipo === "dia" && String(usuarioId) !== "todos") {
   // 3) Totales (incluye card caja dentro)
   renderTotales();
 
- 
-
   // Abrir PDF
   window.open(doc.output("bloburl"), "_blank");
 }
-
-
-
 
 function formatearFecha(fechaStr) {
   const [anio, mes, dia] = fechaStr.split("-");
@@ -886,32 +1056,29 @@ async function renderCaja(params) {
   }
 
   const $esperado = card.querySelector("[data-efectivo-esperado]");
-const $dejado = card.querySelector("#monto_caja");          // puede ser null en TODOS
-const $entregar = card.querySelector("[data-por-entregar]"); // puede ser null en TODOS
-const selUsuario = document.getElementById("usuario");
+  const $dejado = card.querySelector("#monto_caja"); // puede ser null en TODOS
+  const $entregar = card.querySelector("[data-por-entregar]"); // puede ser null en TODOS
+  const selUsuario = document.getElementById("usuario");
 
-$esperado.textContent = `$${esperado.toFixed(2)}`;
-if (esTodos) {
-  // En "Todos" solo mostramos Total General Efectivo.
-  // Nada de caja/por entregar/movimientos.
-  return;
-}
-
-
- 
-// 1.5) Neto de movimientos de caja (INGRESO/EGRESO) usando DETALLE
-let netoMovs = 0;
-try {
-  const qs = new URLSearchParams(params).toString();
-  const r = await fetch(`../php/obtener_reportes_detalle.php?${qs}`);
-  const det = await r.json();
-  if (det.success) {
-    netoMovs = parseFloat(det.caja_neto || 0); // INGRESO - EGRESO
+  $esperado.textContent = `$${esperado.toFixed(2)}`;
+  if (esTodos) {
+    // En "Todos" solo mostramos Total General Efectivo.
+    // Nada de caja/por entregar/movimientos.
+    return;
   }
-} catch (e) {
-  console.warn("No se pudo leer caja_neto para entrega", e);
-}
 
+  // 1.5) Neto de movimientos de caja (INGRESO/EGRESO) usando DETALLE
+  let netoMovs = 0;
+  try {
+    const qs = new URLSearchParams(params).toString();
+    const r = await fetch(`../php/obtener_reportes_detalle.php?${qs}`);
+    const det = await r.json();
+    if (det.success) {
+      netoMovs = parseFloat(det.caja_neto || 0); // INGRESO - EGRESO
+    }
+  } catch (e) {
+    console.warn("No se pudo leer caja_neto para entrega", e);
+  }
 
   // Worker = select deshabilitado (viene así desde PHP)
   const esWorker = selUsuario.disabled === true;
@@ -930,27 +1097,34 @@ try {
     wrap.classList.add("text-emerald-400");
   };
 
-const cargarMontoCaja = async () => {
-  const selVal = selUsuario.value;
-  const fechaDia = (params.tipo === "dia" ? params.fecha : ""); // ✅
+  const cargarMontoCaja = async () => {
+    const selVal = selUsuario.value;
+    const fechaDia = params.tipo === "dia" ? params.fecha : ""; // ✅
 
-  if (esWorker) {
-    const { monto } = await getCajaMontoFromController(selVal, true, fechaDia);
-    $dejado.value = Number(monto || 0).toFixed(2);
-    setEditMode(false);
-  } else {
-    if (selVal === "todos") {
-      $dejado.value = "0.00";
-      setEditMode(true);
-    } else {
-      const { monto } = await getCajaMontoFromController(selVal, false, fechaDia);
+    if (esWorker) {
+      const { monto } = await getCajaMontoFromController(
+        selVal,
+        true,
+        fechaDia
+      );
       $dejado.value = Number(monto || 0).toFixed(2);
-      setEditMode(true);
+      setEditMode(false);
+    } else {
+      if (selVal === "todos") {
+        $dejado.value = "0.00";
+        setEditMode(true);
+      } else {
+        const { monto } = await getCajaMontoFromController(
+          selVal,
+          false,
+          fechaDia
+        );
+        $dejado.value = Number(monto || 0).toFixed(2);
+        setEditMode(true);
+      }
     }
-  }
-  recalc();
-};
-
+    recalc();
+  };
 
   // Eventos
   $dejado.addEventListener("input", recalc);
@@ -1100,4 +1274,3 @@ function initBuscarReporteLock() {
 document.addEventListener("DOMContentLoaded", () => {
   initBuscarReporteLock();
 });
-

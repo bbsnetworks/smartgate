@@ -98,6 +98,19 @@ while ($row = $res->fetch_assoc()) {
   }
 }
 $stmt->close();
+/* =========================
+   VISITAS (producto codigo=1)
+========================= */
+$visitas_cantidad = 0;
+$visitas_total = 0;
+
+$visitas_por_metodo = [
+  "efectivo" => 0,
+  "tarjeta" => 0,
+  "transferencia" => 0
+];
+
+$visitas_detalle = []; // opcional (para listar en PDF si quieres)
 
 /* =========================
    PAGOS DE PRODUCTOS
@@ -107,6 +120,7 @@ $ventasAgrupadas = [];
 if (!$isTodos) {
   $stmt2 = $conexion->prepare("
     SELECT pp.venta_id, pp.fecha_pago, u.nombre AS usuario, prod.nombre AS producto,
+           prod.codigo AS codigo,
            pp.cantidad, pp.metodo_pago, pp.total
     FROM pagos_productos pp
     LEFT JOIN productos prod ON pp.producto_id = prod.id
@@ -118,6 +132,7 @@ if (!$isTodos) {
 } else {
   $stmt2 = $conexion->prepare("
     SELECT pp.venta_id, pp.fecha_pago, u.nombre AS usuario, prod.nombre AS producto,
+           prod.codigo AS codigo,
            pp.cantidad, pp.metodo_pago, pp.total
     FROM pagos_productos pp
     LEFT JOIN productos prod ON pp.producto_id = prod.id
@@ -132,6 +147,32 @@ $stmt2->execute();
 $res2 = $stmt2->get_result();
 
 while ($row = $res2->fetch_assoc()) {
+  $codigo = (string)($row["codigo"] ?? "");
+  $metodo = strtolower((string)($row["metodo_pago"] ?? ""));
+  $cantidad = intval($row["cantidad"] ?? 0);
+  $total = floatval($row["total"] ?? 0);
+
+  // ✅ Si es VISITA (codigo=1), se separa y NO entra a ventas
+  if ($codigo === "1") {
+    $visitas_cantidad += $cantidad;
+    $visitas_total += $total;
+
+    if (!isset($visitas_por_metodo[$metodo])) $visitas_por_metodo[$metodo] = 0;
+    $visitas_por_metodo[$metodo] += $total;
+
+    // opcional: para listar en PDF
+    $visitas_detalle[] = [
+      "venta_id" => $row["venta_id"],
+      "usuario" => $row["usuario"] ?? "Usuario eliminado",
+      "fecha" => date("Y-m-d", strtotime($row["fecha_pago"])),
+      "metodo_pago" => $row["metodo_pago"] ?? "Sin especificar",
+      "cantidad" => $cantidad,
+      "total" => $total
+    ];
+    continue;
+  }
+
+  // ✅ Producto normal: se agrupa en ventas
   $venta_id = $row['venta_id'];
 
   if (!isset($ventasAgrupadas[$venta_id])) {
@@ -146,10 +187,11 @@ while ($row = $res2->fetch_assoc()) {
 
   $ventasAgrupadas[$venta_id]["productos"][] = [
     "nombre" => $row["producto"] ?? "Producto eliminado",
-    "cantidad" => intval($row["cantidad"]),
-    "total" => floatval($row["total"])
+    "cantidad" => $cantidad,
+    "total" => $total
   ];
 }
+
 $stmt2->close();
 
 /* =========================
@@ -214,6 +256,11 @@ echo json_encode([
   "pagos" => $pagos,
   "ventas" => array_values($ventasAgrupadas),
 
+  "visitas_cantidad" => $visitas_cantidad,
+  "visitas_total" => $visitas_total,
+  "visitas_por_metodo" => $visitas_por_metodo,
+  "visitas_detalle" => $visitas_detalle,
+
   "total_efectivo" => $total_efectivo,
   "total_tarjeta" => $total_tarjeta,
   "total_transferencia" => $total_transferencia,
@@ -223,5 +270,6 @@ echo json_encode([
   "caja_egresos" => $caja_egresos,
   "caja_neto" => $caja_neto
 ]);
+
 
 exit;

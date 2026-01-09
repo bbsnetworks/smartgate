@@ -52,20 +52,67 @@ try {
   $stmt->fetch();
   $stmt->close();
 
-  // Pagos de productos
-  if ($usuario !== "todos") {
-  $stmt2 = $conexion->prepare("SELECT SUM(total) as total, COUNT(DISTINCT venta_id) as cantidad FROM pagos_productos WHERE usuario_id = ? AND DATE(fecha_pago) BETWEEN ? AND ?");
+  // Pagos de productos (EXCLUYENDO visitas codigo=1)
+if ($usuario !== "todos") {
+  $stmt2 = $conexion->prepare("
+    SELECT 
+      COALESCE(SUM(pp.total),0) as total,
+      COUNT(DISTINCT pp.venta_id) as cantidad
+    FROM pagos_productos pp
+    JOIN productos pr ON pr.id = pp.producto_id
+    WHERE pp.usuario_id = ?
+      AND DATE(pp.fecha_pago) BETWEEN ? AND ?
+      AND pr.codigo <> '1'
+  ");
   $stmt2->bind_param("iss", $usuario, $inicio, $fin);
 } else {
-  $stmt2 = $conexion->prepare("SELECT SUM(total) as total, COUNT(DISTINCT venta_id) as cantidad FROM pagos_productos WHERE DATE(fecha_pago) BETWEEN ? AND ?");
+  $stmt2 = $conexion->prepare("
+    SELECT 
+      COALESCE(SUM(pp.total),0) as total,
+      COUNT(DISTINCT pp.venta_id) as cantidad
+    FROM pagos_productos pp
+    JOIN productos pr ON pr.id = pp.producto_id
+    WHERE DATE(pp.fecha_pago) BETWEEN ? AND ?
+      AND pr.codigo <> '1'
+  ");
   $stmt2->bind_param("ss", $inicio, $fin);
 }
 
-  $stmt2->execute();
-  $stmt2->bind_result($total_productos, $cantidad_productos);
-  $stmt2->fetch();
-  $stmt2->close();
+$stmt2->execute();
+$stmt2->bind_result($total_productos, $cantidad_productos);
+$stmt2->fetch();
+$stmt2->close();
 
+// VISITAS (producto con codigo=1)
+if ($usuario !== "todos") {
+  $stmtV = $conexion->prepare("
+    SELECT
+      COALESCE(SUM(pp.cantidad),0) AS visitas_cantidad,
+      COALESCE(SUM(pp.total),0) AS visitas_total
+    FROM pagos_productos pp
+    JOIN productos pr ON pr.id = pp.producto_id
+    WHERE pp.usuario_id = ?
+      AND DATE(pp.fecha_pago) BETWEEN ? AND ?
+      AND pr.codigo = '1'
+  ");
+  $stmtV->bind_param("iss", $usuario, $inicio, $fin);
+} else {
+  $stmtV = $conexion->prepare("
+    SELECT
+      COALESCE(SUM(pp.cantidad),0) AS visitas_cantidad,
+      COALESCE(SUM(pp.total),0) AS visitas_total
+    FROM pagos_productos pp
+    JOIN productos pr ON pr.id = pp.producto_id
+    WHERE DATE(pp.fecha_pago) BETWEEN ? AND ?
+      AND pr.codigo = '1'
+  ");
+  $stmtV->bind_param("ss", $inicio, $fin);
+}
+
+$stmtV->execute();
+$stmtV->bind_result($visitas_cantidad, $visitas_total);
+$stmtV->fetch();
+$stmtV->close();
 
     // Movimientos de caja (ingresos/egresos)
   if ($usuario !== "todos") {
@@ -102,10 +149,13 @@ try {
     "cantidad_pagos" => $cantidad_pagos ?? 0,
     "total_productos" => $total_productos ?? 0,
     "cantidad_productos" => $cantidad_productos ?? 0,
-    "total_general" => ($total_pagos ?? 0) + ($total_productos ?? 0),
+    "total_general" => ($total_pagos ?? 0) + ($total_productos ?? 0) + ($visitas_total ?? 0),
     "caja_ingresos" => $caja_ingresos ?? 0,
     "caja_egresos" => $caja_egresos ?? 0,
     "caja_cantidad" => $caja_cantidad ?? 0,
+    "visitas_cantidad" => $visitas_cantidad ?? 0,
+    "visitas_total" => $visitas_total ?? 0,
+
 
   ]);
 } catch (Exception $e) {
