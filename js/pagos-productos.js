@@ -1,3 +1,64 @@
+// === BLOQUEO / AUTO-LLENADO DE MONTO ENTREGADO SEGÚN MÉTODO ===
+const metodoPagoSelect = document.getElementById("metodoPago");
+const montoEntregadoInput = document.getElementById("montoEntregado");
+
+function isNoEfectivo(metodo) {
+  return metodo === "Tarjeta" || metodo === "Transferencia";
+}
+
+function setMontoEntregadoBloqueado(bloqueado) {
+  if (!montoEntregadoInput) return;
+
+  montoEntregadoInput.disabled = bloqueado;
+
+  // Opcional: un look "deshabilitado" más obvio
+  if (bloqueado) {
+    montoEntregadoInput.classList.add("opacity-70", "cursor-not-allowed");
+  } else {
+    montoEntregadoInput.classList.remove("opacity-70", "cursor-not-allowed");
+  }
+}
+
+function syncMontoEntregadoConTotal() {
+  if (!metodoPagoSelect || !montoEntregadoInput) return;
+
+  const metodo = metodoPagoSelect.value;
+  const total = getTotalNumber();
+  const totalFmt = total.toFixed(2);
+
+  // ✅ Si no hay productos, siempre 0.00 y habilitado
+  if (total <= 0) {
+    setMontoEntregadoBloqueado(false);
+    montoEntregadoInput.value = "0.00";
+    return;
+  }
+
+  // ✅ Tarjeta/Transferencia: bloquea y pone total exacto
+  if (isNoEfectivo(metodo)) {
+    setMontoEntregadoBloqueado(true);
+    montoEntregadoInput.value = totalFmt;
+    return;
+  }
+
+  // ✅ Efectivo: habilita y NO conserva el valor que venía de tarjeta/transferencia
+  setMontoEntregadoBloqueado(false);
+
+  // Si el valor actual era exactamente el total (venía de tarjeta/transferencia), lo limpiamos
+  const actual = parseFloat((montoEntregadoInput.value || "").replace(",", "."));
+  if (!isNaN(actual) && Math.abs(actual - total) < 0.001) {
+    montoEntregadoInput.value = "";
+  }
+
+  // (Opcional) Si prefieres que en efectivo se ponga por defecto el total exacto, usa esto:
+  // montoEntregadoInput.value = totalFmt;
+}
+
+
+// Cuando cambie el método de pago
+if (metodoPagoSelect) {
+  metodoPagoSelect.addEventListener("change", syncMontoEntregadoConTotal);
+}
+
 let productosAgregados = [];
 let sugerenciaController;
 let sugerenciasHabilitadas = true;
@@ -31,7 +92,10 @@ inputCodigo.addEventListener("keypress", function (e) {
   }
 });
 function getTotalNumber() {
-  return productosAgregados.reduce((acc, p) => acc + (parseFloat(p.precio) * parseInt(p.cantidad || 0)), 0);
+  return productosAgregados.reduce(
+    (acc, p) => acc + parseFloat(p.precio) * parseInt(p.cantidad || 0),
+    0
+  );
 }
 function formateaMoneda(n) {
   return `$${Number(n).toFixed(2)}`;
@@ -65,7 +129,6 @@ function ocultarSugerencias() {
   }
 }
 
-
 function actualizarTabla() {
   const tbody = document.getElementById("tablaProductos");
   tbody.innerHTML = "";
@@ -89,6 +152,9 @@ function actualizarTabla() {
   });
 
   document.getElementById("totalPagar").textContent = total.toFixed(2);
+
+  // ✅ Si es Tarjeta/Transferencia, actualiza el input con el nuevo total
+  syncMontoEntregadoConTotal();
 }
 
 function cambiarCantidad(index, valor) {
@@ -110,17 +176,35 @@ async function procesarVenta() {
   const total = getTotalNumber();
   const metodoPago = document.getElementById("metodoPago").value;
 
-  const pagoStr = (document.getElementById('montoEntregado')?.value || '').replace(',', '.');
-  const pagado = parseFloat(pagoStr);
+  let pagado = 0;
 
-  if (isNaN(pagado) || pagado <= 0) {
-    swalError.fire("Monto inválido", "La cantidad entregada debe ser mayor a 0.", "error");
-    return;
-  }
-  if (pagado < total) {
-    const falta = total - pagado;
-    swalError.fire("Pago insuficiente", `Faltan ${formateaMoneda(falta)} para completar el total.`, "error");
-    return;
+  if (isNoEfectivo(metodoPago)) {
+    // ✅ Siempre exacto al total (sin cambio)
+    pagado = total;
+
+    // Asegura que el input muestre el total (por si acaso)
+    if (montoEntregadoInput) montoEntregadoInput.value = total.toFixed(2);
+  } else {
+    const pagoStr = (montoEntregadoInput?.value || "").replace(",", ".");
+    pagado = parseFloat(pagoStr);
+
+    if (isNaN(pagado) || pagado <= 0) {
+      swalError.fire(
+        "Monto inválido",
+        "La cantidad entregada debe ser mayor a 0.",
+        "error"
+      );
+      return;
+    }
+    if (pagado < total) {
+      const falta = total - pagado;
+      swalError.fire(
+        "Pago insuficiente",
+        `Faltan ${formateaMoneda(falta)} para completar el total.`,
+        "error"
+      );
+      return;
+    }
   }
 
   const confirm = await swalInfo.fire({
@@ -146,21 +230,22 @@ async function procesarVenta() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       productos: productosAgregados,
-      metodo_pago: metodoPago
+      metodo_pago: metodoPago,
     }),
   })
-  .then((res) => res.json())
-  .then((data) => {
-    if (data.success) {
-      // Ticket (opcional: incluir pagó/cambio en el ticket)
-      generarTicketVenta(data, productosParaTicket, { pagado, cambio });
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.success) {
+        // Ticket (opcional: incluir pagó/cambio en el ticket)
+        generarTicketVenta(data, productosParaTicket, { pagado, cambio });
 
-      // después de recibir data.success === true
-const cambioColor = cambio > 0 ? '#22c55e' /*verde*/ : '#e5e7eb' /*gris claro*/;
+        // después de recibir data.success === true
+        const cambioColor =
+          cambio > 0 ? "#22c55e" /*verde*/ : "#e5e7eb"; /*gris claro*/
 
-swalSuccess.fire({
-  title: "Venta realizada con éxito",
-  html: `
+        swalSuccess.fire({
+          title: "Venta realizada con éxito",
+          html: `
     <div class="text-left space-y-1">
       <div><strong>Folio:</strong> ${data.venta_id}</div>
       <div><strong>Total:</strong> ${formateaMoneda(total)}</div>
@@ -182,37 +267,51 @@ swalSuccess.fire({
       </div>
     </div>
   `,
-  icon: "success"
-});
+          icon: "success",
+        });
 
-
-      // Reset UI
-      productosAgregados = [];
-      actualizarTabla();
-      document.getElementById("metodoPago").value = "Efectivo";
-      const m = document.getElementById('montoEntregado');
-      if (m) m.value = '';
-    } else {
-      swalError.fire("Error", data.error || "No se pudo procesar la venta", "error");
-    }
-  })
-  .catch(() => swalError.fire("Error", "No se pudo procesar la venta", "error"));
+        // Reset UI
+        productosAgregados = [];
+        actualizarTabla();
+        document.getElementById("metodoPago").value = "Efectivo";
+        if (montoEntregadoInput) montoEntregadoInput.value = "";
+        syncMontoEntregadoConTotal(); // deja habilitado para efectivo
+      } else {
+        swalError.fire(
+          "Error",
+          data.error || "No se pudo procesar la venta",
+          "error"
+        );
+      }
+    })
+    .catch(() =>
+      swalError.fire("Error", "No se pudo procesar la venta", "error")
+    );
 }
 
-
-
-async function generarTicketVenta(data, productos, pagoInfo = { pagado: 0, cambio: 0 }) {
+async function generarTicketVenta(
+  data,
+  productos,
+  pagoInfo = { pagado: 0, cambio: 0 }
+) {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: [58, 130 + productos.length * 10] });
+  const doc = new jsPDF({
+    unit: "mm",
+    format: [58, 130 + productos.length * 10],
+  });
 
   const logo = await cargarImagenBase64("../img/logo-black.webp");
 
   const fechaCompleta = new Date(data.fecha_pago);
   const fecha = fechaCompleta.toLocaleDateString("es-MX");
-  const hora = fechaCompleta.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  const hora = fechaCompleta.toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   doc.addImage(logo, "PNG", 19, 5, 20, 20);
-  doc.setFont("courier", "bold"); doc.setFontSize(10);
+  doc.setFont("courier", "bold");
+  doc.setFontSize(10);
   doc.text("Venta de Productos", 29, 30, { align: "center" });
   doc.setFont("courier", "normal");
   doc.text(`${fecha}, ${hora}`, 29, 36, { align: "center" });
@@ -220,9 +319,11 @@ async function generarTicketVenta(data, productos, pagoInfo = { pagado: 0, cambi
 
   let y = 44;
   doc.setFont("courier", "bold");
-  doc.text(`Folio: ${data.venta_id}`, 29, y, { align: "center" }); y += 5;
+  doc.text(`Folio: ${data.venta_id}`, 29, y, { align: "center" });
+  y += 5;
   doc.setFont("courier", "normal");
-  doc.text(`Vendedor: ${data.usuario}`, 29, y, { align: "center" }); y += 6;
+  doc.text(`Vendedor: ${data.usuario}`, 29, y, { align: "center" });
+  y += 6;
 
   let total = 0;
   productos.forEach((p) => {
@@ -237,15 +338,19 @@ async function generarTicketVenta(data, productos, pagoInfo = { pagado: 0, cambi
     y += 10;
   });
 
-  doc.line(5, y, 53, y); y += 6;
+  doc.line(5, y, 53, y);
+  y += 6;
   doc.setFont("courier", "bold");
-  doc.text(`Total: ${formateaMoneda(total)}`, 29, y, { align: "center" }); y += 5;
+  doc.text(`Total: ${formateaMoneda(total)}`, 29, y, { align: "center" });
+  y += 5;
 
   // (Opcional) mostrar pagó/cambio también en ticket
   if (pagoInfo) {
     doc.setFont("courier", "normal");
-    doc.text(`Pagó: ${formateaMoneda(pagoInfo.pagado)}`, 5, y); y += 5;
-    doc.text(`Cambio: ${formateaMoneda(pagoInfo.cambio)}`, 5, y); y += 7;
+    doc.text(`Pagó: ${formateaMoneda(pagoInfo.pagado)}`, 5, y);
+    y += 5;
+    doc.text(`Cambio: ${formateaMoneda(pagoInfo.cambio)}`, 5, y);
+    y += 7;
   }
 
   doc.setFont("courier", "italic");
@@ -254,9 +359,6 @@ async function generarTicketVenta(data, productos, pagoInfo = { pagado: 0, cambi
   doc.autoPrint();
   window.open(doc.output("bloburl"), "_blank");
 }
-
-
-
 
 function cargarImagenBase64(ruta) {
   return new Promise((resolve) => {
@@ -274,7 +376,7 @@ function cargarImagenBase64(ruta) {
 }
 
 inputCodigo.addEventListener("input", () => {
-    if (!sugerenciasHabilitadas) return; // Ignora si escaneo activo
+  if (!sugerenciasHabilitadas) return; // Ignora si escaneo activo
 
   const termino = inputCodigo.value.trim();
   if (sugerenciaController) sugerenciaController.abort();
@@ -285,9 +387,12 @@ inputCodigo.addEventListener("input", () => {
   }
 
   sugerenciaController = new AbortController();
-  fetch(`../php/buscar_sugerencias.php?termino=${encodeURIComponent(termino)}`, {
-    signal: sugerenciaController.signal
-  })
+  fetch(
+    `../php/buscar_sugerencias.php?termino=${encodeURIComponent(termino)}`,
+    {
+      signal: sugerenciaController.signal,
+    }
+  )
     .then((res) => res.json())
     .then((sugerencias) => {
       sugerenciasDiv.innerHTML = "";
@@ -317,7 +422,6 @@ inputCodigo.addEventListener("input", () => {
       }
     });
 });
-
 
 // Ocultar sugerencias al perder foco
 inputCodigo.addEventListener("blur", () => {
