@@ -370,28 +370,28 @@
             <small id="kpi-insc-monto-det" class="text-slate-400"></small>
           </article>
           <!-- Movimientos de caja -->
-           <?php if ($rol !== 'root'): ?>
-          <article id="card-caja-mov" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
-            <div class="flex items-center justify-between">
-              <h3 class="font-semibold text-slate-300">Movimientos de caja (hoy)</h3>
-              <i class="bi bi-arrow-left-right icon-20 text-sky-400"></i>
-            </div>
+          <?php if ($rol !== 'root'): ?>
+            <article id="card-caja-mov" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
+              <div class="flex items-center justify-between">
+                <h3 class="font-semibold text-slate-300">Movimientos de caja (hoy)</h3>
+                <i class="bi bi-arrow-left-right icon-20 text-sky-400"></i>
+              </div>
 
-            <p id="kpi-mov-neto" class="mt-3 text-4xl font-extrabold">—</p>
-            <small id="kpi-mov-det" class="block text-slate-400">—</small>
+              <p id="kpi-mov-neto" class="mt-3 text-4xl font-extrabold">—</p>
+              <small id="kpi-mov-det" class="block text-slate-400">—</small>
 
-            <div class="mt-4 flex items-center gap-2">
-              <button id="btn-mov-nuevo"
-                class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
-                <i class="bi bi-plus-circle mr-1"></i> Nuevo
-              </button>
+              <div class="mt-4 flex items-center gap-2">
+                <button id="btn-mov-nuevo"
+                  class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
+                  <i class="bi bi-plus-circle mr-1"></i> Nuevo
+                </button>
 
-              <button id="btn-mov-ver"
-                class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
-                <i class="bi bi-list-ul mr-1"></i> Ver
-              </button>
-            </div>
-          </article>
+                <button id="btn-mov-ver"
+                  class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
+                  <i class="bi bi-list-ul mr-1"></i> Ver
+                </button>
+              </div>
+            </article>
           <?php endif; ?>
         </section>
 
@@ -427,7 +427,63 @@
             <canvas id="chart-prod" height="160"></canvas>
           </article>
         </section>
+        <section>
+          <!-- Entradas (HikCentral) -->
+          <article id="card-entradas" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow
+         xl:col-span-2 h-full flex flex-col mt-8">
 
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-lg font-semibold">Entradas</h3>
+                  <span id="entradas-count" class="...">0</span>
+                </div>
+                <p id="entradas-sub" class="text-slate-400 text-sm"></p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <input id="entradas-fecha" type="date" class="..." />
+                <button id="entradas-refresh"
+                  class="px-3 py-2 rounded-lg bg-slate-700/70 hover:bg-slate-600/70 border border-slate-600/60 text-slate-100">
+                  <i class="bi bi-arrow-clockwise mr-1"></i> Actualizar
+                </button>
+              </div>
+            </div>
+
+
+            <!-- Lista -->
+            <!-- Lista -->
+            <div class="mt-4 flex-1 min-h-0 pr-1 scrollbar-custom relative">
+
+              <!-- Overlay Loader -->
+              <div id="entradas-loading"
+                class="hidden absolute inset-0 z-10 rounded-xl bg-slate-950/40 backdrop-blur-sm flex items-center justify-center">
+                <div class="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-700/60 bg-slate-900/70">
+                  <span
+                    class="inline-block w-5 h-5 border-2 border-slate-200 border-t-transparent rounded-full animate-spin"></span>
+                  <span id="entradas-loading-text" class="text-slate-200 text-sm">Cargando…</span>
+                </div>
+              </div>
+
+              <!-- Scroll interno (tu lista) -->
+              <div class="h-full overflow-auto">
+                <ul id="entradas-lista" class="space-y-2 pr-2 scrollbar-custom">
+                  <!-- JS -->
+                </ul>
+              </div>
+
+            </div>
+
+
+            <!-- Footer -->
+            <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+              <span id="entradas-estado">—</span>
+
+
+            </div>
+          </article>
+
+        </section>
       </div>
     </main>
   </div>

@@ -437,6 +437,49 @@ public static function getPictureData($config, $personId, $picUri) {
 
     return [];
 }
+public static function getEventPictureDataUri($config, $picUri) {
+    $urlService = "/artemis/api/acs/v1/event/pictures";
+    $fullUrl = $config->urlHikCentralAPI . $urlService;
+
+    $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+    $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+
+    $headers = [
+        "x-ca-key: " . $config->userKey,
+        "x-ca-signature-headers: x-ca-key",
+        "x-ca-signature: " . $signature,
+        "Content-Type: application/json",
+        "Accept: */*"
+    ];
+
+    $payload = json_encode(["picUri" => (string)$picUri], JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $fullUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode != 200 || !$response) return '';
+
+    $resp = trim($response);
+
+    // Si ya viene como data uri, lo regresamos tal cual
+    if (stripos($resp, 'data:image') === 0) return $resp;
+
+    // Si viene base64 crudo, lo envolvemos en data uri
+    return "data:image/jpeg;base64," . $resp;
+}
+
+
 
 }
 function api_cfg(string $key = null) {
