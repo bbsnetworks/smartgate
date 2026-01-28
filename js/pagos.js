@@ -10,6 +10,28 @@ function brief(s, take = 40) {
   if (!s) return s;
   return s.length <= take ? s : s.slice(0, take) + `… (len=${s.length})`;
 }
+function setUIBloqueada(bloqueada) {
+  // Botones principales de la tabla (los tuyos tienen onclick directo)
+  const btns = document.querySelectorAll(
+    'button[onclick^="verPagos("], button[onclick^="abrirModalPagoCliente("]'
+  );
+
+  btns.forEach((b) => {
+    b.disabled = bloqueada;
+    b.classList.toggle("opacity-60", bloqueada);
+    b.classList.toggle("pointer-events-none", bloqueada);
+  });
+
+  // Opcional: también bloquea el buscador mientras procesa
+  const filtro = document.getElementById("filtro");
+  if (filtro) {
+    filtro.disabled = bloqueada;
+    filtro.classList.toggle("opacity-60", bloqueada);
+  }
+
+  // Cursor / feedback (opcional)
+  document.body.classList.toggle("cursor-wait", bloqueada);
+}
 
 // Imprime cómo viene la imagen de cada cliente
 function logImagenCliente(tag, c) {
@@ -24,6 +46,8 @@ function logImagenCliente(tag, c) {
 let offset = 0;
 let ultimaBusqueda = "";
 let paginaActualClientes = 1;
+let pagoEnProceso = false;
+
 
 function debounce(func, delay = 300) {
   let timeout;
@@ -667,6 +691,7 @@ async function abrirModalPagoConCliente(cliente) {
     imagenMostrar = await reducirImagenBase64Smart(cliente.foto, 80);
   if (!imagenMostrar)
     imagenMostrar = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
+
   const comentarioRaw = (cliente.comentarios || cliente.comentario || "").trim();
   const comentario = escapeHtml(comentarioRaw);
 
@@ -814,8 +839,6 @@ async function abrirModalPagoConCliente(cliente) {
           </div>
 
         </div>
-
-
       </div>
 
       <!-- PANEL AUTORIZACIÓN: encima del overlay -->
@@ -852,19 +875,20 @@ async function abrirModalPagoConCliente(cliente) {
       </div>
 
     </div>
-  </div>
-  <!-- COMENTARIO DEL CLIENTE -->
-<div class="p-3 rounded-lg border border-slate-600 bg-slate-900/70">
-  <div class="text-xs uppercase tracking-wide text-slate-400 mb-1 flex items-center gap-2">
-    <i data-lucide="message-square" class="w-4 h-4"></i>
-    Comentario del cliente
-  </div>
-  <div class="text-sm text-slate-100 whitespace-pre-wrap">
-    ${comentario ? comentario : "— Sin comentario —"}
-  </div>
-</div>
 
-`;
+    <!-- COMENTARIO DEL CLIENTE -->
+    <div class="p-3 rounded-lg border border-slate-600 bg-slate-900/70">
+      <div class="text-xs uppercase tracking-wide text-slate-400 mb-1 flex items-center gap-2">
+        <i data-lucide="message-square" class="w-4 h-4"></i>
+        Comentario del cliente
+      </div>
+      <div class="text-sm text-slate-100 whitespace-pre-wrap">
+        ${comentario ? comentario : "— Sin comentario —"}
+      </div>
+    </div>
+
+  </div>
+  `;
 
   swalInfo
     .fire({
@@ -873,9 +897,13 @@ async function abrirModalPagoConCliente(cliente) {
       width: "800px",
       confirmButtonText: "Guardar pago",
       showCloseButton: true,
+      showLoaderOnConfirm: true,
+      allowOutsideClick: () => !Swal.isLoading(),
+      allowEscapeKey: () => !Swal.isLoading(),
+      allowEnterKey: () => !Swal.isLoading(),
 
       didOpen: async () => {
-        // ====== 1) cargar última fecha aplicada en Fecha Inicio ======
+        // ====== 1) cargar última fecha aplicada en Fecha Inicio =====/
         let inicioOriginal = "";
         try {
           const res = await fetch(`../php/ultimo_pago.php?id=${cliente.id}`);
@@ -903,14 +931,14 @@ async function abrirModalPagoConCliente(cliente) {
         const $overlay = document.getElementById("lockInicioOverlay");
         const $hint = document.getElementById("hintInicio");
 
-        let inicioAutorizado =
-          tipoUsuario === "admin" || tipoUsuario === "root";
+        let inicioAutorizado = tipoUsuario === "admin" || tipoUsuario === "root";
 
         function aplicarEstadoInicio() {
           if (!$inicio) return;
 
           if (inicioAutorizado) {
             $inicio.readOnly = false;
+            $inicio.classList.remove("opacity-60");
 
             $btnUnlock?.classList.add("hidden");
             $btnUnlock && ($btnUnlock.disabled = true);
@@ -942,7 +970,7 @@ async function abrirModalPagoConCliente(cliente) {
 
         aplicarEstadoInicio();
 
-        // ====== 2) Panel interno de autorización (SIN otro swal) ======
+        // ====== 2) Panel interno de autorización ======
         const $authPanel = document.getElementById("authPanel");
         const $freeze = document.getElementById("freezeForm");
         const $code = document.getElementById("authCode");
@@ -951,7 +979,6 @@ async function abrirModalPagoConCliente(cliente) {
         const $msg = document.getElementById("authMsg");
 
         function abrirPanelAuth() {
-          // ✅ si ya está autorizado, no hacer nada
           if (inicioAutorizado) return;
 
           $authPanel?.classList.remove("hidden");
@@ -1001,10 +1028,7 @@ async function abrirModalPagoConCliente(cliente) {
             aplicarEstadoInicio();
             cerrarPanelAuth();
 
-            // ✅ por seguridad: si existe, fuerza ocultar overlay
             $overlay?.classList.add("hidden");
-
-            // ✅ opcional: enfoca el input y abre selector
             $inicio?.focus();
             $inicio?.showPicker?.();
           } catch (e) {
@@ -1017,10 +1041,8 @@ async function abrirModalPagoConCliente(cliente) {
           }
         }
 
-        // click en desbloquear (botón o overlay)
         $btnUnlock?.addEventListener("click", abrirPanelAuth);
         $overlay?.addEventListener("click", abrirPanelAuth);
-
         $btnVal?.addEventListener("click", validarCodigoInterno);
         $btnCan?.addEventListener("click", cerrarPanelAuth);
         $code?.addEventListener("keydown", (ev) => {
@@ -1073,11 +1095,9 @@ async function abrirModalPagoConCliente(cliente) {
         $met.addEventListener("change", toggleRecibido);
         toggleRecibido();
 
-        // (Opcional) guarda referencia si quieres “blindar” inicio
         window.__pagoInicioOriginal = inicioOriginal;
         window.__pagoInicioAutorizado = inicioAutorizado;
 
-        // icons
         lucide.createIcons();
       },
 
@@ -1085,11 +1105,9 @@ async function abrirModalPagoConCliente(cliente) {
         const inicio = document.getElementById("fecha_inicio").value;
         const fin = document.getElementById("fecha_fin").value;
         const monto = Number(document.getElementById("monto").value) || 0;
-        const descuento =
-          Number(document.getElementById("descuento").value) || 0;
+        const descuento = Number(document.getElementById("descuento").value) || 0;
         const metodo = document.getElementById("metodo").value;
-        const recibido =
-          Number(document.getElementById("recibido")?.value) || 0;
+        const recibido = Number(document.getElementById("recibido")?.value) || 0;
 
         if (!inicio || !fin) {
           Swal.showValidationMessage("Debes seleccionar ambas fechas.");
@@ -1132,6 +1150,9 @@ async function abrirModalPagoConCliente(cliente) {
           }
         }
 
+        // (opcional) para evitar enter doble en el mismo swal
+        Swal.disableButtons();
+
         return {
           cliente_id: Number(cliente.id),
           nombre: cliente.nombre,
@@ -1146,56 +1167,61 @@ async function abrirModalPagoConCliente(cliente) {
         };
       },
     })
-    .then((result) => {
+    .then(async (result) => {
       if (!result.isConfirmed) return;
 
-      fetch("../php/registrar_pago_nombre.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result.value),
-      })
-        .then((res) => res.json())
-        .then(async (data) => {
-          if (!data.success) {
-            swalError.fire("Error", data.error || "Error desconocido", "error");
-            return;
-          }
+      // ✅ Anti-doble clic global
+      if (pagoEnProceso) return;
+      pagoEnProceso = true;
 
-          const total = Math.max(
-            0,
-            result.value.monto - result.value.descuento
-          );
-          const esEfectivo = result.value.metodo === "efectivo";
-          const recibido = esEfectivo
-            ? Number(result.value.recibido) || 0
-            : null;
-          const cambio = esEfectivo ? recibido - total : null;
+      // ✅ Bloquea botones tabla/buscador durante el POST
+      try {
+        setUIBloqueada(true);
+      } catch (_) {}
 
-          const datosTicket = {
-            nombre: result.value.nombre,
-            apellido: result.value.apellido,
-            telefono: result.value.telefono,
-            fecha_inicio: result.value.fecha_inicio,
-            fecha_fin: result.value.fecha_fin,
-            metodo: result.value.metodo,
-            monto: result.value.monto,
-            descuento: result.value.descuento,
-            fecha_pago: new Date().toISOString(),
-            usuario: window.usuarioActual?.nombre || "Usuario desconocido",
-            recibido,
-            cambio,
-          };
+      try {
+        const res = await fetch("../php/registrar_pago_nombre.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(result.value),
+        });
+        const data = await res.json();
 
-          await generarTicketPago(datosTicket);
+        if (!data.success) {
+          await swalError.fire("Error", data.error || "Error desconocido", "error");
+          return;
+        }
 
-          if (esEfectivo) {
-            await swalSuccess.fire({
-              title: "¡Pago en efectivo registrado!",
-              icon: "success",
-              width: 700,
-              backdrop: true,
-              allowOutsideClick: false,
-              html: `
+        const total = Math.max(0, result.value.monto - result.value.descuento);
+        const esEfectivo = result.value.metodo === "efectivo";
+        const recibido = esEfectivo ? Number(result.value.recibido) || 0 : null;
+        const cambio = esEfectivo ? recibido - total : null;
+
+        const datosTicket = {
+          nombre: result.value.nombre,
+          apellido: result.value.apellido,
+          telefono: result.value.telefono,
+          fecha_inicio: result.value.fecha_inicio,
+          fecha_fin: result.value.fecha_fin,
+          metodo: result.value.metodo,
+          monto: result.value.monto,
+          descuento: result.value.descuento,
+          fecha_pago: new Date().toISOString(),
+          usuario: window.usuarioActual?.nombre || "Usuario desconocido",
+          recibido,
+          cambio,
+        };
+
+        await generarTicketPago(datosTicket);
+
+        if (esEfectivo) {
+          await swalSuccess.fire({
+            title: "¡Pago en efectivo registrado!",
+            icon: "success",
+            width: 700,
+            backdrop: true,
+            allowOutsideClick: false,
+            html: `
               <div class="text-left text-slate-200">
                 <div class="flex justify-between items-center mb-1">
                   <span class="opacity-80">Total:</span>
@@ -1203,9 +1229,7 @@ async function abrirModalPagoConCliente(cliente) {
                 </div>
                 <div class="flex justify-between items-center mb-1">
                   <span class="opacity-80">Recibido:</span>
-                  <strong class="text-white">$${(recibido || 0).toFixed(
-                    2
-                  )}</strong>
+                  <strong class="text-white">$${(recibido || 0).toFixed(2)}</strong>
                 </div>
               </div>
 
@@ -1217,28 +1241,35 @@ async function abrirModalPagoConCliente(cliente) {
                 </div>
               </div>
             `,
-              customClass: {
-                popup: "bg-slate-800 text-white rounded-2xl",
-                title: "text-3xl font-bold",
-                confirmButton:
-                  "bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl",
-              },
-            });
-          } else {
-            await swalSuccess.fire("¡Éxito!", data.msg, "success");
-          }
+            customClass: {
+              popup: "bg-slate-800 text-white rounded-2xl",
+              title: "text-3xl font-bold",
+              confirmButton:
+                "bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl",
+            },
+          });
+        } else {
+          await swalSuccess.fire("¡Éxito!", data.msg, "success");
+        }
 
-          location.reload();
-        })
-        .catch(() =>
-          swalError.fire(
-            "Error",
-            "No se pudo conectar con el servidor",
-            "error"
-          )
-        );
+        location.reload();
+      } catch (e) {
+        await swalError.fire("Error", "No se pudo conectar con el servidor", "error");
+      } finally {
+        // ✅ SIEMPRE desbloquear UI
+        pagoEnProceso = false;
+        try {
+          setUIBloqueada(false);
+        } catch (_) {}
+
+        try {
+          Swal.hideLoading();
+          Swal.enableButtons();
+        } catch (_) {}
+      }
     });
 }
+
 
 async function abrirModalPagoCliente(clienteId) {
   const res = await fetch(`../php/buscar_cliente_id.php?id=${clienteId}`);

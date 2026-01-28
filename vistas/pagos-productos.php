@@ -105,7 +105,7 @@ endif;
 
 
     <div class="mt-6">
-      <button
+      <button id="btnCobrar" 
         onclick="procesarVenta()"
         class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold shadow"
       >

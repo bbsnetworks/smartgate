@@ -18,7 +18,28 @@ function setMontoEntregadoBloqueado(bloqueado) {
     montoEntregadoInput.classList.remove("opacity-70", "cursor-not-allowed");
   }
 }
+// === BLOQUEO DEL BOTÓN DE COBRAR (anti doble click) ===
+const btnCobrar =
+  document.getElementById("btnCobrar") || // ponle este id a tu botón si no lo tiene
+  document.querySelector('[data-action="procesarVenta"]') || // opcional
+  document.querySelector('button[onclick*="procesarVenta"]'); // último recurso
 
+let ventaEnProceso = false;
+
+function setBotonCobrarBloqueado(bloqueado, texto = null) {
+  if (!btnCobrar) return;
+
+  btnCobrar.disabled = bloqueado;
+  btnCobrar.classList.toggle("opacity-60", bloqueado);
+  btnCobrar.classList.toggle("cursor-not-allowed", bloqueado);
+
+  if (texto !== null) {
+    btnCobrar.dataset.textoOriginal ??= btnCobrar.innerHTML;
+    btnCobrar.innerHTML = texto;
+  } else if (!bloqueado && btnCobrar.dataset.textoOriginal) {
+    btnCobrar.innerHTML = btnCobrar.dataset.textoOriginal;
+  }
+}
 function syncMontoEntregadoConTotal() {
   if (!metodoPagoSelect || !montoEntregadoInput) return;
 
@@ -44,7 +65,9 @@ function syncMontoEntregadoConTotal() {
   setMontoEntregadoBloqueado(false);
 
   // Si el valor actual era exactamente el total (venía de tarjeta/transferencia), lo limpiamos
-  const actual = parseFloat((montoEntregadoInput.value || "").replace(",", "."));
+  const actual = parseFloat(
+    (montoEntregadoInput.value || "").replace(",", "."),
+  );
   if (!isNaN(actual) && Math.abs(actual - total) < 0.001) {
     montoEntregadoInput.value = "";
   }
@@ -52,7 +75,6 @@ function syncMontoEntregadoConTotal() {
   // (Opcional) Si prefieres que en efectivo se ponga por defecto el total exacto, usa esto:
   // montoEntregadoInput.value = totalFmt;
 }
-
 
 // Cuando cambie el método de pago
 if (metodoPagoSelect) {
@@ -94,7 +116,7 @@ inputCodigo.addEventListener("keypress", function (e) {
 function getTotalNumber() {
   return productosAgregados.reduce(
     (acc, p) => acc + parseFloat(p.precio) * parseInt(p.cantidad || 0),
-    0
+    0,
   );
 }
 function formateaMoneda(n) {
@@ -168,131 +190,163 @@ function eliminarProducto(index) {
 }
 
 async function procesarVenta() {
+  // anti doble ejecución
+  if (ventaEnProceso) return;
+
+  // validación básica antes de bloquear (opcional)
   if (productosAgregados.length === 0) {
     swalError.fire("No hay productos en la venta", "", "warning");
     return;
   }
 
-  const total = getTotalNumber();
-  const metodoPago = document.getElementById("metodoPago").value;
+  ventaEnProceso = true;
+  setBotonCobrarBloqueado(true, "Procesando...");
 
-  let pagado = 0;
+  try {
+    const total = getTotalNumber();
+    const metodoPago = document.getElementById("metodoPago").value;
 
-  if (isNoEfectivo(metodoPago)) {
-    // ✅ Siempre exacto al total (sin cambio)
-    pagado = total;
+    let pagado = 0;
 
-    // Asegura que el input muestre el total (por si acaso)
-    if (montoEntregadoInput) montoEntregadoInput.value = total.toFixed(2);
-  } else {
-    const pagoStr = (montoEntregadoInput?.value || "").replace(",", ".");
-    pagado = parseFloat(pagoStr);
+    if (isNoEfectivo(metodoPago)) {
+      pagado = total;
+      if (montoEntregadoInput) montoEntregadoInput.value = total.toFixed(2);
+    } else {
+      const pagoStr = (montoEntregadoInput?.value || "").replace(",", ".");
+      pagado = parseFloat(pagoStr);
 
-    if (isNaN(pagado) || pagado <= 0) {
-      swalError.fire(
-        "Monto inválido",
-        "La cantidad entregada debe ser mayor a 0.",
-        "error"
-      );
-      return;
+      if (isNaN(pagado) || pagado <= 0) {
+        await swalError.fire(
+          "Monto inválido",
+          "La cantidad entregada debe ser mayor a 0.",
+          "error",
+        );
+        return;
+      }
+      if (pagado < total) {
+        const falta = total - pagado;
+        await swalError.fire(
+          "Pago insuficiente",
+          `Faltan ${formateaMoneda(falta)} para completar el total.`,
+          "error",
+        );
+        return;
+      }
     }
-    if (pagado < total) {
-      const falta = total - pagado;
-      swalError.fire(
-        "Pago insuficiente",
-        `Faltan ${formateaMoneda(falta)} para completar el total.`,
-        "error"
-      );
-      return;
-    }
-  }
 
-  const confirm = await swalInfo.fire({
-    title: "Confirmar venta",
-    html: `
-      <div class="text-left space-y-2">
-        <div><strong>Total:</strong> ${formateaMoneda(total)}</div>
-        <div><strong>Método:</strong> ${metodoPago}</div>
-      </div>
-    `,
-    icon: "question",
-    showCancelButton: true,
-    confirmButtonText: "Aceptar",
-  });
-
-  if (!confirm.isConfirmed) return;
-
-  const productosParaTicket = [...productosAgregados];
-  const cambio = pagado - total;
-
-  fetch("../php/registrar_pago_producto.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      productos: productosAgregados,
-      metodo_pago: metodoPago,
-    }),
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.success) {
-        // Ticket (opcional: incluir pagó/cambio en el ticket)
-        generarTicketVenta(data, productosParaTicket, { pagado, cambio });
-
-        // después de recibir data.success === true
-        const cambioColor =
-          cambio > 0 ? "#22c55e" /*verde*/ : "#e5e7eb"; /*gris claro*/
-
-        swalSuccess.fire({
-          title: "Venta realizada con éxito",
-          html: `
-    <div class="text-left space-y-1">
-      <div><strong>Folio:</strong> ${data.venta_id}</div>
+    const confirm = await swalInfo.fire({
+      title: "Confirmar venta",
+      html: `
+    <div class="text-left space-y-2">
       <div><strong>Total:</strong> ${formateaMoneda(total)}</div>
-      <div><strong>Pagó:</strong> ${formateaMoneda(pagado)}</div>
       <div><strong>Método:</strong> ${metodoPago}</div>
-
-      <!-- CAMBIO al final, grande y resaltado -->
-      <div style="
-        margin-top:12px;
-        padding-top:10px;
-        border-top:1px solid #334155;
-        font-weight:800;
-        font-size:28px;
-        line-height:1.1;
-        color:${cambioColor};
-        text-align:center;
-      ">
-        Cambio: ${formateaMoneda(cambio)}
-      </div>
     </div>
   `,
-          icon: "success",
-        });
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Aceptar",
 
-        // Reset UI
-        productosAgregados = [];
-        actualizarTabla();
-        document.getElementById("metodoPago").value = "Efectivo";
-        if (montoEntregadoInput) montoEntregadoInput.value = "";
-        syncMontoEntregadoConTotal(); // deja habilitado para efectivo
-      } else {
-        swalError.fire(
-          "Error",
-          data.error || "No se pudo procesar la venta",
-          "error"
-        );
-      }
-    })
-    .catch(() =>
-      swalError.fire("Error", "No se pudo procesar la venta", "error")
+      // ✅ Bloqueo anti doble click
+      showLoaderOnConfirm: true,
+      preConfirm: () => {
+        Swal.disableButtons(); // deshabilita Aceptar/Cancelar al primer click
+        return true; // deja que se cierre el modal
+      },
+      allowOutsideClick: () => !Swal.isLoading(),
+      allowEscapeKey: () => !Swal.isLoading(),
+      allowEnterKey: () => !Swal.isLoading(),
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    // (opcional) cambia el texto tras confirmar
+    setBotonCobrarBloqueado(true, "Guardando...");
+
+    const productosParaTicket = [...productosAgregados];
+    const cambio = pagado - total;
+
+    const res = await fetch("../php/registrar_pago_producto.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productos: productosAgregados,
+        metodo_pago: metodoPago,
+      }),
+    });
+
+    // Si tu PHP puede devolver HTML/500, esto evita que truene el .json()
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error("Respuesta no válida del servidor");
+    }
+
+    if (!res.ok) {
+      throw new Error(data?.error || "Error HTTP al procesar la venta");
+    }
+
+    if (data.success) {
+      generarTicketVenta(data, productosParaTicket, { pagado, cambio });
+
+      const cambioColor = cambio > 0 ? "#22c55e" : "#e5e7eb";
+      await swalSuccess.fire({
+        title: "Venta realizada con éxito",
+        html: `
+          <div class="text-left space-y-1">
+            <div><strong>Folio:</strong> ${data.venta_id}</div>
+            <div><strong>Total:</strong> ${formateaMoneda(total)}</div>
+            <div><strong>Pagó:</strong> ${formateaMoneda(pagado)}</div>
+            <div><strong>Método:</strong> ${metodoPago}</div>
+
+            <div style="
+              margin-top:12px;
+              padding-top:10px;
+              border-top:1px solid #334155;
+              font-weight:800;
+              font-size:28px;
+              line-height:1.1;
+              color:${cambioColor};
+              text-align:center;
+            ">
+              Cambio: ${formateaMoneda(cambio)}
+            </div>
+          </div>
+        `,
+        icon: "success",
+      });
+
+      // Reset UI
+      productosAgregados = [];
+      actualizarTabla();
+      document.getElementById("metodoPago").value = "Efectivo";
+      if (montoEntregadoInput) montoEntregadoInput.value = "";
+      syncMontoEntregadoConTotal();
+    } else {
+      await swalError.fire(
+        "Error",
+        data.error || "No se pudo procesar la venta",
+        "error",
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    await swalError.fire(
+      "Error",
+      err.message || "No se pudo procesar la venta",
+      "error",
     );
+  } finally {
+    ventaEnProceso = false;
+    setBotonCobrarBloqueado(false, null);
+  }
 }
 
 async function generarTicketVenta(
   data,
   productos,
-  pagoInfo = { pagado: 0, cambio: 0 }
+  pagoInfo = { pagado: 0, cambio: 0 },
 ) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({
@@ -391,7 +445,7 @@ inputCodigo.addEventListener("input", () => {
     `../php/buscar_sugerencias.php?termino=${encodeURIComponent(termino)}`,
     {
       signal: sugerenciaController.signal,
-    }
+    },
   )
     .then((res) => res.json())
     .then((sugerencias) => {
