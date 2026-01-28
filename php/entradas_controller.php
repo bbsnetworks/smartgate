@@ -3,9 +3,16 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/Visitor.php';
 require_once __DIR__ . '/Encrypter.php';
+require_once __DIR__ . '/conexion.php'; // usa $conexion para mapear user->personId
 
 $fecha = $_GET['fecha'] ?? date('Y-m-d'); // YYYY-MM-DD
 $user  = $_GET['user']  ?? 'all';         // 'me' | 'all' | <id>
+$tipo  = $_GET['tipo']  ?? 'entrada';     // entrada | vencida | no_registrado
+
+$debug = isset($_GET['debug']) && $_GET['debug'] == '1';
+
+// (Opcional) override directo: ?eventType=196893
+$eventTypeParam = $_GET['eventType'] ?? null;
 
 // valida fecha
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
@@ -21,17 +28,46 @@ if (!$config) {
   exit;
 }
 
-// ✅ los que ya confirmaste
-$EVENT_TYPE     = 196893;
-$DOOR_INDEXCODE = "3";       // <- tu doorIndexCode correcto
-$TZ             = "-06:00";  // <- rango horario correcto
+// ✅ Tipos permitidos (incluye 197633)
+$ALLOWED_EVENT_TYPES = [196893, 197384, 197633, 197151];
 
-// rango del día (con timezone -06:00)
+// ✅ Tabs -> eventTypes (vencida incluye 2 códigos)
+$TIPOS = [
+  "entrada"       => [196893],
+  "vencida"       => [197384, 197633],
+  "no_registrado" => [197151],
+];
+
+// eventTypes por tipo
+$eventTypes = $TIPOS[$tipo] ?? $TIPOS["entrada"];
+
+// override si viene eventType explícito
+if ($eventTypeParam !== null && $eventTypeParam !== '') {
+  $tmp = (int)$eventTypeParam;
+  if (!in_array($tmp, $ALLOWED_EVENT_TYPES, true)) {
+    http_response_code(400);
+    echo json_encode([
+      'ok' => false,
+      'error' => 'eventType inválido',
+      'allowed' => $ALLOWED_EVENT_TYPES
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+  }
+  $eventTypes = [$tmp]; // sigue siendo array (1 solo)
+}
+
+// ✅ doorIndexCode y TZ confirmados
+$DOOR_INDEXCODE = "3";
+$TZ             = "-06:00";
+
+// rango del día (incluye también el día anterior como lo tenías)
 $startTime = $fecha . "T00:00:00" . $TZ;
 $endTime   = $fecha . "T23:59:59" . $TZ;
 
-// (Opcional) filtrar por personId según tu usuario global
+
+// (Opcional) filtrar por personId según tu filtro global
 $personIdFilter = null;
+
 try {
   if ($user !== 'all') {
     session_start();
@@ -44,8 +80,7 @@ try {
     }
 
     if ($uid > 0) {
-      // ⚠️ AJUSTA si tu tabla/campo se llaman distinto
-      // Aquí asumo que "usuarios.data" guarda el personId de HikCentral
+      // Asumo que "usuarios.data" guarda el personId de HikCentral
       $stmt = $conexion->prepare("SELECT data AS personId FROM usuarios WHERE id = ? LIMIT 1");
       if ($stmt) {
         $stmt->bind_param("i", $uid);
@@ -77,29 +112,28 @@ try {
     "Accept: */*"
   ];
 
-  $TZ = "-06:00";
+  // payload base
+  $payload = [
+    "startTime" => $startTime,
+    "endTime"   => $endTime,
+    "doorIndexCodes" => [(string)$DOOR_INDEXCODE],
+    "pageNo"    => 1,
+    "pageSize"  => 50,
+    "temperatureStatus" => -1,
+    "maskStatus" => -1,
+  ];
 
-$startTime = date('Y-m-d', strtotime($fecha . ' -1 day')) . "T00:00:00" . $TZ;
-$endTime   = $fecha . "T23:59:59" . $TZ;
-
-$payload = [
-  "startTime" => $startTime,
-  "endTime"   => $endTime,
-  "eventType" => $EVENT_TYPE,
-  "doorIndexCodes" => [(string)$DOOR_INDEXCODE],
-  "pageNo"    => 1,
-  "pageSize"  => 10,
-  "temperatureStatus" => -1,
-  "maskStatus" => -1,
-];
-
-
-
-  // filtro opcional por persona
   if ($personIdFilter) {
     $payload["personId"] = $personIdFilter;
   }
 
+  // 🔥 juntar resultados de múltiples eventTypes
+  $all = [];
+
+  $debugCalls = [];
+
+foreach ($eventTypes as $et) {
+  $payload["eventType"] = (int)$et;
   $data = json_encode($payload, JSON_UNESCAPED_UNICODE);
 
   $ch = curl_init();
@@ -117,6 +151,17 @@ $payload = [
   $curlErr  = curl_error($ch);
   curl_close($ch);
 
+  // ✅ guarda debug por cada eventType
+  if ($debug) {
+    $debugCalls[] = [
+      "eventType" => (int)$et,
+      "requestUrl" => $fullUrl,
+      "requestBody" => json_decode($data, true),
+      "httpCode" => $httpCode,
+      "rawResponse" => $response
+    ];
+  }
+
   if ($curlErr) throw new Exception("cURL: " . $curlErr);
   if ($httpCode != 200) throw new Exception("HTTP $httpCode - $response");
 
@@ -126,27 +171,43 @@ $payload = [
   $list = $json['data']['list'] ?? [];
   if (!is_array($list)) $list = [];
 
-  // Normalizamos para tu UI
-  $out = array_map(function($x) {
-    return [
+  foreach ($list as $x) {
+    $all[] = [
       "personId"   => $x["personId"]   ?? "",
       "personName" => $x["personName"] ?? "",
       "eventTime"  => $x["eventTime"]  ?? ($x["deviceTime"] ?? ""),
-      "picUri"     => $x["picUri"]     ?? ""
+      "picUri"     => $x["picUri"]     ?? "",
+      "eventType"  => (int)$et,
     ];
-  }, $list);
+  }
+}
+
 
   // ordenar por eventTime desc
-  usort($out, function($a, $b) {
+  usort($all, function($a, $b) {
     return strcmp($b['eventTime'] ?? '', $a['eventTime'] ?? '');
   });
 
-  echo json_encode([
-    "ok" => true,
-    "fecha" => $fecha,
-    "count" => count($out),
-    "list" => $out
-  ], JSON_UNESCAPED_UNICODE);
+  $out = [
+  "ok" => true,
+  "fecha" => $fecha,
+  "tipo" => $tipo,
+  "eventTypes" => array_map('intval', $eventTypes),
+  "count" => count($all),
+  "list" => $all
+];
+
+if ($debug) {
+  $out["debug"] = [
+    "startTime" => $startTime,
+    "endTime" => $endTime,
+    "personIdFilter" => $personIdFilter,
+    "calls" => $debugCalls
+  ];
+}
+
+echo json_encode($out, JSON_UNESCAPED_UNICODE);
+
 
 } catch (Throwable $e) {
   http_response_code(500);

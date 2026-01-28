@@ -5,7 +5,31 @@ let USER_FILTER = "me"; // "me" | "all" | <iduser>
 // ===============================
 const API_BASE = `${location.origin}/smartgate/php/`;
 const ENTRADAS_ENDPOINT = API_BASE + "entradas_controller.php";
-const FOTO_ENDPOINT = "/smartgate/php/ver_foto_evento.php"; // ?uri=Vsm://...
+const FOTO_ENDPOINT = "/smartgate/php/ver_foto_evento.php";
+
+// Tipos de evento para tabs
+const EVENT_TABS = [
+  {
+    key: "entrada",
+    label: "Entradas",
+    pill: "...",
+    icon: "bi bi-check-circle",
+  },
+  {
+    key: "vencida",
+    label: "Membresía vencida",
+    pill: "...",
+    icon: "bi bi-exclamation-triangle",
+  },
+  {
+    key: "no_registrado",
+    label: "No registrado",
+    pill: "...",
+    icon: "bi bi-x-circle",
+  },
+];
+
+let ENTRADAS_EVENT_KEY = "entrada"; // tab seleccionado
 
 function todayISO() {
   const d = new Date();
@@ -64,19 +88,17 @@ function formatHora(raw) {
   return s;
 }
 
-
 function renderEntradaItem({ id, nombre, hora, picUri }) {
   const safeId = escHtml(id ?? "—");
   const safeNombre = escHtml(nombre ?? "—");
   const safeHora = escHtml(hora ?? "—");
 
+  const tab = getSelectedTabMeta(); // 👈
+
   const img = picUri
-    ? `<img
-        data-personid="${escAttr(id)}"
-        data-picuri="${escAttr(picUri)}"
-        class="h-10 w-10 rounded-full object-cover border border-slate-600/70 bg-slate-800/40"
-        alt="foto"
-      >`
+    ? `<img data-picuri="${escAttr(picUri)}"
+            class="h-10 w-10 rounded-full object-cover border border-slate-600/70 cursor-zoom-in"
+            alt="foto">`
     : `<div class="h-10 w-10 rounded-full bg-slate-700/60 border border-slate-600/70 flex items-center justify-center text-slate-200">
          <i class="bi bi-person-fill"></i>
        </div>`;
@@ -87,12 +109,20 @@ function renderEntradaItem({ id, nombre, hora, picUri }) {
         ${img}
         <div class="min-w-0 flex-1">
           <div class="flex items-center justify-between gap-3">
-            <p class="font-semibold text-slate-100 truncate">${safeNombre}</p>
-            <span class="text-xs text-slate-300 bg-slate-700/50 border border-slate-600/60 px-2 py-1 rounded-full shrink-0">
-              ${safeHora}
-            </span>
+            <div class="min-w-0">
+              <p class="font-semibold text-slate-100 truncate">${safeNombre}</p>
+              <p class="text-xs text-slate-400 mt-1">ID: <span class="text-slate-300">${safeId}</span></p>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[11px] px-2 py-1 rounded-full border ${tab.pill}">
+                <i class="${tab.icon} mr-1"></i>${escHtml(tab.label)}
+              </span>
+              <span class="text-xs text-slate-300 bg-slate-700/50 border border-slate-600/60 px-2 py-1 rounded-full">
+                ${safeHora}
+              </span>
+            </div>
           </div>
-          <p class="text-xs text-slate-400 mt-1">ID: <span class="text-slate-300">${safeId}</span></p>
         </div>
       </div>
     </li>
@@ -116,6 +146,40 @@ function initEntradasCard() {
     cargarEntradas(inputFecha.value);
   });
 }
+function initEntradasTabs() {
+  const wrap = document.getElementById("entradas-tabs");
+  if (!wrap) return;
+
+  wrap.innerHTML = EVENT_TABS.map((t) => {
+    const active = t.key === ENTRADAS_EVENT_KEY;
+    return `
+      <button type="button"
+        data-eventkey="${escAttr(t.key)}"
+        class="px-3 py-2 rounded-lg border text-sm font-medium transition
+               ${active ? "bg-slate-700/70 border-slate-500/60 text-white" : "bg-slate-900/30 border-slate-700/70 text-slate-300 hover:bg-slate-800/50"}">
+        <i class="${t.icon} mr-1"></i>${escHtml(t.label)}
+      </button>
+    `;
+  }).join("");
+
+  wrap.querySelectorAll("button[data-eventkey]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      ENTRADAS_EVENT_KEY = btn.getAttribute("data-eventkey");
+      initEntradasTabs(); // re-pinta active state
+      await cargarEntradasCard(); // recarga con el nuevo tipo
+    });
+  });
+}
+
+function getSelectedEventType() {
+  const t = EVENT_TABS.find((x) => x.key === ENTRADAS_EVENT_KEY);
+  return t ? t.eventType : 196893;
+}
+
+function getSelectedTabMeta() {
+  return EVENT_TABS.find((x) => x.key === ENTRADAS_EVENT_KEY) || EVENT_TABS[0];
+}
+
 function setEntradasLoading(isLoading, text = "Cargando…") {
   const overlay = document.getElementById("entradas-loading");
   const label = document.getElementById("entradas-loading-text");
@@ -149,6 +213,7 @@ async function cargarEntradas(fechaISO) {
       </li>
     `,
   });
+
   setEntradasLoading(true, "Cargando entradas…");
 
   try {
@@ -156,7 +221,10 @@ async function cargarEntradas(fechaISO) {
     url.searchParams.set("fecha", fechaISO);
     url.searchParams.set("user", USER_FILTER);
 
+    url.searchParams.set("tipo", ENTRADAS_EVENT_KEY);
+
     const res = await fetch(url.toString(), { cache: "no-store" });
+
     const data = await res.json();
 
     const list = data?.list ?? data?.data?.list ?? data?.data ?? [];
@@ -193,7 +261,6 @@ async function cargarEntradas(fechaISO) {
 
     await cargarFotosEntradas(); // ✅ aquí, justo después de renderizar
     setEntradasLoading(false);
-
   } catch (e) {
     console.error(e);
     setEntradasUI({
@@ -207,7 +274,6 @@ async function cargarEntradas(fechaISO) {
       `,
     });
     setEntradasLoading(false);
-
   }
 }
 
@@ -247,7 +313,6 @@ async function cargarFotosEntradas() {
   await Promise.all(tasks);
 }
 
-
 document.addEventListener("DOMContentLoaded", async () => {
   // 1) Cargar select global y fijar USER_FILTER
   await cargarUsuariosGlobal();
@@ -256,6 +321,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await cargarTodo();
   // Entradas: init listeners + primera carga
   initEntradasCard();
+  initEntradasTabs();
   initEntradasFotoModal();
   await cargarEntradasCard();
 
@@ -300,7 +366,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
   }
-  
 });
 
 async function cargarKPIs() {

@@ -464,6 +464,10 @@
                   <span id="entradas-loading-text" class="text-slate-200 text-sm">Cargando…</span>
                 </div>
               </div>
+              <!-- Tabs de eventos -->
+              <div id="entradas-tabs" class="mt-4 flex flex-wrap gap-2">
+                <!-- JS -->
+              </div>
 
               <!-- Scroll interno (tu lista) -->
               <div class="h-full overflow-auto">
