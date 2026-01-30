@@ -13,7 +13,7 @@ function brief(s, take = 40) {
 function setUIBloqueada(bloqueada) {
   // Botones principales de la tabla (los tuyos tienen onclick directo)
   const btns = document.querySelectorAll(
-    'button[onclick^="verPagos("], button[onclick^="abrirModalPagoCliente("]'
+    'button[onclick^="verPagos("], button[onclick^="abrirModalPagoCliente("]',
   );
 
   btns.forEach((b) => {
@@ -48,7 +48,6 @@ let ultimaBusqueda = "";
 let paginaActualClientes = 1;
 let pagoEnProceso = false;
 
-
 function debounce(func, delay = 300) {
   let timeout;
   return (...args) => {
@@ -68,6 +67,19 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 let paginaActual = 1;
+function parseYMDLocal(ymd) {
+  if (!ymd || typeof ymd !== "string") return null;
+  // Si viene "YYYY-MM-DD HH:MM:SS" recorta
+  const s = ymd.slice(0, 10);
+  const [y, m, d] = s.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d); // <- LOCAL (00:00 local)
+}
+
+function todayLocal() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()); // 00:00 local
+}
 
 function buscarClientes(q = "", pagina = 1) {
   paginaActualClientes = pagina;
@@ -82,8 +94,8 @@ function buscarClientes(q = "", pagina = 1) {
 
   fetch(
     `../php/buscar_clientes_tabla_pagos.php?q=${encodeURIComponent(
-      q
-    )}&page=${pagina}`
+      q,
+    )}&page=${pagina}`,
   )
     .then((res) => res.json())
     .then((data) => {
@@ -102,8 +114,9 @@ function buscarClientes(q = "", pagina = 1) {
       mensaje.classList.add("hidden");
 
       clientes.forEach((c) => {
-        const hoy = new Date().toISOString().split("T")[0];
-        const activo = new Date(c.Fin) >= new Date(hoy);
+        const hoy = todayLocal();
+        const fin = parseYMDLocal(c.Fin);
+        const activo = fin ? fin >= hoy : false;
         const estado = activo ? "Activo" : "Vencido";
         const estadoColor = activo ? "text-green-400" : "text-red-400";
         const filaColor = activo ? "bg-opacity-10" : "bg-opacity-10";
@@ -151,7 +164,7 @@ function renderPaginacionClientes(total, limit, paginaActual) {
     numero,
     texto = null,
     activo = false,
-    disabled = false
+    disabled = false,
   ) => {
     const btn = document.createElement("button");
     btn.textContent = texto || numero;
@@ -351,7 +364,7 @@ async function abrirModalPago() {
         }
         if (new Date(inicio) >= new Date(fin)) {
           Swal.showValidationMessage(
-            "La fecha de fin debe ser mayor que la de inicio."
+            "La fecha de fin debe ser mayor que la de inicio.",
           );
           return false;
         }
@@ -365,7 +378,7 @@ async function abrirModalPago() {
         }
         if (descuento > monto) {
           Swal.showValidationMessage(
-            "El descuento no puede ser mayor al monto."
+            "El descuento no puede ser mayor al monto.",
           );
           return false;
         }
@@ -379,8 +392,8 @@ async function abrirModalPago() {
           if (recibido < total) {
             Swal.showValidationMessage(
               `El efectivo recibido ($${recibido.toFixed(
-                2
-              )}) no alcanza el total ($${total.toFixed(2)}).`
+                2,
+              )}) no alcanza el total ($${total.toFixed(2)}).`,
             );
             return false;
           }
@@ -430,7 +443,6 @@ async function abrirModalPago() {
                 div.dataset.telefono = c.telefono;
                 div.dataset.comentarios = c.comentarios || ""; // o c.comentario
 
-
                 // log de inspección
                 logImagenCliente("busqueda", c);
 
@@ -456,7 +468,7 @@ async function abrirModalPago() {
                   document
                     .querySelectorAll(".cliente-opcion")
                     .forEach((el) =>
-                      el.classList.remove("cliente-seleccionado")
+                      el.classList.remove("cliente-seleccionado"),
                     );
                   div.classList.add("cliente-seleccionado");
 
@@ -483,9 +495,9 @@ async function abrirModalPago() {
                                       </div>
                                   </div>
                                 `;
-                               const comentario = (div.dataset.comentarios || "").trim();
+                  const comentario = (div.dataset.comentarios || "").trim();
 
-resultadoCliente.innerHTML += `
+                  resultadoCliente.innerHTML += `
   <div class="mt-3 flex items-start gap-2 p-3 rounded-xl
               bg-slate-900/60 border border-slate-600/80">
     <i data-lucide="sticky-note" class="w-4 h-4 text-amber-300 mt-0.5"></i>
@@ -494,16 +506,13 @@ resultadoCliente.innerHTML += `
     </div>
   </div>
 `;
-lucide.createIcons();
-
-
-
+                  lucide.createIcons();
 
                   // 🔁 Aquí consultamos la última fecha pagada del cliente
                   // 🔁 Aquí consultamos la última fecha pagada del cliente
                   try {
                     const res = await fetch(
-                      `../php/ultimo_pago.php?id=${div.dataset.id}`
+                      `../php/ultimo_pago.php?id=${div.dataset.id}`,
                     );
                     const json = await res.json();
 
@@ -516,7 +525,7 @@ lucide.createIcons();
                   } catch (error) {
                     console.error(
                       "Error al obtener última fecha pagada:",
-                      error
+                      error,
                     );
                   }
 
@@ -571,7 +580,7 @@ lucide.createIcons();
                   }
 
                   [$monto, $desc, $rec].forEach((el) =>
-                    el.addEventListener("input", toggleRecibido)
+                    el.addEventListener("input", toggleRecibido),
                   );
                   $met.addEventListener("change", toggleRecibido);
                   toggleRecibido();
@@ -601,7 +610,7 @@ lucide.createIcons();
             if (data.success) {
               const total = Math.max(
                 0,
-                result.value.monto - result.value.descuento
+                result.value.monto - result.value.descuento,
               );
               const esEfectivo = result.value.metodo === "efectivo";
               const recibido = esEfectivo
@@ -670,7 +679,7 @@ lucide.createIcons();
               swalError.fire(
                 "Error",
                 data.error || "Error desconocido",
-                "error"
+                "error",
               );
             }
           });
@@ -692,7 +701,11 @@ async function abrirModalPagoConCliente(cliente) {
   if (!imagenMostrar)
     imagenMostrar = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
 
-  const comentarioRaw = (cliente.comentarios || cliente.comentario || "").trim();
+  const comentarioRaw = (
+    cliente.comentarios ||
+    cliente.comentario ||
+    ""
+  ).trim();
   const comentario = escapeHtml(comentarioRaw);
 
   const html = `
@@ -931,7 +944,8 @@ async function abrirModalPagoConCliente(cliente) {
         const $overlay = document.getElementById("lockInicioOverlay");
         const $hint = document.getElementById("hintInicio");
 
-        let inicioAutorizado = tipoUsuario === "admin" || tipoUsuario === "root";
+        let inicioAutorizado =
+          tipoUsuario === "admin" || tipoUsuario === "root";
 
         function aplicarEstadoInicio() {
           if (!$inicio) return;
@@ -1060,7 +1074,7 @@ async function abrirModalPagoConCliente(cliente) {
         function totalACobrar() {
           return Math.max(
             0,
-            (Number($monto.value) || 0) - (Number($desc.value) || 0)
+            (Number($monto.value) || 0) - (Number($desc.value) || 0),
           );
         }
 
@@ -1090,7 +1104,7 @@ async function abrirModalPagoConCliente(cliente) {
         }
 
         [$monto, $desc, $rec].forEach((el) =>
-          el.addEventListener("input", toggleRecibido)
+          el.addEventListener("input", toggleRecibido),
         );
         $met.addEventListener("change", toggleRecibido);
         toggleRecibido();
@@ -1105,9 +1119,11 @@ async function abrirModalPagoConCliente(cliente) {
         const inicio = document.getElementById("fecha_inicio").value;
         const fin = document.getElementById("fecha_fin").value;
         const monto = Number(document.getElementById("monto").value) || 0;
-        const descuento = Number(document.getElementById("descuento").value) || 0;
+        const descuento =
+          Number(document.getElementById("descuento").value) || 0;
         const metodo = document.getElementById("metodo").value;
-        const recibido = Number(document.getElementById("recibido")?.value) || 0;
+        const recibido =
+          Number(document.getElementById("recibido")?.value) || 0;
 
         if (!inicio || !fin) {
           Swal.showValidationMessage("Debes seleccionar ambas fechas.");
@@ -1115,7 +1131,7 @@ async function abrirModalPagoConCliente(cliente) {
         }
         if (new Date(inicio) >= new Date(fin)) {
           Swal.showValidationMessage(
-            "La fecha de fin debe ser mayor que la de inicio."
+            "La fecha de fin debe ser mayor que la de inicio.",
           );
           return false;
         }
@@ -1129,7 +1145,7 @@ async function abrirModalPagoConCliente(cliente) {
         }
         if (descuento > monto) {
           Swal.showValidationMessage(
-            "El descuento no puede ser mayor al monto."
+            "El descuento no puede ser mayor al monto.",
           );
           return false;
         }
@@ -1143,8 +1159,8 @@ async function abrirModalPagoConCliente(cliente) {
           if (recibido < total) {
             Swal.showValidationMessage(
               `El efectivo recibido ($${recibido.toFixed(
-                2
-              )}) no alcanza el total ($${total.toFixed(2)}).`
+                2,
+              )}) no alcanza el total ($${total.toFixed(2)}).`,
             );
             return false;
           }
@@ -1188,7 +1204,11 @@ async function abrirModalPagoConCliente(cliente) {
         const data = await res.json();
 
         if (!data.success) {
-          await swalError.fire("Error", data.error || "Error desconocido", "error");
+          await swalError.fire(
+            "Error",
+            data.error || "Error desconocido",
+            "error",
+          );
           return;
         }
 
@@ -1254,7 +1274,11 @@ async function abrirModalPagoConCliente(cliente) {
 
         location.reload();
       } catch (e) {
-        await swalError.fire("Error", "No se pudo conectar con el servidor", "error");
+        await swalError.fire(
+          "Error",
+          "No se pudo conectar con el servidor",
+          "error",
+        );
       } finally {
         // ✅ SIEMPRE desbloquear UI
         pagoEnProceso = false;
@@ -1270,7 +1294,6 @@ async function abrirModalPagoConCliente(cliente) {
     });
 }
 
-
 async function abrirModalPagoCliente(clienteId) {
   const res = await fetch(`../php/buscar_cliente_id.php?id=${clienteId}`);
   const cliente = await res.json();
@@ -1279,7 +1302,7 @@ async function abrirModalPagoCliente(clienteId) {
     swalError.fire(
       "Error",
       cliente.error || "No se pudo cargar el cliente",
-      "error"
+      "error",
     );
     return;
   }
@@ -1291,7 +1314,7 @@ async function abrirModalPagoCliente(clienteId) {
 }
 
 function eliminarPago(idPago, clienteId, nombreCompleto) {
-  console.log("DELETE pago ->", { idPago, clienteId });
+  //console.log("DELETE pago ->", { idPago, clienteId });
   const tipoUsuario = window.usuarioActual?.tipo;
 
   const confirmarYBorrar = () => {
@@ -1308,7 +1331,7 @@ function eliminarPago(idPago, clienteId, nombreCompleto) {
         }
       })
       .catch(() =>
-        swalError.fire("Error", "No se pudo conectar con el servidor", "error")
+        swalError.fire("Error", "No se pudo conectar con el servidor", "error"),
       );
   };
 
@@ -1378,7 +1401,7 @@ function verPagos(clienteId, nombreCompleto) {
         swalError.fire(
           "Error",
           data.error || "No se pudo cargar el historial",
-          "error"
+          "error",
         );
         return;
       }
@@ -1463,7 +1486,7 @@ function verPagos(clienteId, nombreCompleto) {
             pagosVisibles,
             colapsado,
             clienteId,
-            nombreCompleto
+            nombreCompleto,
           );
           actualizarToggle($toggle, pagosVisibles, colapsado);
           actualizarBadge($badge, pagosVisibles);
@@ -1479,7 +1502,7 @@ function verPagos(clienteId, nombreCompleto) {
               pagosVisibles,
               colapsado,
               clienteId,
-              nombreCompleto
+              nombreCompleto,
             );
             actualizarToggle($toggle, pagosVisibles, colapsado);
             actualizarBadge($badge, pagosVisibles);
@@ -1492,7 +1515,7 @@ function verPagos(clienteId, nombreCompleto) {
               pagosVisibles,
               colapsado,
               clienteId,
-              nombreCompleto
+              nombreCompleto,
             );
             actualizarToggle($toggle, pagosVisibles, colapsado);
           });
@@ -1525,9 +1548,7 @@ function nombreMes(num) {
 
 async function generarTicketPago(data) {
   if (!window.jspdf) {
-    await import(
-      "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
-    );
+    await import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
   }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({
@@ -1537,8 +1558,7 @@ async function generarTicketPago(data) {
   });
 
   const logoSrc = await obtenerLogoMarca();
-const logo = await cargarImagenBase64(logoSrc);
-
+  const logo = await cargarImagenBase64(logoSrc);
 
   const fechaPago = new Date(data.fecha_pago);
   const fecha = fechaPago.toLocaleDateString("es-MX", {
@@ -1719,7 +1739,7 @@ function renderListaPagos(
   pagos,
   colapsado,
   clienteId,
-  nombreCompleto
+  nombreCompleto,
 ) {
   const lista = colapsado ? pagos.slice(0, 3) : pagos;
   if (!lista.length) {
@@ -1776,7 +1796,7 @@ function renderCardPago(pago, clienteId, nombreCompleto) {
   <div class="mb-1 text-sm flex items-center gap-2 text-slate-300">
     <i data-lucide="dollar-sign" class="w-4 h-4 text-yellow-400"></i>
     <strong class="text-white">Monto original:</strong> $${montoOriginal.toFixed(
-      2
+      2,
     )}
   </div>
   <div class="mb-1 text-sm flex items-center gap-2 text-slate-300">
@@ -1808,7 +1828,7 @@ function renderCardPago(pago, clienteId, nombreCompleto) {
     ${
       puedeEliminar
         ? `<button onclick="eliminarPago(${Number(idPago)}, ${Number(
-            clienteId
+            clienteId,
           )}, '${safeNombre}')"
              class="mt-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1">
              <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar

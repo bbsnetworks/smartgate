@@ -180,6 +180,36 @@
             <i class="bi bi-file-text icon-20 text-amber-400"></i><span>Ver Reportes</span>
           </a>
         </div>
+
+        <!-- Sección Herramientas -->
+        <div class="mt-6">
+          <button onclick="toggleAccordion('toolsPanel')"
+            class="w-full text-left text-sm font-semibold text-sky-300 bg-sky-900/40 px-4 py-3 rounded-lg hover:bg-sky-800/50 transition">
+            🧰 Herramientas
+          </button>
+
+          <div id="toolsPanel" class="mt-3 space-y-2">
+            <a id="btn-server-status" href="#"
+              class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+              <i class="bi bi-activity icon-20 text-sky-400"></i>
+              <span>Revisar servidor</span>
+            </a>
+
+            <a id="btn-server-start" href="#"
+              class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+              <i class="bi bi-play-circle icon-20 text-emerald-400"></i>
+              <span>Levantar servidor</span>
+            </a>
+
+            <a id="btn-server-open" href="#"
+              class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+              <i class="bi bi-window-fullscreen icon-20 text-pink-400"></i>
+              <span>Abrir Visor</span>
+            </a>
+
+          </div>
+        </div>
+
       </div>
 
       <!-- Botones inferiores -->
@@ -441,17 +471,17 @@
                 <p id="entradas-sub" class="text-slate-400 text-sm"></p>
               </div>
 
-              <div class="flex items-center gap-2">
+              <div id="entradas-fecha-wrap" class="flex items-center gap-2">
                 <input id="entradas-fecha" type="date" class="..." />
                 <button id="entradas-refresh"
                   class="px-3 py-2 rounded-lg bg-slate-700/70 hover:bg-slate-600/70 border border-slate-600/60 text-slate-100">
                   <i class="bi bi-arrow-clockwise mr-1"></i> Actualizar
                 </button>
               </div>
+
             </div>
 
 
-            <!-- Lista -->
             <!-- Lista -->
             <div class="mt-4 flex-1 min-h-0 pr-1 scrollbar-custom relative">
 
@@ -466,6 +496,10 @@
               </div>
               <!-- Tabs de eventos -->
               <div id="entradas-tabs" class="mt-4 flex flex-wrap gap-2">
+                <!-- JS -->
+              </div>
+              <!-- Filtros -->
+              <div id="entradas-filtros" class="mt-3 flex flex-wrap gap-2 items-center">
                 <!-- JS -->
               </div>
 
@@ -504,6 +538,8 @@
   <script src="js/dashboard.js"></script> <!-- tu script de suscripción/accordeones -->
   <script src="js/puerta.js"></script> <!-- sigue igual -->
   <script src="js/dashboard-home.js"></script> <!-- KPIs y gráfica -->
+  <script src="js/tools-eventservice.js"></script>
+
 </body>
 
 </html>

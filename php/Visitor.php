@@ -2,10 +2,12 @@
 require_once 'Encrypter.php';
 require_once __DIR__ . '/conexion.php';
 
-class Visitor {
+class Visitor
+{
     const TIMEOUT = 10; // Tiempo de espera en segundos
 
-    public static function getOrganizations($config) {
+    public static function getOrganizations($config)
+    {
         $urlService = "/artemis/api/resource/v1/org/orgList"; // 🔹 Cambié la URL según el debug
         $fullUrl = $config->urlHikCentralAPI . $urlService; // URL completa con el host correcto
 
@@ -54,13 +56,14 @@ class Visitor {
 
         return json_decode($response, true);
     }
-    public static function assignUserToGroup($config, $privilegeGroupId, $userId) {
+    public static function assignUserToGroup($config, $privilegeGroupId, $userId)
+    {
         $urlService = "/artemis/api/acs/v1/privilege/group/single/addPersons";
         $fullUrl = $config->urlHikCentralAPI . $urlService;
-    
+
         $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
         $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
-    
+
         $headers = [
             "x-ca-key: " . $config->userKey,
             "x-ca-signature-headers: x-ca-key",
@@ -68,7 +71,7 @@ class Visitor {
             "Content-Type: application/json",
             "Accept: */*"
         ];
-    
+
         $payload = [
             "privilegeGroupId" => $privilegeGroupId,
             "type" => 1,
@@ -76,9 +79,9 @@ class Visitor {
                 ["id" => strval($userId)]
             ]
         ];
-    
+
         $data = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    
+
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $fullUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -88,55 +91,57 @@ class Visitor {
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-    
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-    
+
         return json_decode($response, true);
     }
-    public static function removeUserFromGroup($config, $privilegeGroupId, $userId) {
-    $urlService = "/artemis/api/acs/v1/privilege/group/single/deletePersons"; // <- si tu doc usa otra, cámbiala aquí
-    $fullUrl = $config->urlHikCentralAPI . $urlService;
+    public static function removeUserFromGroup($config, $privilegeGroupId, $userId)
+    {
+        $urlService = "/artemis/api/acs/v1/privilege/group/single/deletePersons"; // <- si tu doc usa otra, cámbiala aquí
+        $fullUrl = $config->urlHikCentralAPI . $urlService;
 
-    $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
-    $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+        $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+        $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
 
-    $headers = [
-        "x-ca-key: " . $config->userKey,
-        "x-ca-signature-headers: x-ca-key",
-        "x-ca-signature: " . $signature,
-        "Content-Type: application/json",
-        "Accept: */*"
-    ];
+        $headers = [
+            "x-ca-key: " . $config->userKey,
+            "x-ca-signature-headers: x-ca-key",
+            "x-ca-signature: " . $signature,
+            "Content-Type: application/json",
+            "Accept: */*"
+        ];
 
-    $payload = [
-        "privilegeGroupId" => (string)$privilegeGroupId,
-        "type" => 1,
-        "list" => [
-            ["id" => strval($userId)]
-        ]
-    ];
+        $payload = [
+            "privilegeGroupId" => (string) $privilegeGroupId,
+            "type" => 1,
+            "list" => [
+                ["id" => strval($userId)]
+            ]
+        ];
 
-    $data = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        $data = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $fullUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $fullUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
 
-    $response = curl_exec($ch);
-    curl_close($ch);
+        $response = curl_exec($ch);
+        curl_close($ch);
 
-    return json_decode($response, true);
-}
+        return json_decode($response, true);
+    }
 
-    public static function getGroups($config, $payload) {
+    public static function getGroups($config, $payload)
+    {
         $urlService = "/artemis/api/acs/v1/privilege/group";
         $fullUrl = $config->urlHikCentralAPI . $urlService;
 
@@ -173,13 +178,14 @@ class Visitor {
 
         return json_decode($response, true);
     }
-    public static function sendUserToDevice($config) {
+    public static function sendUserToDevice($config)
+    {
         $urlService = "/artemis/api/visitor/v1/auth/reapplication";
         $fullUrl = $config->urlHikCentralAPI . $urlService;
-    
+
         $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
         $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
-    
+
         $headers = [
             "x-ca-key: " . $config->userKey,
             "x-ca-signature-headers: x-ca-key",
@@ -187,9 +193,9 @@ class Visitor {
             "Content-Type: application/json",
             "Accept: */*"
         ];
-    
+
         $payload = json_encode([]); // 🔹 Enviar un JSON vacío como indica la documentación
-    
+
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $fullUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -199,20 +205,21 @@ class Visitor {
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-    
+
         return json_decode($response, true);
     }
-    public static function deleteUser($config, $personId) {
+    public static function deleteUser($config, $personId)
+    {
         $urlService = "/artemis/api/resource/v1/person/single/delete"; // <- corregido
         $fullUrl = $config->urlHikCentralAPI . $urlService;
-    
+
         $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
         $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
-    
+
         $headers = [
             "x-ca-key: " . $config->userKey,
             "x-ca-signature-headers: x-ca-key",
@@ -220,9 +227,9 @@ class Visitor {
             "Content-Type: application/json",
             "Accept: */*"
         ];
-    
-        $payload = json_encode(["personId" => (string)$personId]); // <- este es el body correcto
-    
+
+        $payload = json_encode(["personId" => (string) $personId]); // <- este es el body correcto
+
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $fullUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -232,19 +239,20 @@ class Visitor {
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    
+
         $response = curl_exec($ch);
         curl_close($ch);
-    
+
         return json_decode($response, true);
     }
-    public static function updateUser($config, $userData) {
+    public static function updateUser($config, $userData)
+    {
         $urlService = "/artemis/api/resource/v1/person/single/update";
         $fullUrl = $config->urlHikCentralAPI . $urlService;
-    
+
         $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
         $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
-    
+
         $headers = [
             "x-ca-key: " . $config->userKey,
             "x-ca-signature-headers: x-ca-key",
@@ -252,9 +260,9 @@ class Visitor {
             "Content-Type: application/json",
             "Accept: */*"
         ];
-    
+
         $payload = json_encode($userData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    
+
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $fullUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -264,35 +272,89 @@ class Visitor {
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    
+
         $response = curl_exec($ch);
         curl_close($ch);
-    
+
         return json_decode($response, true);
     }
-    public static function getPersonList($config) {
-    $urlService = "/artemis/api/resource/v1/person/personList";
-    $fullUrl = $config->urlHikCentralAPI . $urlService;
+    public static function getPersonList($config)
+    {
+        $urlService = "/artemis/api/resource/v1/person/personList";
+        $fullUrl = $config->urlHikCentralAPI . $urlService;
 
-    $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
-    $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+        $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+        $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
 
-    $headers = [
-        "x-ca-key: " . $config->userKey,
-        "x-ca-signature-headers: x-ca-key",
-        "x-ca-signature: " . $signature,
-        "Content-Type: application/json",
-        "Accept: */*"
-    ];
+        $headers = [
+            "x-ca-key: " . $config->userKey,
+            "x-ca-signature-headers: x-ca-key",
+            "x-ca-signature: " . $signature,
+            "Content-Type: application/json",
+            "Accept: */*"
+        ];
 
-    $pageNo = 1;
-    $pageSize = 100;
-    $allResults = [];
+        $pageNo = 1;
+        $pageSize = 100;
+        $allResults = [];
 
-    while (true) {
-        $data = json_encode([
-            "pageNo" => $pageNo,
-            "pageSize" => $pageSize
+        while (true) {
+            $data = json_encode([
+                "pageNo" => $pageNo,
+                "pageSize" => $pageSize
+            ]);
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $fullUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode != 200) {
+                throw new Exception("Error al obtener la lista de personas: Código HTTP $httpCode. Respuesta: $response");
+            }
+
+            $json = json_decode($response, true);
+
+            $lista = $json['data']['list'] ?? [];
+            if (empty($lista)) {
+                break; // No hay más registros
+            }
+
+            $allResults = array_merge($allResults, $lista);
+            $pageNo++;
+        }
+
+        return ["data" => ["list" => $allResults]];
+    }
+
+    public static function getPersonPhoto($config, $personId, $picUri)
+    {
+        $urlService = "/artemis/api/resource/v1/person/picture_data";
+        $fullUrl = $config->urlHikCentralAPI . $urlService;
+
+        $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+        $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+
+        $headers = [
+            "x-ca-key: " . $config->userKey,
+            "x-ca-signature-headers: x-ca-key",
+            "x-ca-signature: " . $signature,
+            "Content-Type: application/json",
+            "Accept: */*"
+        ];
+
+        $payload = json_encode([
+            "personId" => strval($personId),
+            "picUri" => $picUri
         ]);
 
         $ch = curl_init();
@@ -303,217 +365,267 @@ class Visitor {
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($httpCode != 200) {
-            throw new Exception("Error al obtener la lista de personas: Código HTTP $httpCode. Respuesta: $response");
-        }
-
-        $json = json_decode($response, true);
-
-        $lista = $json['data']['list'] ?? [];
-        if (empty($lista)) {
-            break; // No hay más registros
-        }
-
-        $allResults = array_merge($allResults, $lista);
-        $pageNo++;
-    }
-
-    return ["data" => ["list" => $allResults]];
-}
-
-public static function getPersonPhoto($config, $personId, $picUri) {
-    $urlService = "/artemis/api/resource/v1/person/picture_data";
-    $fullUrl = $config->urlHikCentralAPI . $urlService;
-
-    $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
-    $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
-
-    $headers = [
-        "x-ca-key: " . $config->userKey,
-        "x-ca-signature-headers: x-ca-key",
-        "x-ca-signature: " . $signature,
-        "Content-Type: application/json",
-        "Accept: */*"
-    ];
-
-    $payload = json_encode([
-        "personId" => strval($personId),
-        "picUri" => $picUri
-    ]);
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $fullUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode == 200) {
-        $json = json_decode($response, true);
-        if (isset($json['data']) && strpos($json['data'], 'base64') !== false) {
-            $base64 = explode(',', $json['data'])[1] ?? '';
-            return base64_decode($base64);
-        }
-    }
-    return null;
-}
-public static function getPersonImage($config, $personId, $picUri) {
-    $response = self::getPictureData($config, $personId, $picUri);
-
-    if (isset($response['data'])) {
-        $data = $response['data'];
-
-        if (strpos($data, 'base64,') !== false) {
-            $partes = explode('base64,', $data);
-            if (isset($partes[1])) {
-                return $partes[1];
+        if ($httpCode == 200) {
+            $json = json_decode($response, true);
+            if (isset($json['data']) && strpos($json['data'], 'base64') !== false) {
+                $base64 = explode(',', $json['data'])[1] ?? '';
+                return base64_decode($base64);
             }
         }
+        return null;
+    }
+    public static function getPersonImage($config, $personId, $picUri)
+    {
+        $response = self::getPictureData($config, $personId, $picUri);
 
-        return $data; // fallback: por si no tiene el prefijo
+        if (isset($response['data'])) {
+            $data = $response['data'];
+
+            if (strpos($data, 'base64,') !== false) {
+                $partes = explode('base64,', $data);
+                if (isset($partes[1])) {
+                    return $partes[1];
+                }
+            }
+
+            return $data; // fallback: por si no tiene el prefijo
+        }
+
+        return '';
     }
 
-    return '';
-}
 
 
+    public static function getPictureData($config, $personId, $picUri)
+    {
+        $urlService = "/artemis/api/resource/v1/person/picture_data";
+        $fullUrl = $config->urlHikCentralAPI . $urlService;
 
-public static function getPictureData($config, $personId, $picUri) {
-    $urlService = "/artemis/api/resource/v1/person/picture_data";
-    $fullUrl = $config->urlHikCentralAPI . $urlService;
+        $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+        $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
 
-    $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
-    $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+        $headers = [
+            "x-ca-key: " . $config->userKey,
+            "x-ca-signature-headers: x-ca-key",
+            "x-ca-signature: " . $signature,
+            "Content-Type: application/json",
+            "Accept: */*"
+        ];
 
-    $headers = [
-        "x-ca-key: " . $config->userKey,
-        "x-ca-signature-headers: x-ca-key",
-        "x-ca-signature: " . $signature,
-        "Content-Type: application/json",
-        "Accept: */*"
-    ];
+        $payload = json_encode([
+            "personId" => (string) $personId,
+            "picUri" => $picUri
+        ]);
 
-    $payload = json_encode([
-        "personId" => (string)$personId,
-        "picUri" => $picUri
-    ]);
+        error_log("🟡 getPictureData() - Enviando: " . $payload);
 
-    error_log("🟡 getPictureData() - Enviando: " . $payload);
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $fullUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
 
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $fullUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+        error_log("🔵 getPictureData() - Código HTTP: $httpCode");
+        error_log("🔵 getPictureData() - Respuesta RAW: " . substr($response, 0, 200));
 
-    error_log("🔵 getPictureData() - Código HTTP: $httpCode");
-    error_log("🔵 getPictureData() - Respuesta RAW: " . substr($response, 0, 200));
+        // 📌 La API devuelve directamente un string base64, no JSON
+        if (strpos($response, 'data:image') === 0) {
+            return ['data' => $response]; // <- Envolvemos manualmente para que funcione como un array
+        }
 
-    // 📌 La API devuelve directamente un string base64, no JSON
-    if (strpos($response, 'data:image') === 0) {
-        return ['data' => $response]; // <- Envolvemos manualmente para que funcione como un array
+        return [];
+    }
+    public static function getEventPictureDataUri($config, $picUri)
+    {
+        $urlService = "/artemis/api/acs/v1/event/pictures";
+        $fullUrl = $config->urlHikCentralAPI . $urlService;
+
+        $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+        $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+
+        $headers = [
+            "x-ca-key: " . $config->userKey,
+            "x-ca-signature-headers: x-ca-key",
+            "x-ca-signature: " . $signature,
+            "Content-Type: application/json",
+            "Accept: */*"
+        ];
+
+        $payload = json_encode(["picUri" => (string) $picUri], JSON_UNESCAPED_UNICODE);
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $fullUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode != 200 || !$response)
+            return '';
+
+        $resp = trim($response);
+
+        // Si ya viene como data uri, lo regresamos tal cual
+        if (stripos($resp, 'data:image') === 0)
+            return $resp;
+
+        // Si viene base64 crudo, lo envolvemos en data uri
+        return "data:image/jpeg;base64," . $resp;
+    }
+    public static function eventServiceView($config)
+    {
+        $urlService = "/artemis/api/eventService/v1/eventSubscriptionView";
+        $fullUrl = $config->urlHikCentralAPI . $urlService;
+
+        $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+        $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+
+        $headers = [
+            "x-ca-key: " . $config->userKey,
+            "x-ca-signature-headers: x-ca-key",
+            "x-ca-signature: " . $signature,
+            "Content-Type: application/json",
+            "Accept: */*"
+        ];
+
+        $payload = json_encode(new stdClass()); // {}
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $fullUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false)
+            throw new Exception("cURL: " . $curlErr);
+        if ($httpCode < 200 || $httpCode >= 300)
+            throw new Exception("HTTP $httpCode: $response");
+
+        // OJO: esta API normalmente regresa JSON
+        $json = json_decode($response, true);
+        if (!$json)
+            throw new Exception("Respuesta no-JSON: " . substr($response, 0, 200));
+
+        return $json;
     }
 
-    return [];
+    public static function eventServiceSubscribe($config, array $eventTypes, string $eventDest, int $passBack = 1)
+    {
+        $urlService = "/artemis/api/eventService/v1/eventSubscriptionByEventTypes";
+        $fullUrl = $config->urlHikCentralAPI . $urlService;
+
+        $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
+        $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+
+        $headers = [
+            "x-ca-key: " . $config->userKey,
+            "x-ca-signature-headers: x-ca-key",
+            "x-ca-signature: " . $signature,
+            "Content-Type: application/json",
+            "Accept: */*"
+        ];
+
+        $body = [
+            "eventTypes" => array_values($eventTypes),
+            "eventDest" => $eventDest,
+            "passBack" => $passBack
+        ];
+
+        $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $fullUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false)
+            throw new Exception("cURL: " . $curlErr);
+        if ($httpCode < 200 || $httpCode >= 300)
+            throw new Exception("HTTP $httpCode: $response");
+
+        $json = json_decode($response, true);
+        if (!$json)
+            throw new Exception("Respuesta no-JSON: " . substr($response, 0, 200));
+
+        return $json;
+    }
+
+
 }
-public static function getEventPictureDataUri($config, $picUri) {
-    $urlService = "/artemis/api/acs/v1/event/pictures";
-    $fullUrl = $config->urlHikCentralAPI . $urlService;
+function api_cfg(string $key = null)
+{
+    static $cfg = null;
 
-    $contentToSign = "POST\n*/*\napplication/json\nx-ca-key:" . $config->userKey . "\n" . $urlService;
-    $signature = Encrypter::HikvisionSignature($config->userSecret, $contentToSign);
+    if ($cfg === null) {
+        $id = 1;
+        $stmt = $GLOBALS['conexion']->prepare(
+            "SELECT userKey, userSecret, urlHikCentralAPI FROM api_config WHERE id=?"
+        );
+        $stmt->bind_param('i', $id);
+        if (!$stmt->execute())
+            return null;
 
-    $headers = [
-        "x-ca-key: " . $config->userKey,
-        "x-ca-signature-headers: x-ca-key",
-        "x-ca-signature: " . $signature,
-        "Content-Type: application/json",
-        "Accept: */*"
-    ];
+        $res = $stmt->get_result();
+        $row = $res->fetch_assoc();
+        if (!$row)
+            return null;
 
-    $payload = json_encode(["picUri" => (string)$picUri], JSON_UNESCAPED_UNICODE);
+        // Normaliza URL (sin / final)
+        $row['urlHikCentralAPI'] = rtrim($row['urlHikCentralAPI'], '/');
 
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $fullUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        $cfg = (object) [
+            'userKey' => $row['userKey'],
+            'userSecret' => $row['userSecret'],
+            'urlHikCentralAPI' => $row['urlHikCentralAPI'],
+        ];
+    }
 
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode != 200 || !$response) return '';
-
-    $resp = trim($response);
-
-    // Si ya viene como data uri, lo regresamos tal cual
-    if (stripos($resp, 'data:image') === 0) return $resp;
-
-    // Si viene base64 crudo, lo envolvemos en data uri
-    return "data:image/jpeg;base64," . $resp;
-}
-
-
-
-}
-function api_cfg(string $key = null) {
-  static $cfg = null;
-
-  if ($cfg === null) {
-    $id = 1;
-    $stmt = $GLOBALS['conexion']->prepare(
-      "SELECT userKey, userSecret, urlHikCentralAPI FROM api_config WHERE id=?"
-    );
-    $stmt->bind_param('i', $id);
-    if (!$stmt->execute()) return null;
-
-    $res = $stmt->get_result();
-    $row = $res->fetch_assoc();
-    if (!$row) return null;
-
-    // Normaliza URL (sin / final)
-    $row['urlHikCentralAPI'] = rtrim($row['urlHikCentralAPI'], '/');
-
-    $cfg = (object)[
-      'userKey'         => $row['userKey'],
-      'userSecret'      => $row['userSecret'],
-      'urlHikCentralAPI'=> $row['urlHikCentralAPI'],
-    ];
-  }
-
-  return $key ? ($cfg->$key ?? null) : $cfg;
+    return $key ? ($cfg->$key ?? null) : $cfg;
 }
 // 🔹 Actualiza la URL con el host correcto (IP real si HikCentral está en otro servidor)
 $config = api_cfg();
 if (!$config) {
-  http_response_code(500);
-  die('Falta configuración de API (Dashboard → Configurar API HikCentral).');
+    http_response_code(500);
+    die('Falta configuración de API (Dashboard → Configurar API HikCentral).');
 }
 
 // Ejecutar la consulta de la lista de organizaciones
@@ -525,6 +637,3 @@ try {
     echo "Error al obtener organizaciones: " . $e->getMessage();
 }
 ?>
-
-
-

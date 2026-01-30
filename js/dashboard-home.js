@@ -7,8 +7,14 @@ const API_BASE = `${location.origin}/smartgate/php/`;
 const ENTRADAS_ENDPOINT = API_BASE + "entradas_controller.php";
 const FOTO_ENDPOINT = "/smartgate/php/ver_foto_evento.php";
 
-// Tipos de evento para tabs
+// ✅ Tabs (agregamos "Todos")
 const EVENT_TABS = [
+  {
+    key: "todos",
+    label: "Todos",
+    pill: "bg-sky-600/20 text-sky-200 border-sky-500/30",
+    icon: "bi bi-collection",
+  },
   {
     key: "entrada",
     label: "Entradas",
@@ -29,7 +35,29 @@ const EVENT_TABS = [
   },
 ];
 
-let ENTRADAS_EVENT_KEY = "entrada"; // tab seleccionado
+let ENTRADAS_EVENT_KEY = "todos"; // ✅ default ahora "Todos"
+
+// ===============================
+// Helpers filtros (hora)
+// ===============================
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function horaRedondeadaActual() {
+  const d = new Date();
+  return `${pad2(d.getHours())}:00`;
+}
+
+function horaMasUna(hhmm) {
+  const [hh, mm] = String(hhmm || "00:00").split(":").map(Number);
+  const h = (Number.isFinite(hh) ? hh : 0) + 1;
+  return `${pad2(h % 24)}:${pad2(Number.isFinite(mm) ? mm : 0)}`;
+}
+
+function getIsTodos() {
+  return ENTRADAS_EVENT_KEY === "todos";
+}
 
 function todayISO() {
   const d = new Date();
@@ -88,12 +116,16 @@ function formatHora(raw) {
   return s;
 }
 
-function renderEntradaItem({ id, nombre, hora, picUri }) {
-  const safeId = escHtml(id ?? "—");
+function renderEntradaItem({ personCode, nombre, hora, picUri, tipoLabel, tipoIcon, tipoPill }) {
+  const safeCode = escHtml(personCode ?? "—");
   const safeNombre = escHtml(nombre ?? "—");
   const safeHora = escHtml(hora ?? "—");
 
-  const tab = getSelectedTabMeta(); // 👈
+  // En "Todos" mostramos la etiqueta real del evento de cada registro.
+  // En tabs específicas, usamos la del tab seleccionado.
+  const tab = getIsTodos()
+    ? { label: tipoLabel || "Evento", icon: tipoIcon || "bi bi-dot", pill: tipoPill || "bg-slate-700/40 text-slate-200 border-slate-500/30" }
+    : getSelectedTabMeta();
 
   const img = picUri
     ? `<img data-picuri="${escAttr(picUri)}"
@@ -111,7 +143,7 @@ function renderEntradaItem({ id, nombre, hora, picUri }) {
           <div class="flex items-center justify-between gap-3">
             <div class="min-w-0">
               <p class="font-semibold text-slate-100 truncate">${safeNombre}</p>
-              <p class="text-xs text-slate-400 mt-1">ID: <span class="text-slate-300">${safeId}</span></p>
+              <p class="text-xs text-slate-400 mt-1">Código: <span class="text-slate-300">${safeCode}</span></p>
             </div>
 
             <div class="flex items-center gap-2 shrink-0">
@@ -128,6 +160,71 @@ function renderEntradaItem({ id, nombre, hora, picUri }) {
     </li>
   `;
 }
+// ===============================
+// ✅ Filtros UI
+// ===============================
+function initEntradasFiltros() {
+  const wrap = document.getElementById("entradas-filtros");
+  if (!wrap) return;
+
+  // Valores por defecto
+  const hDesde = horaRedondeadaActual();
+  const hHasta = horaMasUna(hDesde);
+
+  wrap.innerHTML = `
+    <div class="flex flex-wrap gap-2 items-center w-full">
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-slate-400">Desde</label>
+        <input id="entradas-hora-desde" type="time" value="${escAttr(hDesde)}"
+               class="h-9 px-2 rounded-lg border border-slate-700/70 bg-slate-900/40 text-slate-200 text-sm"/>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-slate-400">Hasta</label>
+        <input id="entradas-hora-hasta" type="time" value="${escAttr(hHasta)}"
+               class="h-9 px-2 rounded-lg border border-slate-700/70 bg-slate-900/40 text-slate-200 text-sm"/>
+      </div>
+
+      <div class="flex-1 min-w-[180px]">
+        <input id="entradas-buscar" type="text" placeholder="Buscar por personCode…"
+               class="w-full h-9 px-3 rounded-lg border border-slate-700/70 bg-slate-900/40 text-slate-200 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"/>
+      </div>
+
+      <button id="entradas-aplicar-filtros" type="button"
+              class="h-9 px-3 rounded-lg border border-slate-700/70 bg-slate-800/40 text-slate-200 text-sm hover:bg-slate-800/70">
+        <i class="bi bi-funnel mr-1"></i>Aplicar
+      </button>
+    </div>
+  `;
+
+  // listeners
+  const btn = document.getElementById("entradas-aplicar-filtros");
+  const q = document.getElementById("entradas-buscar");
+
+  btn?.addEventListener("click", () => cargarEntradasCard());
+
+  // Enter en búsqueda
+  q?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") cargarEntradasCard();
+  });
+}
+function toggleEntradasFiltros() {
+  const wrap = document.getElementById("entradas-filtros");
+  if (!wrap) return;
+  // En "Todos" ocultamos filtros para mantenerlo rápido
+  wrap.classList.toggle("hidden", getIsTodos());
+}
+function toggleEntradasFecha() {
+  const wrap = document.getElementById("entradas-fecha-wrap");
+  const inputFecha = document.getElementById("entradas-fecha");
+  if (!wrap || !inputFecha) return;
+
+  if (getIsTodos()) {
+    inputFecha.classList.add("hidden");   // ❌ fecha
+  } else {
+    inputFecha.classList.remove("hidden"); // ✅ fecha
+  }
+}
 
 // Inicializa listeners (solo 1 vez)
 function initEntradasCard() {
@@ -138,13 +235,8 @@ function initEntradasCard() {
 
   if (!inputFecha.value) inputFecha.value = todayISO();
 
-  inputFecha.addEventListener("change", () => {
-    cargarEntradas(inputFecha.value);
-  });
-
-  btnRefresh?.addEventListener("click", () => {
-    cargarEntradas(inputFecha.value);
-  });
+  inputFecha.addEventListener("change", () => cargarEntradasCard());
+  btnRefresh?.addEventListener("click", () => cargarEntradasCard());
 }
 function initEntradasTabs() {
   const wrap = document.getElementById("entradas-tabs");
@@ -164,9 +256,11 @@ function initEntradasTabs() {
 
   wrap.querySelectorAll("button[data-eventkey]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      ENTRADAS_EVENT_KEY = btn.getAttribute("data-eventkey");
-      initEntradasTabs(); // re-pinta active state
-      await cargarEntradasCard(); // recarga con el nuevo tipo
+      ENTRADAS_EVENT_KEY = btn.getAttribute("data-eventkey") || "todos";
+      initEntradasTabs();
+      toggleEntradasFecha();           
+      toggleEntradasFiltros();     
+      await cargarEntradasCard();   
     });
   });
 }
@@ -179,7 +273,12 @@ function getSelectedEventType() {
 function getSelectedTabMeta() {
   return EVENT_TABS.find((x) => x.key === ENTRADAS_EVENT_KEY) || EVENT_TABS[0];
 }
-
+function getFiltrosEntradas() {
+  const hDesde = document.getElementById("entradas-hora-desde")?.value || "";
+  const hHasta = document.getElementById("entradas-hora-hasta")?.value || "";
+  const q = (document.getElementById("entradas-buscar")?.value || "").trim();
+  return { hDesde, hHasta, q };
+}
 function setEntradasLoading(isLoading, text = "Cargando…") {
   const overlay = document.getElementById("entradas-loading");
   const label = document.getElementById("entradas-loading-text");
@@ -214,17 +313,28 @@ async function cargarEntradas(fechaISO) {
     `,
   });
 
-  setEntradasLoading(true, "Cargando entradas…");
+  setEntradasLoading(true, "Cargando accesos…");
 
   try {
     const url = new URL(ENTRADAS_ENDPOINT, location.origin);
     url.searchParams.set("fecha", fechaISO);
     url.searchParams.set("user", USER_FILTER);
 
-    url.searchParams.set("tipo", ENTRADAS_EVENT_KEY);
+    // tipo
+    url.searchParams.set("tipo", ENTRADAS_EVENT_KEY); // "todos" | "entrada" | ...
+
+    // filtros extra (solo si NO es "todos")
+    if (!getIsTodos()) {
+      const { hDesde, hHasta, q } = getFiltrosEntradas();
+      if (hDesde) url.searchParams.set("hora_desde", hDesde);
+      if (hHasta) url.searchParams.set("hora_hasta", hHasta);
+      if (q) url.searchParams.set("q", q);
+    } else {
+      // ✅ Para "Todos": limitar 10 (backend ideal), pero también lo recortamos aquí por seguridad
+      url.searchParams.set("limit", "5");
+    }
 
     const res = await fetch(url.toString(), { cache: "no-store" });
-
     const data = await res.json();
 
     const list = data?.list ?? data?.data?.list ?? data?.data ?? [];
@@ -236,7 +346,7 @@ async function cargarEntradas(fechaISO) {
         itemsHtml: `
           <li class="p-4 rounded-xl border border-slate-700/70 bg-slate-900/30 text-slate-300">
             <i class="bi bi-info-circle text-sky-300 mr-2"></i>
-            No hay entradas registradas para esta fecha.
+            No hay registros para estos filtros.
           </li>
         `,
       });
@@ -244,22 +354,51 @@ async function cargarEntradas(fechaISO) {
       return;
     }
 
-    const mapped = list.map((x) => ({
-      id: x.personId ?? "",
+    // ✅ Mapeo: personCode + tipo real opcional (para Todos)
+    let mapped = list.map((x) => ({
+      personCode: x.personCode ?? x.personId ?? "", // fallback temporal si aún no viene
       nombre: x.personName ?? "—",
       hora: formatHora(x.eventTime ?? ""),
       picUri: x.picUri ?? "",
+
+      // En "Todos" es ideal que el backend mande "tipo" o "eventKey"
+      tipo: x.tipo ?? x.eventKey ?? x.eventType ?? null,
     }));
+
+    // ✅ recorte extra por si el backend no aplicó limit
+    if (getIsTodos()) mapped = mapped.slice(0, 10);
+
+    // Etiquetado en "Todos" (si backend manda tipo/eventKey)
+    const tipoMeta = (tipo) => {
+      // Ajusta si tu backend manda strings "entrada|vencida|no_registrado"
+      if (tipo === "entrada" || tipo === 196893) {
+        return { tipoLabel: "Entradas", tipoIcon: "bi bi-check-circle", tipoPill: EVENT_TABS.find(t => t.key==="entrada")?.pill || "" };
+      }
+      if (tipo === "vencida" || tipo === 197384) {
+        return { tipoLabel: "Membresía vencida", tipoIcon: "bi bi-exclamation-triangle", tipoPill: EVENT_TABS.find(t => t.key==="vencida")?.pill || "" };
+      }
+      if (tipo === "no_registrado" || tipo === 197151) {
+        return { tipoLabel: "No registrado", tipoIcon: "bi bi-x-circle", tipoPill: EVENT_TABS.find(t => t.key==="no_registrado")?.pill || "" };
+      }
+      return { tipoLabel: "Evento", tipoIcon: "bi bi-dot", tipoPill: "bg-slate-700/40 text-slate-200 border-slate-500/30" };
+    };
+
+    const html = mapped
+      .map((it) => {
+        const extra = getIsTodos() ? tipoMeta(it.tipo) : {};
+        return renderEntradaItem({ ...it, ...extra });
+      })
+      .join("");
 
     setEntradasUI({
       count: String(mapped.length),
       estado: `Mostrando ${mapped.length}`,
-      itemsHtml: mapped.map(renderEntradaItem).join(""),
+      itemsHtml: html,
     });
+
+    // ✅ Fotos SOLO una vez
     setEntradasLoading(true, "Cargando fotos…");
     await cargarFotosEntradas();
-
-    await cargarFotosEntradas(); // ✅ aquí, justo después de renderizar
     setEntradasLoading(false);
   } catch (e) {
     console.error(e);
@@ -269,7 +408,7 @@ async function cargarEntradas(fechaISO) {
       itemsHtml: `
         <li class="p-4 rounded-xl border border-rose-700/50 bg-rose-900/20 text-rose-200">
           <i class="bi bi-exclamation-triangle mr-2"></i>
-          No se pudieron cargar las entradas. Revisa el endpoint o la respuesta JSON.
+          No se pudieron cargar los accesos. Revisa el endpoint o la respuesta JSON.
         </li>
       `,
     });
@@ -288,9 +427,7 @@ async function cargarEntradasCard() {
   await cargarEntradas(fecha);
 }
 async function cargarFotosEntradas() {
-  const imgs = Array.from(
-    document.querySelectorAll("#entradas-lista img[data-picuri]"),
-  );
+  const imgs = Array.from(document.querySelectorAll("#entradas-lista img[data-picuri]"));
 
   const tasks = imgs.map(async (img) => {
     const uri = img.getAttribute("data-picuri");
@@ -302,11 +439,9 @@ async function cargarFotosEntradas() {
       if (!r.ok) return;
 
       const dataUri = (await r.text()).trim();
-      if (dataUri.startsWith("data:image")) {
-        img.src = dataUri;
-      }
+      if (dataUri.startsWith("data:image")) img.src = dataUri;
     } catch (e) {
-      // no-op
+      /* no-op */
     }
   });
 
@@ -322,6 +457,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Entradas: init listeners + primera carga
   initEntradasCard();
   initEntradasTabs();
+  initEntradasFiltros();   
+  toggleEntradasFiltros();
+  toggleEntradasFecha();
   initEntradasFotoModal();
   await cargarEntradasCard();
 
