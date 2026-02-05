@@ -119,7 +119,7 @@ try {
 }
 
 $nuevoInicioSQL = $fiDT->format("Y-m-d 00:00:00");
-$nuevaFinSQL    = (clone $fiDT)->modify("+1 day")->format("Y-m-d 23:59:59");
+$nuevaFinSQL    = $fiDT->format("Y-m-d 23:59:59");
 
 // Convertir a ISO para la API (igual que en update_user.php)
 $inicioISO = convertirFechaHik($nuevoInicioSQL);
