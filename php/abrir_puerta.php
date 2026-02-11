@@ -1,44 +1,80 @@
 <?php
 require_once 'Visitor.php';
 require_once 'conexion.php';
+require_once 'Encrypter.php';
 session_start();
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
 $config = api_cfg();
 if (!$config) {
   http_response_code(500);
-  echo json_encode(["success"=>false, "error"=>"Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."]);
+  echo json_encode([
+    "success" => false,
+    "error" => "Falta configuración de API. Ve a Dashboard → Configurar API HikCentral."
+  ], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
 $puerta = $_POST['puerta'] ?? 'principal';
+$slot   = isset($_POST['slot']) ? (int)$_POST['slot'] : 0; // 1 o 2 (0 = todas)
 
-/** Lee códigos válidos activos de BD */
+/**
+ * Lee códigos válidos activos (solo "descubierto") y máximo 2
+ * Puerta 1 = primer registro (ORDER BY id ASC)
+ * Puerta 2 = segundo registro
+ */
 $stmt = $conexion->prepare("
   SELECT doorIndexCode
   FROM puertas_codigos_validos
-  WHERE puerta = ? AND activo = 1
-  ORDER BY doorIndexCode+0 ASC
+  WHERE puerta = ?
+    AND activo = 1
+    AND fuente = 'descubierto'
+  ORDER BY id ASC
+  LIMIT 2
 ");
 $stmt->bind_param("s", $puerta);
 $stmt->execute();
 $res = $stmt->get_result();
-$codes = [];
+
+$allCodes = [];
 while ($r = $res->fetch_assoc()) {
-  $codes[] = (string)$r['doorIndexCode'];
+  $allCodes[] = (string)$r['doorIndexCode'];
 }
 $stmt->close();
 
-if (empty($codes)) {
+if (empty($allCodes)) {
   echo json_encode([
     "success" => false,
-    "error"   => "No hay códigos válidos en BD. Ejecuta 'Verificar puertas' primero."
-  ]);
+    "error" => "No hay puertas activas en BD. Ejecuta 'Sincronizar puertas' primero."
+  ], JSON_UNESCAPED_UNICODE);
   exit;
+}
+
+// slot=0 abre todas (compatibilidad)
+// slot=1 abre Puerta 1
+// slot=2 abre Puerta 2 (si existe)
+$codes = $allCodes;
+
+if ($slot === 1) {
+  $codes = [ $allCodes[0] ];
+} elseif ($slot === 2) {
+  if (count($allCodes) < 2) {
+    echo json_encode([
+      "success" => false,
+      "error" => "Puerta 2 no está disponible. Sincroniza puertas."
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+  }
+  $codes = [ $allCodes[1] ];
+} else {
+  $slot = 0;
+  $codes = $allCodes;
 }
 
 /**
  * Encapsula la llamada a /door/doControl
+ * controlType:
+ * 0=remain open, 1=close, 2=open, 3=remain open (según tu doc)
  */
 function doDoorControl($config, array $codes, int $controlType) {
   $urlService = "/artemis/api/acs/v1/door/doControl";
@@ -55,10 +91,12 @@ function doDoorControl($config, array $codes, int $controlType) {
     "Accept: */*"
   ];
 
+  // ✅ Incluye controlDirection=0 (como tu prueba manual)
   $payload = json_encode([
-    "doorIndexCodes" => $codes,
-    "controlType"    => $controlType
-  ]);
+    "doorIndexCodes"   => $codes,
+    "controlType"      => $controlType,
+    "controlDirection" => 0
+  ], JSON_UNESCAPED_UNICODE);
 
   $ch = curl_init();
   curl_setopt_array($ch, [
@@ -69,6 +107,8 @@ function doDoorControl($config, array $codes, int $controlType) {
     CURLOPT_HTTPHEADER     => $headers,
     CURLOPT_POSTFIELDS     => $payload,
   ]);
+
+  // Mantengo tu lógica para no romper tu entorno
   if (stripos($fullUrl, 'https://') !== 0) {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
@@ -87,19 +127,16 @@ function doDoorControl($config, array $codes, int $controlType) {
   ];
 }
 
-/** --- Normalización de resultados --- */
+/** Normaliza "data" a lista de resultados */
 function extractControlResults($decoded) {
   $out = [];
-
   if (!is_array($decoded)) return $out;
 
-  // Caso típico: data es objeto { doorIndexCode, controlResultCode, ... }
   if (isset($decoded['data']) && is_array($decoded['data']) && isset($decoded['data']['controlResultCode'])) {
     $out[] = $decoded['data'];
     return $out;
   }
 
-  // Caso: data es array de objetos [{...}, {...}]
   if (isset($decoded['data']) && is_array($decoded['data']) && array_is_list($decoded['data'])) {
     foreach ($decoded['data'] as $item) {
       if (is_array($item)) $out[] = $item;
@@ -107,7 +144,6 @@ function extractControlResults($decoded) {
     return $out;
   }
 
-  // Caso: data.list es array
   if (isset($decoded['data']['list']) && is_array($decoded['data']['list'])) {
     foreach ($decoded['data']['list'] as $item) {
       if (is_array($item)) $out[] = $item;
@@ -118,15 +154,15 @@ function extractControlResults($decoded) {
   return $out;
 }
 
-/* ===== 1) PRIMERA LLAMADA: ABRIR (controlType = 0) ===== */
-$openResp = doDoorControl($config, $codes, 0);
+/* ===== ABRIR (controlType = 2) ===== */
+$openResp = doDoorControl($config, $codes, 2);
 
 if ($openResp['err']) {
-  echo json_encode(["success"=>false, "error"=>"Error de cURL (abrir): {$openResp['err']}"]);
+  echo json_encode(["success"=>false, "error"=>"Error de cURL (abrir): {$openResp['err']}"], JSON_UNESCAPED_UNICODE);
   exit;
 }
-if ($openResp['httpCode'] !== 200) {
-  echo json_encode(["success"=>false, "error"=>"HTTP {$openResp['httpCode']} (abrir): {$openResp['body']}"]);
+if ((int)$openResp['httpCode'] !== 200) {
+  echo json_encode(["success"=>false, "error"=>"HTTP {$openResp['httpCode']} (abrir): {$openResp['body']}"], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
@@ -140,33 +176,17 @@ $ok = ($apiCode === "0") && array_reduce($results, function($carry, $item){
 }, false);
 
 if ($ok) {
-
-  /* ===== 2) SEGUNDA LLAMADA: CERRAR / STOP (controlType = 1) ===== */
-  // Pequeña pausa opcional, por si el torniquete necesita un instante
-  usleep(150 * 1000); // 150ms
-
-  $closeResp = doDoorControl($config, $codes, 1);
-  $closeInfo = [
-    'sent'     => false,
-    'httpCode' => $closeResp['httpCode'],
-    'err'      => $closeResp['err'] ?: null,
-  ];
-
-  if (!$closeResp['err'] && $closeResp['httpCode'] === 200) {
-    $closeInfo['sent'] = true;
-  }
-
   echo json_encode([
-    "success"       => true,
-    "msg"           => "Puerta abierta",
-    "puerta"        => $puerta,
-    "usando"        => $codes,
-    "autoClose"     => $closeInfo  // info de la segunda llamada
-  ]);
+    "success" => true,
+    "msg"     => "Puerta abierta",
+    "puerta"  => $puerta,
+    "slot"    => $slot,     // 0 = todas, 1 = puerta 1, 2 = puerta 2
+    "usando"  => $codes     // códigos realmente usados
+  ], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
-// Si no pudimos confirmar éxito al abrir, devolvemos info de depuración
+// Si no abrió, devolvemos info útil
 $compactResults = array_map(function($i){
   return [
     'doorIndexCode'      => $i['doorIndexCode']      ?? null,
@@ -180,6 +200,8 @@ echo json_encode([
   "success" => false,
   "error"   => "No se pudo abrir.",
   "code"    => $apiCode,
+  "slot"    => $slot,
+  "usando"  => $codes,
   "results" => $compactResults,
   "desc"    => $firstDesc
-]);
+], JSON_UNESCAPED_UNICODE);

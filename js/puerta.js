@@ -27,7 +27,7 @@ async function postForm(url, obj) {
 }
 
 /* =========================================================================
-   Verificar puertas (independiente del FAB)
+   Sincronizar puertas (acsDoorList -> BD)  [ANTES: "Verificar puertas"]
    ====================================================================== */
 let busyVerify = false;
 
@@ -35,64 +35,72 @@ async function handleVerifyClick(e) {
   if (e) e.preventDefault();
   if (busyVerify) return;
 
-  const { value: params } = await Swal.fire({
-    title: "Verificar puertas",
+  // Usa swalCard si existe; si no, cae a swalInfo/Swal
+  const Card = window.swalCard || window.swalInfo || Swal;
+
+  const r = await Card.fire({
+    title: "Sincronizar puertas",
     html: `
-      <div class="text-left">
-        <label class="block mb-1 text-sm">Puerta (alias):</label>
-        <input id="v_puerta" value="${DEFAULT_PUERTA}" class="swal2-input" placeholder="principal">
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block mb-1 text-sm">Inicio</label>
-            <input id="v_start" type="number" value="1" class="swal2-input">
-          </div>
-          <div>
-            <label class="block mb-1 text-sm">Fin</label>
-            <input id="v_end" type="number" value="40" class="swal2-input">
-          </div>
+      <div class="text-slate-300 text-sm leading-relaxed">
+        Esto consultará <b>acsDoorList</b> y guardará automáticamente las puertas como:
+        <b>Puerta 1</b> y <b>Puerta 2</b>.
+        <div class="mt-2 text-slate-400">
+          (Se actualizarán los doorIndexCode en tu base de datos)
         </div>
-        <label class="mt-2 flex items-center gap-2 text-sm">
-          <input id="v_replace" type="checkbox">
-          <span>Reemplazar existentes (desactivar anteriores)</span>
-        </label>
       </div>
     `,
+    icon: "question",
     showCancelButton: true,
-    confirmButtonText: "Verificar",
-    preConfirm: () => {
-      const puerta  = (document.getElementById("v_puerta").value || "").trim() || DEFAULT_PUERTA;
-      const start   = parseInt(document.getElementById("v_start").value || "1", 10);
-      const end     = parseInt(document.getElementById("v_end").value   || "40", 10);
-      const replace = document.getElementById("v_replace").checked ? "1" : "0";
-      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
-        Swal.showValidationMessage("El rango es inválido.");
-        return false;
-      }
-      return { puerta, start, end, replace };
-    },
+    confirmButtonText: "Sí, sincronizar",
+    cancelButtonText: "Cancelar",
+    reverseButtons: true,
+    focusCancel: true,
   });
 
-  if (!params) return;
+  if (!r.isConfirmed) return;
 
   try {
     busyVerify = true;
-    S.info.fire({ title: "Verificando...", didOpen: () => Swal.showLoading() });
 
-    const { data } = await postForm("php/verificar_puertas.php", {
-      puerta: params.puerta,
-      start: String(params.start),
-      end: String(params.end),
-      replace: params.replace
+    // Spinner / loading
+    Card.fire({
+      title: "Sincronizando…",
+      html: `<span class="text-slate-300 text-sm">Consultando puertas y guardando en base de datos</span>`,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => Swal.showLoading(),
     });
 
-    if (data && data.success) {
-      const list = (data.codes || []).map((c) => `<code>${c}</code>`).join(", ") || "(ninguno)";
-      S.success.fire("Listo", `Códigos válidos guardados para <b>${data.puerta}</b>: ${list}`);
-    } else {
-      S.error.fire("Error", (data && (data.error || data.message)) || "No fue posible verificar");
+    // ✅ Ya no pedimos alias; el backend asigna "Puerta 1" y "Puerta 2"
+    // ✅ replace lo mandamos en 1 (desactiva las que ya no existan)
+    const { ok, data } = await postForm("php/sync_puertas.php", {
+      replace: "1",
+    });
+
+    if (!ok || !data || !data.success) {
+      throw new Error((data && (data.error || data.message)) || "No fue posible sincronizar");
     }
-  } catch {
-    S.error.fire("Error", "Fallo al conectar con el servidor");
+
+    // Puedes mostrar los doorIndexCode que regreses del backend (si los mandas)
+    const codes = Array.isArray(data.codes) ? data.codes : [];
+    const detalle = codes.length
+      ? `<div class="mt-2 text-slate-300 text-sm">DoorIndexCodes: ${codes.map(c => `<code>${c}</code>`).join(", ")}</div>`
+      : "";
+
+    (window.swalSuccess || Swal).fire({
+      title: "Listo ✅",
+      html: `
+        <div class="text-slate-200">
+          Se guardaron correctamente <b>Puerta 1</b> y <b>Puerta 2</b>.
+          ${detalle}
+        </div>
+      `,
+      icon: "success",
+    });
+
+  } catch (err) {
+    (window.swalError || Swal).fire("Error", err.message || "Fallo al conectar con el servidor", "error");
   } finally {
     busyVerify = false;
   }
@@ -139,31 +147,54 @@ window.verificarPuertas = handleVerifyClick;
 /* =========================================================================
    Abrir puerta (usa códigos guardados en BD) — soporta dos IDs
    ====================================================================== */
+/* =========================================================================
+   Abrir puerta (Puerta 1 / Puerta 2)
+   ====================================================================== */
+/* =========================================================================
+   Abrir puerta (Puerta 1 / Puerta 2)
+   ====================================================================== */
 (function abrirPuertaModule() {
-  const btnAbrir = $("#btn-abrir-puerta") || $("#card-abrir-puerta");
-  if (!btnAbrir) return;
+  const btn1 = $("#btn-abrir-puerta-1");
+  const btn2 = $("#btn-abrir-puerta-2");
+
+  if (!btn1 && !btn2) return;
 
   let busy = false;
 
-  on(btnAbrir, "click", async (e) => {
-    e.preventDefault();
+  async function abrir(slot) {
     if (busy) return;
     busy = true;
 
+    // Bloquea ambos mientras se procesa
+    [btn1, btn2].forEach(b => { if (b) b.disabled = true; });
+
     try {
-      S.success.fire({ title: "Abriendo puerta...", didOpen: () => Swal.showLoading() });
+      S.info.fire({
+        title: `Abriendo Puerta ${slot}...`,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => Swal.showLoading()
+      });
 
-      const { data } = await postForm("php/abrir_puerta.php", { puerta: DEFAULT_PUERTA });
+      const { ok, data } = await postForm("php/abrir_puerta.php", {
+        puerta: DEFAULT_PUERTA,
+        slot: String(slot) // <<<<<< CLAVE
+      });
 
-      if (data && data.success) {
-        S.success.fire("Listo", "La puerta ha sido abierta");
-      } else {
-        S.error.fire("Error", (data && (data.error || data.message)) || "No se pudo abrir la puerta");
+      if (!ok || !data || !data.success) {
+        throw new Error((data && (data.error || data.message)) || "No se pudo abrir la puerta");
       }
-    } catch {
-      S.error.fire("Error", "Fallo al conectar con el servidor");
+
+      S.success.fire("Listo", `Puerta ${slot} abierta correctamente`);
+    } catch (err) {
+      S.error.fire("Error", err.message || "Fallo al conectar con el servidor");
     } finally {
       busy = false;
+      // Re-habilita (si btn2 estaba deshabilitado por no existir puerta 2, tu lógica debe volver a setearlo)
+      [btn1, btn2].forEach(b => { if (b) b.disabled = false; });
     }
-  });
+  }
+
+  on(btn1, "click", (e) => { e.preventDefault(); e.stopPropagation(); abrir(1); });
+  on(btn2, "click", (e) => { e.preventDefault(); e.stopPropagation(); abrir(2); });
 })();

@@ -19,6 +19,10 @@ $q         = trim($_GET['q'] ?? '');      // buscar por personCode
 $limit     = (int)($_GET['limit'] ?? 0);  // para "todos" default 10
 $debug     = isset($_GET['debug']) && $_GET['debug'] == '1';
 
+// ✅ alias de puerta (por defecto principal)
+$puertaAlias = trim($_GET['puerta'] ?? 'principal');
+if ($puertaAlias === '') $puertaAlias = 'principal';
+
 // (Opcional) override directo: ?eventType=196893
 $eventTypeParam = $_GET['eventType'] ?? null;
 
@@ -50,8 +54,7 @@ if (!$config) {
 // ===============================
 // Config HikCentral
 // ===============================
-$DOOR_INDEXCODE = "3";
-$TZ             = "-06:00";
+$TZ = "-06:00";
 
 // ✅ Tipos permitidos (incluye 197633)
 $ALLOWED_EVENT_TYPES = [196893, 197384, 197633, 197151];
@@ -118,6 +121,52 @@ if ($horaDesde && $horaHasta) {
 }
 
 // ===============================
+// ✅ Obtener doorIndexCodes desde BD
+// ===============================
+function getDoorIndexCodesFromDb(mysqli $conexion, string $puertaAlias): array {
+  $codes = [];
+
+  $sql = "
+    SELECT doorIndexCode
+    FROM puertas_codigos_validos
+    WHERE puerta = ?
+      AND activo = 1
+      AND fuente = 'descubierto'
+    ORDER BY id ASC
+    LIMIT 10
+  ";
+  $stmt = $conexion->prepare($sql);
+  if (!$stmt) return [];
+
+  $stmt->bind_param("s", $puertaAlias);
+  $stmt->execute();
+  $rs = $stmt->get_result();
+  while ($row = $rs->fetch_assoc()) {
+    $c = trim((string)($row['doorIndexCode'] ?? ''));
+    if ($c !== '') $codes[] = $c;
+  }
+  $stmt->close();
+
+  // unique + reindex
+  $codes = array_values(array_unique($codes));
+
+  return $codes;
+}
+
+$doorIndexCodes = getDoorIndexCodesFromDb($conexion, $puertaAlias);
+
+// Si no hay puertas activas descubiertas, forzamos a que el admin sincronice
+if (count($doorIndexCodes) === 0) {
+  http_response_code(409);
+  echo json_encode([
+    "ok" => false,
+    "error" => "No hay puertas activas (descubierto) para '{$puertaAlias}'. Sincroniza puertas en el Dashboard.",
+    "puerta" => $puertaAlias
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
+}
+
+// ===============================
 // Filtrar por personId (user global)
 // ===============================
 $personIdFilter = null;
@@ -143,6 +192,7 @@ try {
         if (!empty($row['personId'])) {
           $personIdFilter = (string)$row['personId'];
         }
+        $stmt->close();
       }
     }
   }
@@ -279,11 +329,12 @@ try {
   $payloadBase = [
     "startTime" => $startTime,
     "endTime"   => $endTime,
-    "doorIndexCodes" => [(string)$DOOR_INDEXCODE],
+    // ✅ ahora sale de BD
+    "doorIndexCodes" => $doorIndexCodes,
     "pageNo"    => 1,
     "pageSize"  => 50,
     "temperatureStatus" => -1,
-    "maskStatus" => -1,
+    "wearMaskStatus"    => -1,
   ];
 
   // filtro por usuario (personId)
@@ -296,14 +347,13 @@ try {
   $qPersonIds = [];
 
   if ($q !== '' && !$personIdFilter) {
-    // Si el filtro global ya fija personId, no tiene sentido buscar por q externo.
-    // (si quieres que q también aplique cuando user=me, dímelo y lo ajusto)
     $qPersonIds = findPersonIdsByPersonCode($config, $q, $debug ? $debugCalls : null);
 
-    // si no encontró nadie, regresamos vacío rápido
     if (count($qPersonIds) === 0) {
       echo json_encode([
         "ok" => true,
+        "puerta" => $puertaAlias,
+        "doorIndexCodes" => $doorIndexCodes,
         "fecha" => $fecha,
         "tipo" => $tipo,
         "eventTypes" => array_map('intval', $eventTypes),
@@ -319,24 +369,17 @@ try {
   if ($limit <= 0) {
     $limit = ($tipo === 'todos') ? 5 : 50;
   }
-  // cap razonable
   if ($limit > 200) $limit = 200;
 
-  // juntar resultados de múltiples eventTypes
   $all = [];
-
-  // cache de personCode por personId
   $personCodeCache = [];
 
   foreach ($eventTypes as $et) {
     $payload = $payloadBase;
     $payload["eventType"] = (int)$et;
 
-    // si viene q (personCode) y tenemos personIds: pedimos por cada personId (reduce resultados)
     if (count($qPersonIds) > 0) {
-      // Para no hacer 50 llamadas, limitamos a 10 personIds por búsqueda
-      $maxIds = 5;
-      $ids = array_slice($qPersonIds, 0, $maxIds);
+      $ids = array_slice($qPersonIds, 0, 5);
 
       foreach ($ids as $pid) {
         $payload["personId"] = (string)$pid;
@@ -358,25 +401,26 @@ try {
         if (!is_array($list)) $list = [];
 
         foreach ($list as $x) {
-          $pid2 = (string)($x["personId"] ?? "");
-          $pcode = (string)($x["personCode"] ?? ""); // si existiera directo
+          $pid2  = (string)($x["personId"] ?? "");
+          $pcode = (string)($x["personCode"] ?? "");
           if ($pcode === '' && $pid2 !== '') {
             $pcode = resolvePersonCodeByPersonId($config, $pid2, $personCodeCache, $debug ? $debugCalls : null);
           }
 
           $all[] = [
-            "personId"   => $pid2,
-            "personCode" => $pcode,
-            "personName" => $x["personName"] ?? "",
-            "eventTime"  => $x["eventTime"]  ?? ($x["deviceTime"] ?? ""),
-            "picUri"     => $x["picUri"]     ?? "",
-            "eventType"  => (int)$et,
-            "eventKey"   => $eventTypeToKey((int)$et),
+            "doorIndexCode" => (string)($x["doorIndexCode"] ?? ""),
+            "doorName"      => (string)($x["doorName"] ?? ""),
+            "personId"      => $pid2,
+            "personCode"    => $pcode,
+            "personName"    => $x["personName"] ?? "",
+            "eventTime"     => $x["eventTime"] ?? ($x["deviceTime"] ?? ""),
+            "picUri"        => $x["picUri"] ?? "",
+            "eventType"     => (int)$et,
+            "eventKey"      => $eventTypeToKey((int)$et),
           ];
         }
       }
     } else {
-      // normal (sin q)
       $hc = null; $raw = null;
       $json = hikPost($config, $urlServiceEvents, $payload, $hc, $raw);
 
@@ -394,20 +438,22 @@ try {
       if (!is_array($list)) $list = [];
 
       foreach ($list as $x) {
-        $pid2 = (string)($x["personId"] ?? "");
-        $pcode = (string)($x["personCode"] ?? ""); // si existiera directo
+        $pid2  = (string)($x["personId"] ?? "");
+        $pcode = (string)($x["personCode"] ?? "");
         if ($pcode === '' && $pid2 !== '') {
           $pcode = resolvePersonCodeByPersonId($config, $pid2, $personCodeCache, $debug ? $debugCalls : null);
         }
 
         $all[] = [
-          "personId"   => $pid2,
-          "personCode" => $pcode,
-          "personName" => $x["personName"] ?? "",
-          "eventTime"  => $x["eventTime"]  ?? ($x["deviceTime"] ?? ""),
-          "picUri"     => $x["picUri"]     ?? "",
-          "eventType"  => (int)$et,
-          "eventKey"   => $eventTypeToKey((int)$et),
+          "doorIndexCode" => (string)($x["doorIndexCode"] ?? ""),
+          "doorName"      => (string)($x["doorName"] ?? ""),
+          "personId"      => $pid2,
+          "personCode"    => $pcode,
+          "personName"    => $x["personName"] ?? "",
+          "eventTime"     => $x["eventTime"] ?? ($x["deviceTime"] ?? ""),
+          "picUri"        => $x["picUri"] ?? "",
+          "eventType"     => (int)$et,
+          "eventKey"      => $eventTypeToKey((int)$et),
         ];
       }
     }
@@ -415,16 +461,19 @@ try {
 
   // ordenar por eventTime desc
   usort($all, function($a, $b) {
-    return strcmp($b['eventTime'] ?? '', $a['eventTime'] ?? '');
+    $ta = isset($a['eventTime']) ? strtotime($a['eventTime']) : 0;
+    $tb = isset($b['eventTime']) ? strtotime($b['eventTime']) : 0;
+    return $tb <=> $ta;
   });
 
-  // aplicar limit final
   if ($limit > 0 && count($all) > $limit) {
     $all = array_slice($all, 0, $limit);
   }
 
   $out = [
     "ok" => true,
+    "puerta" => $puertaAlias,
+    "doorIndexCodes" => $doorIndexCodes,
     "fecha" => $fecha,
     "tipo" => $tipo,
     "eventTypes" => array_map('intval', $eventTypes),

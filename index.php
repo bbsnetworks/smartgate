@@ -356,13 +356,31 @@
             <small id="kpi-ventas-det" class="text-slate-400"></small>
           </article>
           <!-- Abrir puerta -->
-          <article id="card-abrir-puerta"
-            class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow cursor-pointer hover:bg-slate-700/70 transition">
+          <article id="card-abrir-puerta" class="rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-slate-300">Abrir puerta</h3>
               <i class="bi bi-door-open icon-20 text-green-400"></i>
             </div>
-            <p class="mt-3 text-sm text-slate-400">Click para enviar la orden.</p>
+
+            <p class="mt-3 text-sm text-slate-400">
+              Selecciona qué puerta deseas abrir.
+            </p>
+
+            <div class="mt-4 flex items-center gap-2">
+              <button id="btn-abrir-puerta-1" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow
+             disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="bi bi-door-open mr-1"></i> Puerta 1
+              </button>
+
+              <button id="btn-abrir-puerta-2" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white shadow
+             disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="bi bi-door-open mr-1"></i> Puerta 2
+              </button>
+            </div>
+
+            <small id="puertas-hint" class="mt-3 block text-xs text-slate-400">
+              —
+            </small>
           </article>
           <!-- Cafetería: nuevo pedido (táctil) -->
           <!-- 
