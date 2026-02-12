@@ -296,8 +296,16 @@
               <h3 class="font-semibold text-slate-300">Clientes NO activos</h3>
               <i class="bi bi-person-x icon-20 text-rose-400"></i>
             </div>
+
             <p id="kpi-inactivos" class="mt-3 text-4xl font-extrabold">—</p>
-            <small class="text-slate-400">fin &lt; hoy o sin fecha</small>
+            <small class="text-slate-400 block">fin &lt; hoy o sin fecha</small>
+
+            <div class="mt-4">
+              <button id="btn-ver-inactivos" class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow
+             disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="bi bi-eye mr-1"></i> Ver clientes
+              </button>
+            </div>
           </article>
 
           <!-- Aniversarios -->

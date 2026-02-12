@@ -50,7 +50,9 @@ function horaRedondeadaActual() {
 }
 
 function horaMasUna(hhmm) {
-  const [hh, mm] = String(hhmm || "00:00").split(":").map(Number);
+  const [hh, mm] = String(hhmm || "00:00")
+    .split(":")
+    .map(Number);
   const h = (Number.isFinite(hh) ? hh : 0) + 1;
   return `${pad2(h % 24)}:${pad2(Number.isFinite(mm) ? mm : 0)}`;
 }
@@ -116,7 +118,15 @@ function formatHora(raw) {
   return s;
 }
 
-function renderEntradaItem({ personCode, nombre, hora, picUri, tipoLabel, tipoIcon, tipoPill }) {
+function renderEntradaItem({
+  personCode,
+  nombre,
+  hora,
+  picUri,
+  tipoLabel,
+  tipoIcon,
+  tipoPill,
+}) {
   const safeCode = escHtml(personCode ?? "—");
   const safeNombre = escHtml(nombre ?? "—");
   const safeHora = escHtml(hora ?? "—");
@@ -124,7 +134,11 @@ function renderEntradaItem({ personCode, nombre, hora, picUri, tipoLabel, tipoIc
   // En "Todos" mostramos la etiqueta real del evento de cada registro.
   // En tabs específicas, usamos la del tab seleccionado.
   const tab = getIsTodos()
-    ? { label: tipoLabel || "Evento", icon: tipoIcon || "bi bi-dot", pill: tipoPill || "bg-slate-700/40 text-slate-200 border-slate-500/30" }
+    ? {
+        label: tipoLabel || "Evento",
+        icon: tipoIcon || "bi bi-dot",
+        pill: tipoPill || "bg-slate-700/40 text-slate-200 border-slate-500/30",
+      }
     : getSelectedTabMeta();
 
   const img = picUri
@@ -220,7 +234,7 @@ function toggleEntradasFecha() {
   if (!wrap || !inputFecha) return;
 
   if (getIsTodos()) {
-    inputFecha.classList.add("hidden");   // ❌ fecha
+    inputFecha.classList.add("hidden"); // ❌ fecha
   } else {
     inputFecha.classList.remove("hidden"); // ✅ fecha
   }
@@ -258,9 +272,9 @@ function initEntradasTabs() {
     btn.addEventListener("click", async () => {
       ENTRADAS_EVENT_KEY = btn.getAttribute("data-eventkey") || "todos";
       initEntradasTabs();
-      toggleEntradasFecha();           
-      toggleEntradasFiltros();     
-      await cargarEntradasCard();   
+      toggleEntradasFecha();
+      toggleEntradasFiltros();
+      await cargarEntradasCard();
     });
   });
 }
@@ -372,15 +386,32 @@ async function cargarEntradas(fechaISO) {
     const tipoMeta = (tipo) => {
       // Ajusta si tu backend manda strings "entrada|vencida|no_registrado"
       if (tipo === "entrada" || tipo === 196893) {
-        return { tipoLabel: "Entradas", tipoIcon: "bi bi-check-circle", tipoPill: EVENT_TABS.find(t => t.key==="entrada")?.pill || "" };
+        return {
+          tipoLabel: "Entradas",
+          tipoIcon: "bi bi-check-circle",
+          tipoPill: EVENT_TABS.find((t) => t.key === "entrada")?.pill || "",
+        };
       }
       if (tipo === "vencida" || tipo === 197384) {
-        return { tipoLabel: "Membresía vencida", tipoIcon: "bi bi-exclamation-triangle", tipoPill: EVENT_TABS.find(t => t.key==="vencida")?.pill || "" };
+        return {
+          tipoLabel: "Membresía vencida",
+          tipoIcon: "bi bi-exclamation-triangle",
+          tipoPill: EVENT_TABS.find((t) => t.key === "vencida")?.pill || "",
+        };
       }
       if (tipo === "no_registrado" || tipo === 197151) {
-        return { tipoLabel: "No registrado", tipoIcon: "bi bi-x-circle", tipoPill: EVENT_TABS.find(t => t.key==="no_registrado")?.pill || "" };
+        return {
+          tipoLabel: "No registrado",
+          tipoIcon: "bi bi-x-circle",
+          tipoPill:
+            EVENT_TABS.find((t) => t.key === "no_registrado")?.pill || "",
+        };
       }
-      return { tipoLabel: "Evento", tipoIcon: "bi bi-dot", tipoPill: "bg-slate-700/40 text-slate-200 border-slate-500/30" };
+      return {
+        tipoLabel: "Evento",
+        tipoIcon: "bi bi-dot",
+        tipoPill: "bg-slate-700/40 text-slate-200 border-slate-500/30",
+      };
     };
 
     const html = mapped
@@ -427,7 +458,9 @@ async function cargarEntradasCard() {
   await cargarEntradas(fecha);
 }
 async function cargarFotosEntradas() {
-  const imgs = Array.from(document.querySelectorAll("#entradas-lista img[data-picuri]"));
+  const imgs = Array.from(
+    document.querySelectorAll("#entradas-lista img[data-picuri]"),
+  );
 
   const tasks = imgs.map(async (img) => {
     const uri = img.getAttribute("data-picuri");
@@ -454,10 +487,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 2) KPIs + gráficas con el filtro actual
   await cargarTodo();
+
+  // ✅ Botón: ver clientes inactivos (modal)
+  const btnInactivos = document.getElementById("btn-ver-inactivos");
+  btnInactivos?.addEventListener("click", () => abrirModalClientesInactivos());
   // Entradas: init listeners + primera carga
   initEntradasCard();
   initEntradasTabs();
-  initEntradasFiltros();   
+  initEntradasFiltros();
   toggleEntradasFiltros();
   toggleEntradasFecha();
   initEntradasFotoModal();
@@ -1191,4 +1228,305 @@ function initEntradasFotoModal() {
       padding: "1rem",
     });
   });
+}
+// ===============================
+// Clientes inactivos - Modal
+// ===============================
+function rangoInactivosLabel(val) {
+  switch (val) {
+    case "2m":
+      return "2 meses";
+    case "5m":
+      return "5 meses";
+    case "1y":
+      return "1 año";
+    case "1y+":
+      return "Más de 1 año";
+    default:
+      return "2 meses";
+  }
+}
+
+function getRangoInactivosDef() {
+  return "2m"; // ✅ default solicitado
+}
+
+function renderInactivosSkeleton() {
+  return `
+    <div class="space-y-2">
+      ${Array.from({ length: 6 })
+        .map(
+          () => `
+        <div class="p-3 rounded-xl border border-slate-700/70 bg-slate-900/30">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="h-4 w-2/3 bg-slate-700/60 rounded animate-pulse"></div>
+              <div class="h-3 w-1/2 bg-slate-700/40 rounded mt-2 animate-pulse"></div>
+            </div>
+            <div class="h-8 w-20 bg-slate-700/50 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+      `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderInactivosVacio(rangoVal) {
+  const label = rangoInactivosLabel(rangoVal);
+  return `
+    <div class="p-3 rounded-xl border border-slate-700/70 bg-slate-900/30 text-slate-300">
+      <i class="bi bi-info-circle text-sky-300 mr-2"></i>
+      Sin resultados para <span class="text-slate-100 font-semibold">${label}</span>.
+    </div>
+  `;
+}
+
+async function fetchInactivosMock({ rango, user }) {
+  const url = new URL("smartgate/php/clientes_inactivos.php", location.origin);
+  url.searchParams.set("rango", rango);
+
+  // ✅ manda tal cual el filtro global
+  // RECOMENDADO: cuando USER_FILTER === "me" envía el ID numérico (CURRENT_UID)
+  if (user === "me") url.searchParams.set("user", String(CURRENT_UID));
+  else url.searchParams.set("user", String(user || "all"));
+
+  url.searchParams.set("limit", "150");
+
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "Error al cargar inactivos");
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+function renderInactivosList(items) {
+  // items esperado (propuesta para backend):
+  // [{ idcliente, nombre, telefono, ultimo_pago, dias_sin_pagar, motivo, fin, sin_pagos }]
+  if (!Array.isArray(items) || items.length === 0) return "";
+
+  return `
+    <div class="space-y-2">
+      ${items
+        .map((x) => {
+          const nombre = escHtml(x.nombre || "—");
+          const tel = escHtml(x.telefono || "");
+          const fin = x.ultimo_fin ? escHtml(x.ultimo_fin) : null;
+          const alta = x.fecha_ingreso
+            ? escHtml(x.fecha_ingreso)
+            : x.inicio
+              ? escHtml(x.inicio)
+              : "—";
+          const dias = Number(x.dias_sin_pagar || 0);
+          const badge = x.sin_pagos
+            ? `<span class="text-[11px] px-2 py-1 rounded-full border bg-amber-500/10 text-amber-200 border-amber-500/30">
+               <i class="bi bi-exclamation-circle mr-1"></i>Sin pagos
+             </span>`
+            : `<span class="text-[11px] px-2 py-1 rounded-full border bg-rose-500/10 text-rose-200 border-rose-500/30">
+               <i class="bi bi-clock-history mr-1"></i>${Number.isFinite(dias) ? `${dias} días` : "—"}
+             </span>`;
+
+          return `
+          <div class="p-3 rounded-xl border border-slate-700/70 bg-slate-900/30">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-slate-100 truncate">${nombre}</div>
+                <div class="text-xs text-slate-400 mt-1">
+                  ${tel ? `Tel: <span class="text-slate-200">${tel}</span> · ` : ""}
+                  ${
+                    fin
+                      ? `Venció: <span class="text-slate-200">${fin}</span>`
+                      : `Alta: <span class="text-slate-200">${alta}</span>`
+                  }
+                </div>
+              </div>
+              <div class="shrink-0">${badge}</div>
+              <button
+  type="button"
+  class="btn-del-inactivo px-3 py-2 rounded-lg border border-rose-700/50 bg-rose-900/20 text-rose-200 hover:bg-rose-900/35"
+  data-personid="${Number(x.personId || 0)}"
+  data-nombre="${escAttr(x.nombre || "")}"
+  title="Eliminar cliente">
+  <i class="bi bi-trash"></i>
+</button>
+            </div>
+          </div>
+        `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+async function cargarInactivosEnModal({ rango }) {
+  const wrap = document.getElementById("inactivos-lista-wrap");
+  const estado = document.getElementById("inactivos-estado");
+  if (!wrap) return;
+
+  // UI loading
+  wrap.innerHTML = renderInactivosSkeleton();
+  if (estado) estado.textContent = "Cargando…";
+
+  try {
+    // ✅ MOCK por ahora (front)
+    const items = await fetchInactivosMock({ rango, user: USER_FILTER });
+
+    if (!items || items.length === 0) {
+      wrap.innerHTML = renderInactivosVacio(rango);
+      if (estado) estado.textContent = "Sin resultados";
+      return;
+    }
+
+    wrap.innerHTML = renderInactivosList(items);
+    if (estado) estado.textContent = `Mostrando ${items.length}`;
+  } catch (e) {
+    console.error(e);
+    wrap.innerHTML = `
+      <div class="p-3 rounded-xl border border-rose-700/50 bg-rose-900/20 text-rose-200">
+        <i class="bi bi-exclamation-triangle mr-2"></i>
+        No se pudo cargar la lista. Revisa consola / endpoint.
+      </div>
+    `;
+    if (estado) estado.textContent = "Error";
+  }
+}
+
+function abrirModalClientesInactivos() {
+  const rangoDefault = getRangoInactivosDef();
+
+  swalcard.fire({
+    title: "Clientes inactivos",
+    html: `
+      <div class="text-left space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-sm text-slate-300">
+              Basado en último pago o clientes sin pagos con alta antigua.
+            </div>
+            <div class="text-xs text-slate-500 mt-1">
+              Filtro usuario: <span class="text-slate-200 font-semibold">${escHtml(String(USER_FILTER))}</span>
+            </div>
+          </div>
+
+          <div class="shrink-0">
+            <label class="text-xs text-slate-400 block mb-1">Rango</label>
+            <select id="inactivos-rango" class="bg-slate-900/40 border border-slate-700/70 rounded-lg px-3 py-2 text-sm text-slate-200">
+              <option value="2m" selected>2 meses</option>
+              <option value="5m">5 meses</option>
+              <option value="1y">1 año</option>
+              <option value="1y+">Más de 1 año</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <span id="inactivos-estado">—</span>
+          <button type="button" id="inactivos-refresh"
+            class="px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800/80 border border-slate-700/70 text-slate-200">
+            <i class="bi bi-arrow-clockwise mr-1"></i>Actualizar
+          </button>
+        </div>
+
+        <div id="inactivos-lista-wrap" class="max-h-96 overflow-auto pr-1 scrollbar-custom">
+          ${renderInactivosSkeleton()}
+        </div>
+      </div>
+    `,
+    confirmButtonText: "Cerrar",
+    showCancelButton: false,
+    didOpen: async () => {
+      const sel = document.getElementById("inactivos-rango");
+      const btn = document.getElementById("inactivos-refresh");
+      const wrap = document.getElementById("inactivos-lista-wrap");
+      // Carga inicial
+      await cargarInactivosEnModal({ rango: rangoDefault });
+
+      // Cambio de rango
+      sel?.addEventListener("change", async () => {
+        await cargarInactivosEnModal({ rango: sel.value });
+      });
+
+      // Refresh manual
+      btn?.addEventListener("click", async () => {
+        await cargarInactivosEnModal({ rango: sel?.value || rangoDefault });
+      });
+      wrap?.addEventListener("click", async (ev) => {
+        const btn = ev.target.closest(".btn-del-inactivo");
+        if (!btn) return;
+
+        const personId = Number(btn.dataset.personid || 0);
+        const nombre = btn.dataset.nombre || "";
+
+        if (!personId) {
+          swalError.fire(
+            "Error",
+            "No se encontró personId del cliente",
+            "error",
+          );
+          return;
+        }
+
+        await eliminarClienteSmartgate({ personId, nombre });
+      });
+    },
+  });
+}
+async function eliminarClienteSmartgate({ personId, nombre }) {
+  // Confirmación
+  const conf = await swalInfo.fire({
+    title: "¿Eliminar cliente?",
+    html: `
+      <p class="text-slate-300">
+        Se eliminará del <b>Sistema</b> a.<br>
+        <span class="text-rose-200 font-semibold">${escHtml(nombre || "")}</span>
+      </p>
+      <p class="text-xs text-slate-400 mt-2">Esta acción no se puede deshacer pero los pagos hechos por el usuario se mantendran.</p>
+    `,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Sí, eliminar",
+    cancelButtonText: "Cancelar",
+  });
+
+  if (!conf.isConfirmed) return;
+
+  try {
+    swalInfo.fire({
+      title: "Eliminando…",
+      didOpen: () => Swal.showLoading(),
+      showConfirmButton: false,
+      allowOutsideClick: false,
+    });
+
+    const r = await fetch("php/delete_user.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personId }),
+    });
+
+    const d = await r.json();
+
+    if (d.code === 0 || d.code === "0") {
+      await swalSuccess.fire(
+        "Eliminado",
+        d.msg || "Cliente eliminado correctamente.",
+        "success",
+      );
+
+      // 1) refrescar lista del modal (opcional pero recomendado)
+      const sel = document.getElementById("inactivos-rango");
+      await cargarInactivosEnModal({ rango: sel?.value || "2m" });
+
+      // 2) ✅ recargar dashboard completo
+      await cargarTodo();
+    } else {
+      await swalError.fire(
+        "Error",
+        d.error || d.msg || "No se pudo eliminar",
+        "error",
+      );
+    }
+  } catch (e) {
+    await swalError.fire("Error", "Fallo al conectar con el servidor", "error");
+  }
 }
