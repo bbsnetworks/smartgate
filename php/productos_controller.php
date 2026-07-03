@@ -7,7 +7,13 @@ header("Content-Type: application/json");
 function current_user_id() {
   return isset($_SESSION['usuario']['id']) ? (int)$_SESSION['usuario']['id'] : null;
 }
+// === Producto reservado: Visita ===
+function esCodigoReservadoVisita($codigo) {
+  $codigo = trim((string)$codigo);
 
+  // Bloquea 1, 01, 001, 0001, etc.
+  return ctype_digit($codigo) && (int)$codigo === 1;
+}
 // === Utilidad: aplicar movimiento atómico (MySQLi) ===
 function aplicarMovimientoInventario($conexion, $producto_id, $tipo, $cantidad, $nota = '', $usuario_id = null) {
   // signo
@@ -175,7 +181,14 @@ function agregarProducto($conexion) {
   if (!$codigo || !$nombre || !$descripcion || $precio < 0 || $stock_inicial < 0 || $categoria_id <= 0) {
     echo json_encode(["success"=>false,"error"=>"Todos los campos son obligatorios y deben ser válidos"]); return;
   }
-
+    
+  if (esCodigoReservadoVisita($codigo)) {
+    echo json_encode([
+      "success" => false,
+      "error" => "El código 1 está reservado exclusivamente para Visita. No puedes usar 1, 01, 001 o 0001 para otro producto."
+    ]);
+    return;
+  }
   // Código único
   $stmt = $conexion->prepare("SELECT id FROM productos WHERE codigo = ?");
   $stmt->bind_param("s", $codigo);
@@ -289,6 +302,34 @@ function editarProducto($conexion) {
 
   if ($id <= 0) { echo json_encode(["success"=>false,"error"=>"ID inválido"]); return; }
   if ($codigo === '') { echo json_encode(["success"=>false,"error"=>"Código requerido"]); return; }
+
+$stmtActual = $conexion->prepare("SELECT id, codigo, nombre FROM productos WHERE id = ? LIMIT 1");
+$stmtActual->bind_param("i", $id);
+$stmtActual->execute();
+$productoActual = $stmtActual->get_result()->fetch_assoc();
+$stmtActual->close();
+
+if (!$productoActual) {
+  echo json_encode(["success"=>false,"error"=>"Producto no encontrado"]);
+  return;
+}
+
+if (esCodigoReservadoVisita($productoActual['codigo']) && trim((string)$codigo) !== '1') {
+  echo json_encode([
+    "success" => false,
+    "error" => "El producto Visita debe conservar siempre el código 1."
+  ]);
+  return;
+}
+
+
+if (!esCodigoReservadoVisita($productoActual['codigo']) && esCodigoReservadoVisita($codigo)) {
+  echo json_encode([
+    "success" => false,
+    "error" => "El código 1 está reservado exclusivamente para Visita. No puedes usar 1, 01, 001 o 0001 para otro producto."
+  ]);
+  return;
+}
   if ($nombre === '' || strlen($nombre) > 100) { echo json_encode(["success"=>false,"error"=>"Nombre inválido"]); return; }
   if ($descripcion === '' || strlen($descripcion) > 1000) { echo json_encode(["success"=>false,"error"=>"Descripción inválida"]); return; }
   if ($precio < 0) { echo json_encode(["success"=>false,"error"=>"Precio debe ser mayor o igual a 0"]); return; }
@@ -368,6 +409,10 @@ function eliminarProducto($conexion) {
     $stmt->execute();
     $p = $stmt->get_result()->fetch_assoc();
     if (!$p) throw new Exception("Producto no encontrado");
+    
+    if (esCodigoReservadoVisita($p['codigo'])) {
+      throw new Exception("El producto Visita no puede eliminarse porque el código 1 está reservado por el sistema.");
+    }
 
     $stock = (float)$p['stock'];
     if ($stock > 0) {

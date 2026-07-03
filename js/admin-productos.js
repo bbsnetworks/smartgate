@@ -9,6 +9,8 @@ const limit = 10;
 let paginaActual = 1;
 let totalRegistros = 0;
 let modoBusqueda = false;
+const CODIGO_VISITA = "1";
+const NOMBRE_PRODUCTO_VISITA = "visita";
 
 function cargarProductos(pagina = 1) {
   const busqueda = document.getElementById("busquedaProducto").value.trim().toLowerCase();
@@ -177,6 +179,9 @@ function abrirModalAgregar() {
         const proveedor_id = proveedor_id_str ? parseInt(proveedor_id_str, 10) : null;
 
         if (!codigo || !/^\d+$/.test(codigo)) return Swal.showValidationMessage("El código debe ser numérico.");
+        if (codigo === CODIGO_VISITA) {
+          return Swal.showValidationMessage("El código 1 está reservado exclusivamente para Visita.");
+        }
         if (!nombre) return Swal.showValidationMessage("El nombre es obligatorio.");
         if (!descripcion) return Swal.showValidationMessage("La descripción es obligatoria.");
         if (isNaN(precio) || precio < 0) return Swal.showValidationMessage("Precio de venta inválido.");
@@ -353,7 +358,17 @@ function ejecutarEdicionProducto(id) {
       html: `
         <div class="grid text-left text-sm text-white">
           <label class="font-semibold mx-auto">Código de Barras:</label>
-          <input id="codigo" class="swal2-input mx-auto w-3/4" value="${producto.codigo||''}">
+            <input 
+              id="codigo" 
+              class="swal2-input mx-auto w-3/4" 
+              value="${producto.codigo || ''}"
+              ${String(producto.codigo) === CODIGO_VISITA ? 'readonly' : ''}
+              >
+              ${String(producto.codigo) === CODIGO_VISITA ? `
+                <div class="mx-auto w-3/4 mt-1 text-xs text-yellow-300 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2">
+                  Este producto es especial: el código 1 está reservado para Visita y no puede modificarse.
+                </div>
+              ` : ''}
 
           <label class="font-semibold mx-auto mt-2">Nombre del Producto:</label>
           <input id="nombre" class="swal2-input mx-auto w-3/4" value="${producto.nombre||''}">
@@ -402,6 +417,14 @@ function ejecutarEdicionProducto(id) {
         const proveedor_id = provSel ? parseInt(provSel,10) : null;
 
         if (!codigo || !/^\d+$/.test(codigo)) return Swal.showValidationMessage("Código inválido.");
+        const codigoOriginal = String(producto.codigo || "").trim();
+        if (codigoOriginal === CODIGO_VISITA && codigo !== CODIGO_VISITA) {
+          return Swal.showValidationMessage("El código 1 está reservado para Visita y no puede modificarse.");
+        }
+
+        if (codigoOriginal !== CODIGO_VISITA && codigo === CODIGO_VISITA) {
+          return Swal.showValidationMessage("El código 1 está reservado exclusivamente para Visita.");
+        }
         if (!nombre) return Swal.showValidationMessage("El nombre es obligatorio.");
         if (!descripcion) return Swal.showValidationMessage("La descripción es obligatoria.");
         if (isNaN(precio) || precio < 0) return Swal.showValidationMessage("Precio inválido.");

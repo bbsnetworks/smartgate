@@ -488,6 +488,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 2) KPIs + gráficas con el filtro actual
   await cargarTodo();
 
+    initPagosFinanciadosDashboard();
+
   // ✅ Botón: ver clientes inactivos (modal)
   const btnInactivos = document.getElementById("btn-ver-inactivos");
   btnInactivos?.addEventListener("click", () => abrirModalClientesInactivos());
@@ -871,6 +873,9 @@ async function cargarTodo() {
   await cargarCajaCard();
   await cargarMovimientosCard();
   await cargarEntradasCard();
+
+  // Ventas financiadas / próximos pagos
+  await cargarPagosFinanciadosCard();
 }
 
 // === Caja ===
@@ -1528,5 +1533,416 @@ async function eliminarClienteSmartgate({ personId, nombre }) {
     }
   } catch (e) {
     await swalError.fire("Error", "Fallo al conectar con el servidor", "error");
+  }
+}
+/* =========================================================
+   Ventas financiadas - Card dashboard
+========================================================= */
+
+const FINANCIADAS_DASH_ENDPOINT = "php/ventas_financiadas_controller.php";
+
+function vfMoneyDash(value) {
+  const n = Number(value || 0);
+
+  return n.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  });
+}
+
+function vfFechaDash(value) {
+  if (!value) return "—";
+
+  const d = new Date(String(value) + "T00:00:00");
+
+  if (Number.isNaN(d.getTime())) {
+    return value;
+  }
+
+  return d.toLocaleDateString("es-MX", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function vfDiasParaVencer(fecha) {
+  if (!fecha) return null;
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  const venc = new Date(String(fecha) + "T00:00:00");
+  venc.setHours(0, 0, 0, 0);
+
+  if (Number.isNaN(venc.getTime())) return null;
+
+  const diffMs = venc.getTime() - hoy.getTime();
+  return Math.round(diffMs / 86400000);
+}
+
+function vfEtiquetaTiempo(fecha) {
+  const dias = vfDiasParaVencer(fecha);
+
+  if (dias === null) return "Sin fecha";
+
+  if (dias < 0) {
+    return `Vencida hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? "" : "s"}`;
+  }
+
+  if (dias === 0) {
+    return "Vence hoy";
+  }
+
+  if (dias === 1) {
+    return "Vence mañana";
+  }
+
+  return `Vence en ${dias} días`;
+}
+
+function vfClaseTiempo(fecha) {
+  const dias = vfDiasParaVencer(fecha);
+
+  if (dias === null) {
+    return "text-slate-400";
+  }
+
+  if (dias < 0) {
+    return "text-red-300";
+  }
+
+  if (dias <= 3) {
+    return "text-amber-300";
+  }
+
+  return "text-sky-300";
+}
+
+async function cargarPagosFinanciadosCard() {
+  const lista = document.getElementById("lista-pagos-financiados");
+  const count = document.getElementById("pagos-financiados-count");
+  const disponible = document.getElementById("pagos-financiados-disponible");
+  const vencidos = document.getElementById("pagos-financiados-vencidos");
+  const footer = document.getElementById("pagos-financiados-footer");
+
+  // Si la card no existe en esta vista, no hacemos nada.
+  if (!lista) return;
+
+  lista.innerHTML = `
+    <li class="rounded-xl border border-slate-700 bg-slate-900/50 p-3 text-sm text-slate-400 text-center">
+      Cargando pagos próximos...
+    </li>
+  `;
+
+  try {
+    const body = new FormData();
+    body.append("accion", "listar_pagos_proximos_dashboard");
+
+    const r = await fetch(FINANCIADAS_DASH_ENDPOINT, {
+      method: "POST",
+      body,
+      cache: "no-store",
+    });
+
+    const data = await r.json();
+
+    if (!data.success) {
+      throw new Error(data.detalle || data.error || "No se pudo cargar la card.");
+    }
+
+    const pagos = Array.isArray(data.pagos) ? data.pagos : [];
+    const resumen = data.resumen || {};
+
+    if (count) count.textContent = resumen.total_items ?? pagos.length;
+    if (disponible) disponible.textContent = vfMoneyDash(resumen.total_disponible || 0);
+    if (vencidos) vencidos.textContent = resumen.vencidos || 0;
+
+    if (footer) {
+      footer.textContent = pagos.length
+  ? `Pagos dentro de ±5 días`
+  : "Sin pagos próximos en ±5 días";
+    }
+
+    renderPagosFinanciadosCard(pagos);
+
+  } catch (e) {
+    console.error("Pagos financiados dashboard:", e);
+
+    if (count) count.textContent = "—";
+    if (disponible) disponible.textContent = "—";
+    if (vencidos) vencidos.textContent = "—";
+
+    lista.innerHTML = `
+      <li class="rounded-xl border border-red-700/50 bg-red-900/20 p-3 text-sm text-red-200">
+        <i class="bi bi-exclamation-triangle mr-1"></i>
+        No se pudieron cargar los pagos próximos.
+      </li>
+    `;
+
+    if (footer) footer.textContent = "Error al cargar";
+  }
+}
+
+function renderPagosFinanciadosCard(pagos) {
+  const lista = document.getElementById("lista-pagos-financiados");
+
+  if (!lista) return;
+
+  if (!pagos.length) {
+    lista.innerHTML = `
+      <li class="rounded-xl border border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-400 text-center">
+        <i class="bi bi-check2-circle text-emerald-300 mr-1"></i>
+        No hay pagos disponibles por ahora.
+      </li>
+    `;
+    return;
+  }
+
+  lista.innerHTML = pagos.map((pago) => {
+    const dias = vfDiasParaVencer(pago.fecha_vencimiento);
+    const esVencido = dias !== null && dias < 0;
+
+    const payload = {
+      venta_id: Number(pago.venta_id || 0),
+      cuota_id: Number(pago.cuota_id || 0),
+      folio: pago.folio || "",
+      cliente_nombre: pago.cliente_nombre || "",
+      numero_cuota: Number(pago.numero_cuota || 0),
+      fecha_vencimiento: pago.fecha_vencimiento || "",
+      saldo_cuota: Number(pago.saldo_cuota || 0),
+    };
+
+    return `
+      <li class="rounded-xl border ${esVencido ? "border-red-500/40 bg-red-950/20" : "border-slate-700 bg-slate-900/50"} p-3 hover:bg-slate-800/50 transition">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-semibold text-white truncate">
+              ${escHtml(pago.cliente_nombre || "Sin cliente")}
+            </p>
+
+            <p class="text-xs text-slate-400 mt-1">
+              ${escHtml(pago.folio || "—")} · Cuota ${escHtml(pago.numero_cuota || "—")}
+            </p>
+
+            <p class="text-xs mt-1 ${vfClaseTiempo(pago.fecha_vencimiento)}">
+              <i class="bi bi-calendar2-week mr-1"></i>
+              ${vfEtiquetaTiempo(pago.fecha_vencimiento)} · ${vfFechaDash(pago.fecha_vencimiento)}
+            </p>
+          </div>
+
+          <div class="text-right shrink-0">
+            <p class="font-extrabold text-white">
+              ${vfMoneyDash(pago.saldo_cuota)}
+            </p>
+
+            <button type="button"
+            class="btn-abono-financiado-dash mt-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
+            data-venta-id="${Number(pago.venta_id || 0)}"
+            data-cuota-id="${Number(pago.cuota_id || 0)}"
+            data-folio="${escAttrDash(pago.folio || '')}"
+            data-cliente="${escAttrDash(pago.cliente_nombre || '')}"
+            data-numero-cuota="${Number(pago.numero_cuota || 0)}"
+            data-fecha="${escAttrDash(pago.fecha_vencimiento || '')}"
+            data-saldo="${Number(pago.saldo_cuota || 0)}">
+            Abonar
+          </button>
+          </div>
+        </div>
+      </li>
+    `;
+  }).join("");
+}
+
+function initPagosFinanciadosDashboard() {
+  const lista = document.getElementById("lista-pagos-financiados");
+
+  lista?.addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".btn-abono-financiado-dash");
+  if (!btn) return;
+
+  const pago = {
+    venta_id: Number(btn.dataset.ventaId || 0),
+    cuota_id: Number(btn.dataset.cuotaId || 0),
+    folio: btn.dataset.folio || "",
+    cliente_nombre: btn.dataset.cliente || "",
+    numero_cuota: Number(btn.dataset.numeroCuota || 0),
+    fecha_vencimiento: btn.dataset.fecha || "",
+    saldo_cuota: Number(btn.dataset.saldo || 0),
+  };
+
+  abrirModalAbonoFinanciadoDashboard(pago);
+});
+
+  document
+    .getElementById("btn-cerrar-abono-financiado-dashboard")
+    ?.addEventListener("click", cerrarModalAbonoFinanciadoDashboard);
+
+  document
+    .getElementById("btn-cancelar-abono-financiado-dashboard")
+    ?.addEventListener("click", cerrarModalAbonoFinanciadoDashboard);
+
+  document
+    .getElementById("btn-guardar-abono-financiado-dashboard")
+    ?.addEventListener("click", guardarAbonoFinanciadoDashboard);
+}
+
+function abrirModalAbonoFinanciadoDashboard(pago) {
+  const ventaId = Number(pago.venta_id || 0);
+  const cuotaId = Number(pago.cuota_id || 0);
+  const saldoMax = Number(pago.saldo_cuota || 0);
+
+  if (!ventaId || !cuotaId || saldoMax <= 0) {
+    swalError.fire("Error", "El pago seleccionado no es válido.", "error");
+    return;
+  }
+
+  const modal = document.getElementById("modal-abono-financiado-dashboard");
+  const inputVenta = document.getElementById("dash-abono-venta-id");
+  const inputCuota = document.getElementById("dash-abono-cuota-id");
+  const inputSaldo = document.getElementById("dash-abono-saldo-max");
+  const inputMonto = document.getElementById("dash-abono-monto");
+  const inputMetodo = document.getElementById("dash-abono-metodo");
+  const inputReferencia = document.getElementById("dash-abono-referencia");
+  const inputObservaciones = document.getElementById("dash-abono-observaciones");
+  const sub = document.getElementById("dash-abono-subtitulo");
+  const saldoTexto = document.getElementById("dash-abono-saldo-texto");
+
+  if (
+    !modal ||
+    !inputVenta ||
+    !inputCuota ||
+    !inputSaldo ||
+    !inputMonto ||
+    !inputMetodo ||
+    !inputReferencia ||
+    !inputObservaciones
+  ) {
+    swalError.fire(
+      "Modal incompleto",
+      "Falta agregar el modal de abono financiado en dashboard.php o algún ID no coincide.",
+      "error"
+    );
+    return;
+  }
+
+  inputVenta.value = ventaId;
+  inputCuota.value = cuotaId;
+  inputSaldo.value = saldoMax.toFixed(2);
+
+  inputMonto.value = saldoMax.toFixed(2);
+  inputMonto.max = saldoMax.toFixed(2);
+
+  inputMetodo.value = "efectivo";
+  inputReferencia.value = "";
+  inputObservaciones.value = "";
+
+  if (sub) {
+    sub.textContent = `${pago.folio || ""} · ${pago.cliente_nombre || ""} · Cuota ${pago.numero_cuota || ""}`;
+  }
+
+  if (saldoTexto) {
+    saldoTexto.textContent = vfMoneyDash(saldoMax);
+  }
+
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+}
+
+function escAttrDash(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+function cerrarModalAbonoFinanciadoDashboard() {
+  const modal = document.getElementById("modal-abono-financiado-dashboard");
+
+  modal?.classList.add("hidden");
+  modal?.classList.remove("flex");
+}
+
+async function guardarAbonoFinanciadoDashboard() {
+  const ventaId = Number(document.getElementById("dash-abono-venta-id")?.value || 0);
+  const cuotaId = Number(document.getElementById("dash-abono-cuota-id")?.value || 0);
+  const saldoMax = Number(document.getElementById("dash-abono-saldo-max")?.value || 0);
+  const monto = Number(document.getElementById("dash-abono-monto")?.value || 0);
+
+  const metodo = document.getElementById("dash-abono-metodo")?.value || "efectivo";
+  const referencia = document.getElementById("dash-abono-referencia")?.value || "";
+  const observaciones = document.getElementById("dash-abono-observaciones")?.value || "";
+
+  if (!ventaId || !cuotaId) {
+    swalError.fire("Error", "No se encontró la venta o cuota.", "error");
+    return;
+  }
+
+  if (monto <= 0) {
+    swalError.fire("Monto inválido", "El abono debe ser mayor a 0.", "warning");
+    return;
+  }
+
+  if (monto > saldoMax) {
+    swalError.fire(
+      "Abono mayor al saldo",
+      `No puedes registrar más de ${vfMoneyDash(saldoMax)} en esta cuota.`,
+      "warning"
+    );
+    return;
+  }
+
+  const btn = document.getElementById("btn-guardar-abono-financiado-dashboard");
+  const oldHtml = btn ? btn.innerHTML : "";
+
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = "Guardando...";
+    }
+
+    const body = new FormData();
+    body.append("accion", "registrar_abono");
+    body.append("venta_id", String(ventaId));
+    body.append("cuota_id", String(cuotaId));
+    body.append("monto", String(monto));
+    body.append("metodo_pago", metodo);
+    body.append("referencia", referencia);
+    body.append("observaciones", observaciones);
+
+    const r = await fetch(FINANCIADAS_DASH_ENDPOINT, {
+      method: "POST",
+      body,
+    });
+
+    const data = await r.json();
+
+    if (!data.success) {
+      throw new Error(data.detalle || data.error || "No se pudo registrar el abono.");
+    }
+
+    await swalSuccess.fire(
+      "Abono registrado",
+      "El pago se guardó correctamente.",
+      "success"
+    );
+
+    cerrarModalAbonoFinanciadoDashboard();
+
+    await cargarPagosFinanciadosCard();
+
+    // Refrescamos KPIs por si después agregamos totales relacionados.
+    if (typeof cargarKPIs === "function") {
+      await cargarKPIs();
+    }
+
+  } catch (e) {
+    swalError.fire("Error", e.message || "No se pudo registrar el abono.", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+    }
   }
 }

@@ -28,7 +28,7 @@ async function buscarReportes() {
       return swalError.fire(
         "Falta fecha",
         "Selecciona una fecha para el reporte por día.",
-        "warning"
+        "warning",
       );
   } else if (tipo === "mes") {
     fecha = document.getElementById("fecha_mes").value;
@@ -45,7 +45,7 @@ async function buscarReportes() {
       return swalError.fire(
         "Falta rango",
         "Selecciona ambas fechas del rango.",
-        "warning"
+        "warning",
       );
   }
 
@@ -59,7 +59,7 @@ async function buscarReportes() {
   try {
     const params = new URLSearchParams({ usuario, tipo, fecha, inicio, fin });
     const response = await fetch(
-      `../php/obtener_reportes.php?${params.toString()}`
+      `../php/obtener_reportes.php?${params.toString()}`,
     );
     const data = await response.json();
 
@@ -69,7 +69,7 @@ async function buscarReportes() {
       return swalError.fire(
         "Error",
         data.error || "No se pudo obtener la información.",
-        "error"
+        "error",
       );
     }
 
@@ -88,14 +88,14 @@ async function buscarReportes() {
       `$${parseFloat(total_pagos).toFixed(2)}`,
       "bi-currency-dollar",
       "text-blue-600",
-      "bg-sky-100"
+      "bg-sky-100",
     );
     container.innerHTML += crearCard(
       "Suscripciones Registradas",
       cantidad_pagos,
       "bi-people-fill",
       "text-blue-500",
-      "bg-sky-100"
+      "bg-sky-100",
     );
 
     container.innerHTML += crearCard(
@@ -103,14 +103,14 @@ async function buscarReportes() {
       `$${parseFloat(total_productos).toFixed(2)}`,
       "bi-cart-check",
       "text-green-600",
-      "bg-stone-200"
+      "bg-stone-200",
     );
     container.innerHTML += crearCard(
       "Ventas Registradas",
       cantidad_productos,
       "bi-boxes",
       "text-green-500",
-      "bg-stone-200"
+      "bg-stone-200",
     );
     // ✅ VISITAS (separadas, no mezcladas con productos)
     container.innerHTML += crearCard(
@@ -118,7 +118,7 @@ async function buscarReportes() {
       parseInt(visitas_cantidad || 0, 10),
       "bi-person-walking",
       "text-purple-600",
-      "bg-purple-100"
+      "bg-purple-100",
     );
 
     container.innerHTML += crearCard(
@@ -126,14 +126,14 @@ async function buscarReportes() {
       `$${parseFloat(visitas_total || 0).toFixed(2)}`,
       "bi-ticket-perforated",
       "text-purple-500",
-      "bg-purple-100"
+      "bg-purple-100",
     );
     container.innerHTML += crearCard(
       "Total General",
       `$${parseFloat(total_general).toFixed(2)}`,
       "bi-coin",
       "text-indigo-600",
-      "bg-green-200"
+      "bg-green-200",
     );
 
     // ===== Movimientos de caja (desde DETALLE) =====
@@ -145,7 +145,7 @@ async function buscarReportes() {
 
       try {
         const detRes = await fetch(
-          `../php/obtener_reportes_detalle.php?${params.toString()}`
+          `../php/obtener_reportes_detalle.php?${params.toString()}`,
         );
         const det = await detRes.json();
 
@@ -163,7 +163,7 @@ async function buscarReportes() {
       container.innerHTML += crearCard(
         "Movimientos de caja",
         `<div class="text-xl font-bold text-gray-800">$${netoCaja.toFixed(
-          2
+          2,
         )}</div>
      <div class="text-sm text-gray-600 mt-1">
        Ingresos: $${(cajaIngresos || 0).toFixed(2)} ·
@@ -172,7 +172,7 @@ async function buscarReportes() {
      </div>`,
         "bi-arrow-left-right",
         "text-amber-600",
-        "bg-amber-100"
+        "bg-amber-100",
       );
     }
 
@@ -180,7 +180,7 @@ async function buscarReportes() {
       await renderCaja({ usuario, tipo, fecha, inicio, fin });
     }
 
-    agregarBotonPDF();
+    agregarBotonesAccionReporte();
   } catch (error) {
     console.error(error);
     swalError.fire("Error", "No se pudo conectar con el servidor.", "error");
@@ -218,24 +218,53 @@ function mostrarFiltros() {
 }
 
 // Agrega este botón justo debajo del div con ID "reporteContainer"
-function agregarBotonPDF() {
+function agregarBotonesAccionReporte() {
   const container = document.getElementById("reporteContainer");
 
-  const card = document.createElement("div");
-  card.className =
-    "bg-white rounded-xl shadow text-2xl text-center flex items-center justify-center";
+  // Evita duplicados si ya existen
+  const existente = document.getElementById("accionesReporteWrap");
+  if (existente) existente.remove();
 
-  const btn = document.createElement("button");
-  btn.textContent = "📄 Generar PDF";
-  btn.className =
-    "bg-green-600 h-full w-full hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold shadow";
-  btn.onclick = generarPDFReporte;
+  const wrap = document.createElement("div");
+  wrap.id = "accionesReporteWrap";
+  wrap.className =
+    "col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6";
 
-  card.appendChild(btn);
-  container.appendChild(card);
+  // Card PDF
+  const cardPDF = document.createElement("div");
+  cardPDF.className =
+    "rounded-xl shadow text-2xl text-center flex items-center justify-center overflow-hidden bg-white";
+
+  const btnPDF = document.createElement("button");
+  btnPDF.type = "button";
+  btnPDF.textContent = "📄 Generar PDF";
+  btnPDF.className =
+    "bg-green-600 h-full w-full hover:bg-green-700 text-white px-6 py-5 rounded-xl font-semibold shadow transition";
+  btnPDF.onclick = generarPDFReporte;
+
+  cardPDF.appendChild(btnPDF);
+
+  // Card Correo
+  const cardCorreo = document.createElement("div");
+  cardCorreo.className =
+    "rounded-xl shadow text-2xl text-center flex items-center justify-center overflow-hidden bg-white";
+
+  const btnCorreo = document.createElement("button");
+  btnCorreo.type = "button";
+  btnCorreo.textContent = "✉️ Enviar por correo";
+  btnCorreo.className =
+    "bg-blue-600 h-full w-full hover:bg-blue-700 text-white px-6 py-5 rounded-xl font-semibold shadow transition";
+  btnCorreo.onclick = abrirModalCorreoReporte; // por ahora solo placeholder
+
+  cardCorreo.appendChild(btnCorreo);
+
+  wrap.appendChild(cardPDF);
+  wrap.appendChild(cardCorreo);
+
+  container.appendChild(wrap);
 }
 
-async function generarPDFReporte() {
+async function construirPDFReporte() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
@@ -266,17 +295,12 @@ async function generarPDFReporte() {
 
   // Trae TODO desde detalle (pagos, ventas, métodos, caja)
   const res = await fetch(
-    `../php/obtener_reportes_detalle.php?${params.toString()}`
+    `../php/obtener_reportes_detalle.php?${params.toString()}`,
   );
   const data = await res.json();
 
   if (!data.success) {
-    swalError.fire(
-      "Error",
-      data.error || "No se pudo generar el PDF.",
-      "error"
-    );
-    return;
+    throw new Error(data.error || "No se pudo generar el PDF.");
   }
 
   // =========================
@@ -301,15 +325,15 @@ async function generarPDFReporte() {
   // 3) Paleta + utilidades
   // =========================
   const PALETTE = {
-    title: [45, 55, 72], // slate-700
-    text: [31, 41, 55], // slate-800
-    mute: [107, 114, 128], // gray-500
-    box: [248, 250, 252], // slate-50
-    stroke: [203, 213, 225], // slate-300
-    sub: [2, 132, 199], // sky-600
-    sub2: [234, 88, 12], // orange-600
-    ok: [16, 185, 129], // emerald-500
-    bandBg: [15, 23, 42], // slate-900
+    title: [45, 55, 72],
+    text: [31, 41, 55],
+    mute: [107, 114, 128],
+    box: [248, 250, 252],
+    stroke: [203, 213, 225],
+    sub: [2, 132, 199],
+    sub2: [234, 88, 12],
+    ok: [16, 185, 129],
+    bandBg: [15, 23, 42],
     bandTx: [255, 255, 255],
   };
 
@@ -330,7 +354,7 @@ async function generarPDFReporte() {
     label,
     amount,
     rightBound,
-    color = PALETTE.text
+    color = PALETTE.text,
   ) {
     doc.setTextColor(...color);
     doc.setFont("helvetica", "normal");
@@ -420,10 +444,9 @@ async function generarPDFReporte() {
       ];
       textoRango = `Mes: ${meses[parseInt(mes, 10) - 1]} de ${anio}`;
     } else if (tipo === "anio") textoRango = `Año: ${fecha}`;
-    else if (tipo === "rango")
-      textoRango = `Desde: ${formatearFecha(inicio)}  hasta: ${formatearFecha(
-        fin
-      )}`;
+    else if (tipo === "rango") {
+      textoRango = `Desde: ${formatearFecha(inicio)}  hasta: ${formatearFecha(fin)}`;
+    }
 
     doc.setTextColor(80, 80, 80);
     doc.text(textoRango, 10, y);
@@ -503,7 +526,7 @@ async function generarPDFReporte() {
       doc.text(
         `• Venta #${v.venta_id} por ${v.usuario} el ${fechaFormat}`,
         12,
-        y
+        y,
       );
       y += 6;
 
@@ -549,10 +572,8 @@ async function generarPDFReporte() {
 
   // =========================
   // 7) Resumen de Totales
-  //    + Card de CAJA adentro
   // =========================
   const renderTotales = () => {
-    // Ventas por método
     const totalVentasPorMetodo = { efectivo: 0, tarjeta: 0, transferencia: 0 };
 
     (data.ventas || []).forEach((v) => {
@@ -582,7 +603,6 @@ async function generarPDFReporte() {
     const rightX = leftX + cardW + gap;
     const cardH = 56;
 
-    // --- Card SUSCRIPCIONES ---
     y = ensureSpace(doc, y, cardH + 12);
     doc.setDrawColor(...PALETTE.stroke);
     doc.setFillColor(...PALETTE.box);
@@ -602,7 +622,7 @@ async function generarPDFReporte() {
       yC,
       "Efectivo",
       totalSuscripcionesPorMetodo.efectivo || 0,
-      leftRight
+      leftRight,
     );
     yC = lineAmount(
       doc,
@@ -610,7 +630,7 @@ async function generarPDFReporte() {
       yC,
       "Tarjeta",
       totalSuscripcionesPorMetodo.tarjeta || 0,
-      leftRight
+      leftRight,
     );
     yC = lineAmount(
       doc,
@@ -618,7 +638,7 @@ async function generarPDFReporte() {
       yC,
       "Transferencia",
       totalSuscripcionesPorMetodo.transferencia || 0,
-      leftRight
+      leftRight,
     );
 
     doc.setFont("helvetica", "bold");
@@ -627,10 +647,9 @@ async function generarPDFReporte() {
     doc.text(
       `TOTAL: ${fmtMoney(totalSuscripciones)}`,
       leftX + 6,
-      y + cardH - 6
+      y + cardH - 6,
     );
 
-    // --- Card VENTAS ---
     doc.setDrawColor(...PALETTE.stroke);
     doc.setFillColor(...PALETTE.box);
     doc.roundedRect(rightX, y, cardW, cardH, 3, 3, "FD");
@@ -651,7 +670,7 @@ async function generarPDFReporte() {
       yR,
       "Transferencia",
       ventaTransferencia,
-      rightRight
+      rightRight,
     );
 
     doc.setFont("helvetica", "bold");
@@ -659,55 +678,49 @@ async function generarPDFReporte() {
     doc.setFontSize(11);
     doc.text(`TOTAL: ${fmtMoney(totalVentasCalc)}`, rightX + 6, y + cardH - 6);
 
-    // Debajo de las 2 cards
     y += cardH + 10;
-// --- Card VISITAS (compacta y consistente) ---
-const visitasTotal = Number(data.visitas_total || 0);
-const visitasCantidad = Number(data.visitas_cantidad || 0);
-const visitasMetodo = data.visitas_por_metodo || {};
 
-const vEfe = Number(visitasMetodo.efectivo || 0);
-const vTar = Number(visitasMetodo.tarjeta || 0);
-const vTra = Number(visitasMetodo.transferencia || 0);
+    const visitasTotal = Number(data.visitas_total || 0);
+    const visitasCantidad = Number(data.visitas_cantidad || 0);
+    const visitasMetodo = data.visitas_por_metodo || {};
 
-const boxXv = 10, boxWv = 190, boxHv = 34; // ✅ altura correcta
-y = ensureSpace(doc, y, boxHv + 10);
+    const vEfe = Number(visitasMetodo.efectivo || 0);
+    const vTar = Number(visitasMetodo.tarjeta || 0);
+    const vTra = Number(visitasMetodo.transferencia || 0);
 
-doc.setDrawColor(...PALETTE.stroke);
-doc.setFillColor(250, 245, 255);
-doc.roundedRect(boxXv, y, boxWv, boxHv, 3, 3, "FD");
+    const boxXv = 10,
+      boxWv = 190,
+      boxHv = 34;
+    y = ensureSpace(doc, y, boxHv + 10);
 
-// Título
-doc.setFont("helvetica", "bold");
-doc.setFontSize(11);
-doc.setTextColor(124, 58, 237);
-doc.text("VISITAS (código 1)", boxXv + 6, y + 9);
+    doc.setDrawColor(...PALETTE.stroke);
+    doc.setFillColor(250, 245, 255);
+    doc.roundedRect(boxXv, y, boxWv, boxHv, 3, 3, "FD");
 
-// Cantidad (lado izquierdo)
-doc.setFont("helvetica", "bold");
-doc.setFontSize(16);
-doc.setTextColor(...PALETTE.title);
-doc.text(String(visitasCantidad), boxXv + 6, y + 22);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(124, 58, 237);
+    doc.text("VISITAS (código 1)", boxXv + 6, y + 9);
 
-// Total (lado derecho)
-doc.setFont("helvetica", "bold");
-doc.setFontSize(14);
-doc.setTextColor(...PALETTE.ok);
-const totalTxt = fmtMoney(visitasTotal);
-doc.text(totalTxt, boxXv + boxWv - 6 - doc.getTextWidth(totalTxt), y + 22);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(...PALETTE.title);
+    doc.text(String(visitasCantidad), boxXv + 6, y + 22);
 
-// Mini desglose (una sola línea, no estorba)
-doc.setFont("helvetica", "normal");
-doc.setFontSize(9);
-doc.setTextColor(...PALETTE.mute);
-const mini = `Efe: ${fmtMoney(vEfe)}  ·  Tar: ${fmtMoney(vTar)}  ·  Trans: ${fmtMoney(vTra)}`;
-doc.text(mini, boxXv + 6, y + 31);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(...PALETTE.ok);
+    const totalTxt = fmtMoney(visitasTotal);
+    doc.text(totalTxt, boxXv + boxWv - 6 - doc.getTextWidth(totalTxt), y + 22);
 
-y += boxHv + 10;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...PALETTE.mute);
+    const mini = `Efe: ${fmtMoney(vEfe)}  ·  Tar: ${fmtMoney(vTar)}  ·  Trans: ${fmtMoney(vTra)}`;
+    doc.text(mini, boxXv + 6, y + 31);
 
+    y += boxHv + 10;
 
-
-    // --- Card CAJA (solo si es día) ---
     if (tipo === "dia" && String(usuarioId) !== "todos") {
       const efectivoEsperado =
         (totalSuscripcionesPorMetodo.efectivo || 0) + (ventaEfectivo || 0);
@@ -717,7 +730,7 @@ y += boxHv + 10;
 
       const boxX = 10,
         boxW = 190,
-        boxH = 56; // más alta
+        boxH = 56;
       y = ensureSpace(doc, y, boxH + 10);
 
       doc.setDrawColor(...PALETTE.stroke);
@@ -738,7 +751,7 @@ y += boxHv + 10;
         yK,
         "Total General efectivo",
         efectivoEsperado,
-        rb
+        rb,
       );
       yK = lineAmount(
         doc,
@@ -746,7 +759,7 @@ y += boxHv + 10;
         yK,
         "Movimientos (ingresos - egresos)",
         netoMovs,
-        rb
+        rb,
       );
       yK = lineAmount(doc, boxX + 8, yK, "Caja", dejado, rb);
 
@@ -765,7 +778,6 @@ y += boxHv + 10;
       y += boxH + 10;
     }
 
-    // --- Banda TOTAL GENERAL ---
     y = ensureSpace(doc, y, 18);
     doc.setFillColor(...PALETTE.bandBg);
     doc.rect(10, y, 190, 14, "F");
@@ -774,10 +786,9 @@ y += boxHv + 10;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
 
-    let totalGeneral = totalVentasCalc + totalSuscripciones + (Number(data.visitas_total || 0));
+    let totalGeneral =
+      totalVentasCalc + totalSuscripciones + Number(data.visitas_total || 0);
 
-    // SOLO cuando es por día y un usuario específico:
-    // sumar movimientos netos + lo dejado en caja
     if (tipo === "dia" && String(usuarioId) !== "todos") {
       const netoMovs = parseFloat(data.caja_neto || 0);
       const dejado = Number(document.getElementById("monto_caja")?.value || 0);
@@ -791,7 +802,6 @@ y += boxHv + 10;
 
     y += 22;
 
-    // Nota
     const nota =
       "Nota: Los usuarios o productos eliminados aparecen como 'eliminado' porque ya no existen en la base de datos.";
     const lines = doc.splitTextToSize(nota, 188);
@@ -806,7 +816,7 @@ y += boxHv + 10;
   };
 
   // =========================
-  // 8) Detalle movimientos caja (al final)
+  // 8) Detalle movimientos caja
   // =========================
   const renderMovimientosCajaPDF = () => {
     const movs = data.movimientos_caja || [];
@@ -826,21 +836,20 @@ y += boxHv + 10;
       const tipoMov = String(m.tipo || "").toUpperCase();
       const monto = Number(m.monto || 0);
 
-      // Soporta fecha/hora separados o fecha full
       const fechaTxt = m.fecha
         ? formatearFechaLocal(m.fecha)
         : m.fecha_full
-        ? formatearFechaLocal(m.fecha_full)
-        : "";
+          ? formatearFechaLocal(m.fecha_full)
+          : "";
 
       const horaTxt = m.hora
         ? m.hora
         : m.fecha_full
-        ? new Date(m.fecha_full).toLocaleTimeString("es-MX", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "";
+          ? new Date(m.fecha_full).toLocaleTimeString("es-MX", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "";
 
       const concepto = (m.concepto || "").trim();
       const usuario = (m.usuario || "").trim();
@@ -850,7 +859,6 @@ y += boxHv + 10;
       }`;
       const montoTxt = fmtMoney(monto);
 
-      // Color por tipo
       if (tipoMov === "EGRESO") doc.setTextColor(220, 38, 38);
       else doc.setTextColor(16, 185, 129);
 
@@ -878,20 +886,19 @@ y += boxHv + 10;
   };
 
   // =========================
-  // 9) EJECUCIÓN ORDEN FINAL
+  // 9) Ejecución final
   // =========================
   renderEncabezado();
 
-  // 1) Suscripciones
   const pagos = {
     efectivo: (data.pagos || []).filter(
-      (p) => (p.metodo || "").toLowerCase() === "efectivo"
+      (p) => (p.metodo || "").toLowerCase() === "efectivo",
     ),
     tarjeta: (data.pagos || []).filter(
-      (p) => (p.metodo || "").toLowerCase() === "tarjeta"
+      (p) => (p.metodo || "").toLowerCase() === "tarjeta",
     ),
     transferencia: (data.pagos || []).filter(
-      (p) => (p.metodo || "").toLowerCase() === "transferencia"
+      (p) => (p.metodo || "").toLowerCase() === "transferencia",
     ),
   };
 
@@ -899,16 +906,15 @@ y += boxHv + 10;
   renderPagos("Pagos por Tarjeta:", pagos.tarjeta, "tarjeta");
   renderPagos("Pagos por Transferencia:", pagos.transferencia, "transferencia");
 
-  // 2) Productos
   const ventas = {
     efectivo: (data.ventas || []).filter(
-      (v) => (v.metodo_pago || "").toLowerCase() === "efectivo"
+      (v) => (v.metodo_pago || "").toLowerCase() === "efectivo",
     ),
     tarjeta: (data.ventas || []).filter(
-      (v) => (v.metodo_pago || "").toLowerCase() === "tarjeta"
+      (v) => (v.metodo_pago || "").toLowerCase() === "tarjeta",
     ),
     transferencia: (data.ventas || []).filter(
-      (v) => (v.metodo_pago || "").toLowerCase() === "transferencia"
+      (v) => (v.metodo_pago || "").toLowerCase() === "transferencia",
     ),
   };
 
@@ -916,23 +922,49 @@ y += boxHv + 10;
   renderVentas("Ventas de Productos - Tarjeta:", ventas.tarjeta);
   renderVentas("Ventas de Productos - Transferencia:", ventas.transferencia);
 
-  // 4) Detalle caja al final
   if (tipo === "dia" && String(usuarioId) !== "todos") {
     renderMovimientosCajaPDF();
   }
 
-  // 3) Totales (incluye card caja dentro)
   renderTotales();
 
-  // Abrir PDF
-  window.open(doc.output("bloburl"), "_blank");
+  return doc;
+}
+async function generarPDFReporte() {
+  try {
+    const doc = await construirPDFReporte();
+    window.open(doc.output("bloburl"), "_blank");
+  } catch (error) {
+    console.error(error);
+    swalError.fire(
+      "Error",
+      error.message || "No se pudo generar el PDF.",
+      "error",
+    );
+  }
+}
+
+async function generarPDFReporteBlob() {
+  const doc = await construirPDFReporte();
+  return doc.output("blob");
 }
 
 function formatearFecha(fechaStr) {
   const [anio, mes, dia] = fechaStr.split("-");
   return `${dia}/${mes}/${anio}`;
 }
-
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result || "";
+      const base64 = String(result).split(",")[1] || "";
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 function formatearFechaLocal(fechaISO) {
   const [anio, mes, dia] = fechaISO.split("T")[0].split("-");
   return `${dia}/${mes}/${anio}`;
@@ -992,7 +1024,7 @@ async function obtenerLogoDesdeDB() {
       return data.base64;
     } else {
       console.warn(
-        "No se pudo cargar el logo desde la base de datos. Usando logo por defecto."
+        "No se pudo cargar el logo desde la base de datos. Usando logo por defecto.",
       );
       return await cargarImagenBase64("../img/logo-gym.webp"); // fallback
     }
@@ -1015,7 +1047,7 @@ async function getEfectivoEsperado(params) {
     .reduce(
       (sum, p) =>
         sum + (parseFloat(p.monto || 0) - parseFloat(p.descuento || 0)),
-      0
+      0,
     );
 
   // Ventas en efectivo
@@ -1025,7 +1057,7 @@ async function getEfectivoEsperado(params) {
       (sum, v) =>
         sum +
         (v.productos || []).reduce((s, pr) => s + parseFloat(pr.total || 0), 0),
-      0
+      0,
     );
 
   return {
@@ -1105,7 +1137,7 @@ async function renderCaja(params) {
       const { monto } = await getCajaMontoFromController(
         selVal,
         true,
-        fechaDia
+        fechaDia,
       );
       $dejado.value = Number(monto || 0).toFixed(2);
       setEditMode(false);
@@ -1117,7 +1149,7 @@ async function renderCaja(params) {
         const { monto } = await getCajaMontoFromController(
           selVal,
           false,
-          fechaDia
+          fechaDia,
         );
         $dejado.value = Number(monto || 0).toFixed(2);
         setEditMode(true);
@@ -1274,3 +1306,111 @@ function initBuscarReporteLock() {
 document.addEventListener("DOMContentLoaded", () => {
   initBuscarReporteLock();
 });
+async function abrirModalCorreoReporte() {
+  try {
+    swalInfo.fire({
+      title: "Generando PDF...",
+      text: "Espera un momento",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    const blob = await generarPDFReporteBlob();
+    const pdfBase64 = await blobToBase64(blob);
+
+    const usuarioSelect = document.getElementById("usuario");
+    const nombreUsuario =
+      usuarioSelect.options[usuarioSelect.selectedIndex].text;
+    const tipo = document.getElementById("tipoPeriodo").value;
+
+    let fecha = "",
+      inicio = "",
+      fin = "",
+      textoPeriodo = "";
+
+    if (tipo === "dia") {
+      fecha = document.getElementById("fecha_dia").value;
+      textoPeriodo = fecha;
+    } else if (tipo === "mes") {
+      fecha = document.getElementById("fecha_mes").value;
+      textoPeriodo = fecha;
+    } else if (tipo === "anio") {
+      fecha = document.getElementById("fecha_anio").value;
+      textoPeriodo = fecha;
+    } else if (tipo === "rango") {
+      inicio = document.getElementById("rango_inicio").value;
+      fin = document.getElementById("rango_fin").value;
+      textoPeriodo = `${inicio}_a_${fin}`;
+    }
+
+    const nombreArchivo = `reporte_${nombreUsuario
+      .replace(/\s+/g, "_")
+      .replace(/[^\w\-]/g, "")}_${textoPeriodo}.pdf`;
+    let periodoTexto = "";
+
+    if (tipo === "dia") {
+      periodoTexto = `Día: ${formatearFecha(fecha)}`;
+    } else if (tipo === "mes") {
+      const [anio, mes] = fecha.split("-");
+      const meses = [
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+      ];
+      periodoTexto = `Mes: ${meses[parseInt(mes, 10) - 1]} de ${anio}`;
+    } else if (tipo === "anio") {
+      periodoTexto = `Año: ${fecha}`;
+    } else if (tipo === "rango") {
+      periodoTexto = `Rango: ${formatearFecha(inicio)} al ${formatearFecha(fin)}`;
+    }
+
+    const res = await fetch("../php/enviar_reporte_correo.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        pdf_base64: pdfBase64,
+        nombre_archivo: nombreArchivo,
+        asunto: `Reporte - ${nombreUsuario}`,
+        mensaje: `Adjuntamos el reporte solicitado para ${nombreUsuario}.`,
+        periodo_texto: periodoTexto,
+        usuario_texto: nombreUsuario,
+      }),
+    });
+
+    const data = await res.json();
+    Swal.close();
+
+    if (!data.ok) {
+      return swalError.fire(
+        "Error",
+        data.msg || "No se pudo enviar el correo.",
+        "error",
+      );
+    }
+
+    swalSuccess.fire(
+      "Enviado",
+      data.msg || "El reporte fue enviado correctamente.",
+      "success",
+    );
+  } catch (error) {
+    console.error(error);
+    Swal.close();
+    swalError.fire(
+      "Error",
+      error.message || "No se pudo enviar el reporte por correo.",
+      "error",
+    );
+  }
+}

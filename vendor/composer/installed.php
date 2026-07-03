@@ -1,24 +1,24 @@
 <?php return array (
   'root' => 
   array (
-    'pretty_version' => '1.0.0+no-version-set',
-    'version' => '1.0.0.0',
+    'pretty_version' => 'dev-main',
+    'version' => 'dev-main',
     'aliases' => 
     array (
     ),
-    'reference' => NULL,
+    'reference' => '6d005f5e04fe8699d474cb29554e116375d9a0fb',
     'name' => '__root__',
   ),
   'versions' => 
   array (
     '__root__' => 
     array (
-      'pretty_version' => '1.0.0+no-version-set',
-      'version' => '1.0.0.0',
+      'pretty_version' => 'dev-main',
+      'version' => 'dev-main',
       'aliases' => 
       array (
       ),
-      'reference' => NULL,
+      'reference' => '6d005f5e04fe8699d474cb29554e116375d9a0fb',
     ),
     'composer/pcre' => 
     array (
@@ -58,12 +58,12 @@
     ),
     'phpmailer/phpmailer' => 
     array (
-      'pretty_version' => 'v6.10.0',
-      'version' => '6.10.0.0',
+      'pretty_version' => 'v7.0.2',
+      'version' => '7.0.2.0',
       'aliases' => 
       array (
       ),
-      'reference' => 'bf74d75a1fde6beaa34a0ddae2ec5fce0f72a144',
+      'reference' => 'ebf1655bd5b99b3f97e1a3ec0a69e5f4cd7ea088',
     ),
     'phpoffice/phpspreadsheet' => 
     array (
