@@ -114,6 +114,34 @@ $stmtV->bind_result($visitas_cantidad, $visitas_total);
 $stmtV->fetch();
 $stmtV->close();
 
+// PAGOS FINANCIADOS
+if ($usuario !== "todos") {
+  $stmtF = $conexion->prepare("
+    SELECT
+      COALESCE(SUM(vfp.monto), 0) AS total_financiados,
+      COUNT(*) AS cantidad_financiados
+    FROM ventas_financiadas_pagos vfp
+    WHERE vfp.recibido_por = ?
+      AND DATE(vfp.fecha_pago) BETWEEN ? AND ?
+  ");
+  $stmtF->bind_param("iss", $usuario, $inicio, $fin);
+} else {
+  $stmtF = $conexion->prepare("
+    SELECT
+      COALESCE(SUM(vfp.monto), 0) AS total_financiados,
+      COUNT(*) AS cantidad_financiados
+    FROM ventas_financiadas_pagos vfp
+    WHERE DATE(vfp.fecha_pago) BETWEEN ? AND ?
+  ");
+  $stmtF->bind_param("ss", $inicio, $fin);
+}
+
+$stmtF->execute();
+$stmtF->bind_result($total_financiados, $cantidad_financiados);
+$stmtF->fetch();
+$stmtF->close();
+
+
     // Movimientos de caja (ingresos/egresos)
   if ($usuario !== "todos") {
     $stmt3 = $conexion->prepare("
@@ -144,20 +172,30 @@ $stmtV->close();
   $stmt3->close();
 
   echo json_encode([
-    "success" => true,
-    "total_pagos" => $total_pagos ?? 0,
-    "cantidad_pagos" => $cantidad_pagos ?? 0,
-    "total_productos" => $total_productos ?? 0,
-    "cantidad_productos" => $cantidad_productos ?? 0,
-    "total_general" => ($total_pagos ?? 0) + ($total_productos ?? 0) + ($visitas_total ?? 0),
-    "caja_ingresos" => $caja_ingresos ?? 0,
-    "caja_egresos" => $caja_egresos ?? 0,
-    "caja_cantidad" => $caja_cantidad ?? 0,
-    "visitas_cantidad" => $visitas_cantidad ?? 0,
-    "visitas_total" => $visitas_total ?? 0,
+  "success" => true,
 
+  "total_pagos" => $total_pagos ?? 0,
+  "cantidad_pagos" => $cantidad_pagos ?? 0,
 
-  ]);
+  "total_productos" => $total_productos ?? 0,
+  "cantidad_productos" => $cantidad_productos ?? 0,
+
+  "total_financiados" => $total_financiados ?? 0,
+  "cantidad_financiados" => $cantidad_financiados ?? 0,
+
+  "total_general" =>
+    ($total_pagos ?? 0) +
+    ($total_productos ?? 0) +
+    ($visitas_total ?? 0) +
+    ($total_financiados ?? 0),
+
+  "caja_ingresos" => $caja_ingresos ?? 0,
+  "caja_egresos" => $caja_egresos ?? 0,
+  "caja_cantidad" => $caja_cantidad ?? 0,
+
+  "visitas_cantidad" => $visitas_cantidad ?? 0,
+  "visitas_total" => $visitas_total ?? 0,
+]);
 } catch (Exception $e) {
   echo json_encode(["success" => false, "error" => "Error al consultar: " . $e->getMessage()]);
 }

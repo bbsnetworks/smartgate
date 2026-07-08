@@ -24,29 +24,41 @@ async function buscarReportes() {
 
   if (tipo === "dia") {
     fecha = document.getElementById("fecha_dia").value;
-    if (!fecha)
+
+    if (!fecha) {
+      unlockBuscarReporte();
       return swalError.fire(
         "Falta fecha",
         "Selecciona una fecha para el reporte por día.",
         "warning",
       );
+    }
   } else if (tipo === "mes") {
     fecha = document.getElementById("fecha_mes").value;
-    if (!fecha)
+
+    if (!fecha) {
+      unlockBuscarReporte();
       return swalError.fire("Falta mes", "Selecciona un mes.", "warning");
+    }
   } else if (tipo === "anio") {
     fecha = document.getElementById("fecha_anio").value;
-    if (!fecha)
+
+    if (!fecha) {
+      unlockBuscarReporte();
       return swalError.fire("Falta año", "Selecciona un año.", "warning");
+    }
   } else if (tipo === "rango") {
     inicio = document.getElementById("rango_inicio").value;
     fin = document.getElementById("rango_fin").value;
-    if (!inicio || !fin)
+
+    if (!inicio || !fin) {
+      unlockBuscarReporte();
       return swalError.fire(
         "Falta rango",
         "Selecciona ambas fechas del rango.",
         "warning",
       );
+    }
   }
 
   swalInfo.fire({
@@ -80,6 +92,10 @@ async function buscarReportes() {
       cantidad_productos,
       visitas_cantidad,
       visitas_total,
+
+      total_financiados,
+      cantidad_financiados,
+
       total_general,
     } = data;
 
@@ -97,7 +113,21 @@ async function buscarReportes() {
       "text-blue-500",
       "bg-sky-100",
     );
+    container.innerHTML += crearCard(
+      "Total en Pagos Financiados",
+      `$${parseFloat(total_financiados || 0).toFixed(2)}`,
+      "bi-calendar-check",
+      "text-cyan-600",
+      "bg-cyan-100",
+    );
 
+    container.innerHTML += crearCard(
+      "Pagos Financiados Registrados",
+      parseInt(cantidad_financiados || 0, 10),
+      "bi-receipt-cutoff",
+      "text-cyan-500",
+      "bg-cyan-100",
+    );
     container.innerHTML += crearCard(
       "Total en Productos Vendidos",
       `$${parseFloat(total_productos).toFixed(2)}`,
@@ -314,11 +344,19 @@ async function construirPDFReporte() {
 
   let totalSuscripciones = 0;
   let totalVentas = 0;
+  let totalFinanciadosPDF = 0;
 
   const totalSuscripcionesPorMetodo = {
     efectivo: 0,
     tarjeta: 0,
     transferencia: 0,
+  };
+
+  const totalFinanciadosPorMetodo = {
+    efectivo: 0,
+    tarjeta: 0,
+    transferencia: 0,
+    otro: 0,
   };
 
   // =========================
@@ -505,7 +543,65 @@ async function construirPDFReporte() {
 
     y += 4;
   };
+  // =========================
+  // 5.1) Desglose PAGOS FINANCIADOS
+  // =========================
+  const renderPagosFinanciados = (titulo, pagosFinanciados, metodo) => {
+    if (!pagosFinanciados || pagosFinanciados.length === 0) return;
 
+    y = ensureSpace(doc, y, 25);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(8, 145, 178);
+    doc.text(titulo, 10, y);
+    y += 8;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0);
+
+    pagosFinanciados.forEach((p) => {
+      y = ensureSpace(doc, y, 18);
+
+      const fechaFormat = formatearFechaLarga(p.fecha || p.fecha_pago);
+      const monto = parseFloat(p.monto || 0);
+      const usuario = p.usuario || "Usuario eliminado";
+      const ventaId = p.venta_financiada_id || "N/A";
+      const cuotaId = p.cuota_id || "N/A";
+      const referencia = p.referencia ? ` · Ref: ${p.referencia}` : "";
+
+      const texto = `• Venta financiada #${ventaId} · Cuota #${cuotaId} · Recibió ${usuario} el ${fechaFormat}${referencia}`;
+      const montoTexto = `$${monto.toFixed(2)}`;
+
+      const maxTextWidth = 190 - 12 - doc.getTextWidth(montoTexto) - 4;
+      const textoDividido = doc.splitTextToSize(texto, maxTextWidth);
+
+      doc.text(textoDividido, 12, y);
+      doc.text(montoTexto, 190 - doc.getTextWidth(montoTexto), y);
+
+      y += textoDividido.length * 5.5;
+
+      totalFinanciadosPDF += monto;
+
+      if (!totalFinanciadosPorMetodo[metodo]) {
+        totalFinanciadosPorMetodo[metodo] = 0;
+      }
+
+      totalFinanciadosPorMetodo[metodo] += monto;
+
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(10, y, 200, y);
+      y += 6;
+
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+    });
+
+    y += 4;
+  };
   // =========================
   // 6) Desglose PRODUCTOS
   // =========================
@@ -680,6 +776,60 @@ async function construirPDFReporte() {
 
     y += cardH + 10;
 
+    const finEfectivo = totalFinanciadosPorMetodo.efectivo || 0;
+    const finTarjeta = totalFinanciadosPorMetodo.tarjeta || 0;
+    const finTransferencia = totalFinanciadosPorMetodo.transferencia || 0;
+    const finOtro = totalFinanciadosPorMetodo.otro || 0;
+    const finTotal = finEfectivo + finTarjeta + finTransferencia + finOtro;
+
+    const boxXf = 10;
+    const boxWf = 190;
+    const boxHf = 40;
+
+    if (finTotal > 0) {
+      y = ensureSpace(doc, y, boxHf + 10);
+
+      doc.setDrawColor(...PALETTE.stroke);
+      doc.setFillColor(236, 254, 255);
+      doc.roundedRect(boxXf, y, boxWf, boxHf, 3, 3, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(8, 145, 178);
+      doc.text("PAGOS FINANCIADOS", boxXf + 6, y + 9);
+
+      let yF = y + 18;
+      const rbF = boxXf + boxWf - 8;
+
+      yF = lineAmount(doc, boxXf + 8, yF, "Efectivo", finEfectivo, rbF);
+      yF = lineAmount(doc, boxXf + 8, yF, "Tarjeta", finTarjeta, rbF);
+      yF = lineAmount(
+        doc,
+        boxXf + 8,
+        yF,
+        "Transferencia",
+        finTransferencia,
+        rbF,
+      );
+
+      if (finOtro > 0) {
+        yF = lineAmount(doc, boxXf + 8, yF, "Otro", finOtro, rbF);
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(...PALETTE.ok);
+
+      const finTotalTxt = `TOTAL: ${fmtMoney(finTotal)}`;
+      doc.text(
+        finTotalTxt,
+        boxXf + boxWf - 8 - doc.getTextWidth(finTotalTxt),
+        y + 9,
+      );
+
+      y += boxHf + 10;
+    }
+
     const visitasTotal = Number(data.visitas_total || 0);
     const visitasCantidad = Number(data.visitas_cantidad || 0);
     const visitasMetodo = data.visitas_por_metodo || {};
@@ -723,7 +873,9 @@ async function construirPDFReporte() {
 
     if (tipo === "dia" && String(usuarioId) !== "todos") {
       const efectivoEsperado =
-        (totalSuscripcionesPorMetodo.efectivo || 0) + (ventaEfectivo || 0);
+        (totalSuscripcionesPorMetodo.efectivo || 0) +
+        (ventaEfectivo || 0) +
+        (totalFinanciadosPorMetodo.efectivo || 0);
       const netoMovs = parseFloat(data.caja_neto || 0);
       const dejado = Number(document.getElementById("monto_caja")?.value || 0);
       const totalEntregar = efectivoEsperado + netoMovs + dejado;
@@ -787,7 +939,10 @@ async function construirPDFReporte() {
     doc.setFontSize(12);
 
     let totalGeneral =
-      totalVentasCalc + totalSuscripciones + Number(data.visitas_total || 0);
+      totalVentasCalc +
+      totalSuscripciones +
+      totalFinanciadosPDF +
+      Number(data.visitas_total || 0);
 
     if (tipo === "dia" && String(usuarioId) !== "todos") {
       const netoMovs = parseFloat(data.caja_neto || 0);
@@ -905,7 +1060,45 @@ async function construirPDFReporte() {
   renderPagos("Pagos por Efectivo:", pagos.efectivo, "efectivo");
   renderPagos("Pagos por Tarjeta:", pagos.tarjeta, "tarjeta");
   renderPagos("Pagos por Transferencia:", pagos.transferencia, "transferencia");
+  const pagosFinanciados = {
+    efectivo: (data.pagos_financiados || []).filter(
+      (p) => (p.metodo_pago || p.metodo || "").toLowerCase() === "efectivo",
+    ),
+    tarjeta: (data.pagos_financiados || []).filter(
+      (p) => (p.metodo_pago || p.metodo || "").toLowerCase() === "tarjeta",
+    ),
+    transferencia: (data.pagos_financiados || []).filter(
+      (p) =>
+        (p.metodo_pago || p.metodo || "").toLowerCase() === "transferencia",
+    ),
+    otro: (data.pagos_financiados || []).filter(
+      (p) => (p.metodo_pago || p.metodo || "").toLowerCase() === "otro",
+    ),
+  };
 
+  renderPagosFinanciados(
+    "Pagos Financiados - Efectivo:",
+    pagosFinanciados.efectivo,
+    "efectivo",
+  );
+
+  renderPagosFinanciados(
+    "Pagos Financiados - Tarjeta:",
+    pagosFinanciados.tarjeta,
+    "tarjeta",
+  );
+
+  renderPagosFinanciados(
+    "Pagos Financiados - Transferencia:",
+    pagosFinanciados.transferencia,
+    "transferencia",
+  );
+
+  renderPagosFinanciados(
+    "Pagos Financiados - Otro:",
+    pagosFinanciados.otro,
+    "otro",
+  );
   const ventas = {
     efectivo: (data.ventas || []).filter(
       (v) => (v.metodo_pago || "").toLowerCase() === "efectivo",
@@ -1060,8 +1253,18 @@ async function getEfectivoEsperado(params) {
       0,
     );
 
+  // Pagos financiados en efectivo
+  const efectivoFinanciados = (data.pagos_financiados || [])
+    .filter(
+      (p) => (p.metodo_pago || p.metodo || "").toLowerCase() === "efectivo",
+    )
+    .reduce((sum, p) => sum + parseFloat(p.monto || 0), 0);
+
   return {
-    esperado: (efectivoSuscripciones || 0) + (efectivoVentas || 0),
+    esperado:
+      (efectivoSuscripciones || 0) +
+      (efectivoVentas || 0) +
+      (efectivoFinanciados || 0),
   };
 }
 
