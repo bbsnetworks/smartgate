@@ -283,12 +283,12 @@ function inicializarEventos() {
     closeModal("modalDetalleVenta"),
   );
 
-$('btnAbrirAbonoDesdeDetalle')?.addEventListener('click', () => {
-  const ventaId = intValue('detalleVentaId');
-  const saldoActual = Number(ultimaVentaDetalle?.venta?.saldo_actual || 0);
+  $("btnAbrirAbonoDesdeDetalle")?.addEventListener("click", () => {
+    const ventaId = intValue("detalleVentaId");
+    const saldoActual = Number(ultimaVentaDetalle?.venta?.saldo_actual || 0);
 
-  abrirModalAbono(ventaId, 0, saldoActual);
-});
+    abrirModalAbono(ventaId, 0, saldoActual);
+  });
 
   $("btnCerrarAbono")?.addEventListener("click", () =>
     closeModal("modalAbono"),
@@ -1166,7 +1166,7 @@ function renderDetalleVenta(data) {
   renderDetalleInfoGeneral(venta);
   renderDetalleProductos(detalle);
   renderDetalleCuotas(cuotas, venta);
-  renderDetallePagos(pagos);
+  renderDetallePagos(pagos, venta);
 
   if (window.lucide) {
     lucide.createIcons();
@@ -1186,6 +1186,8 @@ function renderDetalleInfoGeneral(venta) {
 
   if (!cont) return;
 
+  const ventaCancelada = String(venta.estado || "") === "cancelada";
+
   cont.innerHTML = `
     ${detalleCard("Cliente", venta.cliente_nombre || "-")}
     ${detalleCard("Total financiado", money(venta.total_financiado))}
@@ -1195,7 +1197,35 @@ function renderDetalleInfoGeneral(venta) {
     ${detalleCard("Correo", venta.cliente_email || "-")}
     ${detalleCard("Primer pago", formatDate(venta.fecha_primer_pago))}
     ${detalleCard("Estado", estadoBadge(venta.estado))}
+
+    ${
+      ventaCancelada
+        ? `
+          <div class="md:col-span-2 xl:col-span-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <p class="text-sm font-bold text-red-300">Venta cancelada</p>
+                <p class="text-xs text-slate-300">
+                  Esta venta ya no permite registrar abonos ni eliminar pagos.
+                </p>
+              </div>
+
+              <button type="button"
+                onclick="imprimirTicketCancelacion()"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 font-semibold">
+                <i data-lucide="printer" class="w-4 h-4"></i>
+                Imprimir ticket de cancelación
+              </button>
+            </div>
+          </div>
+        `
+        : ""
+    }
   `;
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
 }
 
 function detalleCard(label, value) {
@@ -1350,10 +1380,12 @@ function renderDetalleCuotas(cuotas, venta) {
   }
 }
 
-function renderDetallePagos(pagos) {
-  const tbody = $('tbodyDetallePagos');
+function renderDetallePagos(pagos, venta = {}) {
+  const tbody = $("tbodyDetallePagos");
 
   if (!tbody) return;
+
+  const ventaCancelada = String(venta.estado || "") === "cancelada";
 
   if (!pagos.length) {
     tbody.innerHTML = `
@@ -1366,20 +1398,29 @@ function renderDetallePagos(pagos) {
     return;
   }
 
-  tbody.innerHTML = pagos.map((pago, index) => {
-    const referencia = String(pago.referencia || '').toUpperCase();
-    const esEnganche = referencia === 'ENGANCHE';
-    const esUltimoPago = index === 0;
+  tbody.innerHTML = pagos
+    .map((pago, index) => {
+      const referencia = String(pago.referencia || "").toUpperCase();
+      const esEnganche = referencia === "ENGANCHE";
+      const esUltimoPago = index === 0;
 
-    const puedeEliminar = !esEnganche && esUltimoPago;
+      const puedeEliminar = !ventaCancelada && !esEnganche && esUltimoPago;
 
-    return `
+      let tituloBloqueo = "Solo se puede eliminar el último pago";
+
+      if (ventaCancelada) {
+        tituloBloqueo = "No se pueden eliminar pagos de una venta cancelada";
+      } else if (esEnganche) {
+        tituloBloqueo = "El enganche no se elimina desde aquí";
+      }
+
+      return `
       <tr class="hover:bg-slate-800/50">
         <td class="px-4 py-3 text-center text-slate-300">${formatDateTime(pago.fecha_pago)}</td>
         <td class="px-4 py-3 text-right font-bold text-emerald-300">${money(pago.monto)}</td>
-        <td class="px-4 py-3 text-center text-slate-300">${escapeHTML(pago.metodo_pago || '-')}</td>
-        <td class="px-4 py-3 text-slate-300">${escapeHTML(pago.referencia || '-')}</td>
-        <td class="px-4 py-3 text-slate-300">${escapeHTML(pago.observaciones || '-')}</td>
+        <td class="px-4 py-3 text-center text-slate-300">${escapeHTML(pago.metodo_pago || "-")}</td>
+        <td class="px-4 py-3 text-slate-300">${escapeHTML(pago.referencia || "-")}</td>
+        <td class="px-4 py-3 text-slate-300">${escapeHTML(pago.observaciones || "-")}</td>
         <td class="px-4 py-3 text-center">
           ${
             puedeEliminar
@@ -1393,7 +1434,7 @@ function renderDetallePagos(pagos) {
               `
               : `
                 <span class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-slate-700/60 text-slate-500"
-                  title="${esEnganche ? 'El enganche no se elimina desde aquí' : 'Solo se puede eliminar el último pago'}">
+                  title="${tituloBloqueo}">
                   <i data-lucide="lock" class="w-4 h-4"></i>
                 </span>
               `
@@ -1401,7 +1442,8 @@ function renderDetallePagos(pagos) {
         </td>
       </tr>
     `;
-  }).join('');
+    })
+    .join("");
 
   if (window.lucide) {
     lucide.createIcons();
@@ -1452,11 +1494,11 @@ function abrirModalAbono(ventaId, cuotaId = 0, saldoMax = 0) {
   }
 
   setText(
-  'abonoSubtitulo',
-  cuotaId > 0
-    ? `Máximo permitido para esta cuota: ${money(saldoMax)}`
-    : `Abono general. Máximo permitido: ${money(saldoMax)}`
-);
+    "abonoSubtitulo",
+    cuotaId > 0
+      ? `Máximo permitido para esta cuota: ${money(saldoMax)}`
+      : `Abono general. Máximo permitido: ${money(saldoMax)}`,
+  );
 
   openModal("modalAbono");
 }
@@ -1509,15 +1551,15 @@ async function guardarAbono() {
       btn.innerHTML = "Guardando...";
     }
 
-    await apiRequest({
-      accion: "registrar_abono",
-      venta_id: ventaId,
-      cuota_id: cuotaId,
-      monto,
-      metodo_pago: textValue("abonoMetodoPago") || "efectivo",
-      referencia: textValue("abonoReferencia"),
-      observaciones: textValue("abonoObservaciones"),
-    });
+    const dataAbono = await apiRequest({
+  accion: "registrar_abono",
+  venta_id: ventaId,
+  cuota_id: cuotaId,
+  monto,
+  metodo_pago: textValue("abonoMetodoPago") || "efectivo",
+  referencia: textValue("abonoReferencia"),
+  observaciones: textValue("abonoObservaciones"),
+});
 
     await Swal.fire({
       icon: "success",
@@ -1526,7 +1568,9 @@ async function guardarAbono() {
       background: "#1e293b",
       color: "#f8fafc",
     });
-
+    if (dataAbono.pago_id) {
+      await imprimirTicketPagoFinanciado(dataAbono.pago_id);
+    }
     closeModal("modalAbono");
 
     if (!$("modalDetalleVenta")?.classList.contains("hidden")) {
@@ -1572,20 +1616,22 @@ async function cancelarVentaFinanciada(ventaId) {
   if (!confirmacion.isConfirmed) return;
 
   try {
-    await apiRequest({
+    const data = await apiRequest({
       accion: "cancelar_venta_financiada",
       id: ventaId,
     });
 
-    Swal.fire({
+    await Swal.fire({
       icon: "success",
       title: "Cancelada",
-      text: "La venta financiada fue cancelada correctamente.",
+      text: data.mensaje || "La venta financiada fue cancelada correctamente.",
       background: "#1e293b",
       color: "#f8fafc",
     });
 
     listarVentasFinanciadas();
+
+    await verDetalleVentaFinanciada(ventaId);
   } catch (error) {
     Swal.fire({
       icon: "error",
@@ -1596,21 +1642,261 @@ async function cancelarVentaFinanciada(ventaId) {
     });
   }
 }
+function imprimirTicketCancelacion() {
+  if (!ultimaVentaDetalle || !ultimaVentaDetalle.venta) {
+    Swal.fire({
+      icon: "warning",
+      title: "Sin información",
+      text: "No se encontró la información de la venta para imprimir.",
+      background: "#1e293b",
+      color: "#f8fafc",
+    });
+    return;
+  }
+
+  const venta = ultimaVentaDetalle.venta || {};
+  const detalle = ultimaVentaDetalle.detalle || [];
+  const pagos = ultimaVentaDetalle.pagos || [];
+
+  const productosHTML = detalle.length
+    ? detalle
+        .map(
+          (p) => `
+        <tr>
+          <td colspan="2">${escapeHTML(p.producto_nombre || "-")}</td>
+        </tr>
+        <tr>
+          <td>${Number(p.cantidad || 0)} x ${money(p.precio_unitario)}</td>
+          <td class="right">${money(p.subtotal)}</td>
+        </tr>
+      `,
+        )
+        .join("")
+    : `
+        <tr>
+          <td colspan="2">Sin productos</td>
+        </tr>
+      `;
+
+  const pagosHTML = pagos.length
+    ? pagos
+        .map(
+          (p) => `
+        <tr>
+          <td>${formatDateTime(p.fecha_pago)}</td>
+          <td class="right">${money(p.monto)}</td>
+        </tr>
+      `,
+        )
+        .join("")
+    : `
+        <tr>
+          <td colspan="2">Sin pagos registrados</td>
+        </tr>
+      `;
+
+  const fechaCancelacion = venta.fecha_cancelacion
+    ? formatDateTime(venta.fecha_cancelacion)
+    : formatDateTime(new Date().toISOString());
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <title>Ticket de cancelación</title>
+      <style>
+        @page {
+          size: 58mm auto;
+          margin: 0;
+        }
+
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          width: 58mm;
+          margin: 0;
+          padding: 4mm 3mm;
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 10px;
+          color: #000;
+        }
+
+        .center {
+          text-align: center;
+        }
+
+        .right {
+          text-align: right;
+        }
+
+        .bold {
+          font-weight: bold;
+        }
+
+        .title {
+          font-size: 13px;
+          font-weight: bold;
+          text-align: center;
+          margin-bottom: 2mm;
+        }
+
+        .subtitle {
+          font-size: 11px;
+          font-weight: bold;
+          text-align: center;
+          margin-bottom: 2mm;
+        }
+
+        .line {
+          border-top: 1px dashed #000;
+          margin: 2mm 0;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        td {
+          vertical-align: top;
+          padding: 1px 0;
+        }
+
+        .cancelado {
+          border: 1px solid #000;
+          padding: 2mm;
+          text-align: center;
+          font-weight: bold;
+          font-size: 12px;
+          margin: 2mm 0;
+        }
+
+        .small {
+          font-size: 9px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="title">TICKET DE CANCELACIÓN</div>
+      <div class="subtitle">VENTA FINANCIADA</div>
+
+      <div class="cancelado">CANCELADA</div>
+
+      <div class="line"></div>
+
+      <table>
+        <tr>
+          <td class="bold">Folio:</td>
+          <td class="right">${escapeHTML(venta.folio || "-")}</td>
+        </tr>
+        <tr>
+          <td class="bold">Fecha venta:</td>
+          <td class="right">${formatDate(venta.fecha_venta)}</td>
+        </tr>
+        <tr>
+          <td class="bold">Fecha cancelación:</td>
+          <td class="right">${fechaCancelacion}</td>
+        </tr>
+        <tr>
+          <td class="bold">Cliente:</td>
+          <td class="right">${escapeHTML(venta.cliente_nombre || "-")}</td>
+        </tr>
+        <tr>
+          <td class="bold">Teléfono:</td>
+          <td class="right">${escapeHTML(venta.cliente_telefono || "-")}</td>
+        </tr>
+      </table>
+
+      <div class="line"></div>
+
+      <div class="bold center">PRODUCTOS</div>
+
+      <table>
+        ${productosHTML}
+      </table>
+
+      <div class="line"></div>
+
+      <table>
+        <tr>
+          <td class="bold">Total financiado:</td>
+          <td class="right bold">${money(venta.total_financiado)}</td>
+        </tr>
+        <tr>
+          <td class="bold">Saldo al cancelar:</td>
+          <td class="right bold">${money(venta.saldo_actual)}</td>
+        </tr>
+        <tr>
+          <td class="bold">Mensualidad:</td>
+          <td class="right">${money(venta.monto_mensual)}</td>
+        </tr>
+      </table>
+
+      <div class="line"></div>
+
+      <div class="bold center">PAGOS REGISTRADOS</div>
+
+      <table>
+        ${pagosHTML}
+      </table>
+
+      <div class="line"></div>
+
+      <p class="center small">
+        Este comprobante confirma la cancelación de la venta financiada.
+      </p>
+
+      <p class="center small">
+        No válido como comprobante de pago.
+      </p>
+
+      <script>
+        window.onload = function() {
+          window.print();
+          setTimeout(function() {
+            window.close();
+          }, 500);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
+  const ventana = window.open("", "_blank", "width=350,height=600");
+
+  if (!ventana) {
+    Swal.fire({
+      icon: "warning",
+      title: "Ventana bloqueada",
+      text: "Permite ventanas emergentes para imprimir el ticket.",
+      background: "#1e293b",
+      color: "#f8fafc",
+    });
+    return;
+  }
+
+  ventana.document.open();
+  ventana.document.write(html);
+  ventana.document.close();
+}
 async function eliminarPagoFinanciado(pagoId) {
   if (!pagoId) {
     Swal.fire({
-      icon: 'warning',
-      title: 'Pago inválido',
-      text: 'No se encontró el pago a eliminar.',
-      background: '#1e293b',
-      color: '#f8fafc'
+      icon: "warning",
+      title: "Pago inválido",
+      text: "No se encontró el pago a eliminar.",
+      background: "#1e293b",
+      color: "#f8fafc",
     });
     return;
   }
 
   const confirmacion = await Swal.fire({
-    icon: 'warning',
-    title: 'Eliminar pago',
+    icon: "warning",
+    title: "Eliminar pago",
     html: `
       <div class="text-left">
         <p>Se eliminará este pago y se restaurará el saldo en las cuotas correspondientes.</p>
@@ -1618,45 +1904,44 @@ async function eliminarPagoFinanciado(pagoId) {
       </div>
     `,
     showCancelButton: true,
-    confirmButtonText: 'Sí, eliminar',
-    cancelButtonText: 'Cancelar',
-    background: '#1e293b',
-    color: '#f8fafc',
-    confirmButtonColor: '#dc2626',
-    cancelButtonColor: '#475569'
+    confirmButtonText: "Sí, eliminar",
+    cancelButtonText: "Cancelar",
+    background: "#1e293b",
+    color: "#f8fafc",
+    confirmButtonColor: "#dc2626",
+    cancelButtonColor: "#475569",
   });
 
   if (!confirmacion.isConfirmed) return;
 
   try {
     const data = await apiRequest({
-      accion: 'eliminar_pago_financiado',
-      id: pagoId
+      accion: "eliminar_pago_financiado",
+      id: pagoId,
     });
 
     await Swal.fire({
-      icon: 'success',
-      title: 'Pago eliminado',
-      text: data.mensaje || 'El pago fue eliminado correctamente.',
-      background: '#1e293b',
-      color: '#f8fafc'
+      icon: "success",
+      title: "Pago eliminado",
+      text: data.mensaje || "El pago fue eliminado correctamente.",
+      background: "#1e293b",
+      color: "#f8fafc",
     });
 
-    const ventaId = Number(data.venta_id || intValue('detalleVentaId'));
+    const ventaId = Number(data.venta_id || intValue("detalleVentaId"));
 
     if (ventaId > 0) {
       await verDetalleVentaFinanciada(ventaId);
     }
 
     listarVentasFinanciadas();
-
   } catch (error) {
     Swal.fire({
-      icon: 'error',
-      title: 'No se pudo eliminar',
+      icon: "error",
+      title: "No se pudo eliminar",
       text: error.message,
-      background: '#1e293b',
-      color: '#f8fafc'
+      background: "#1e293b",
+      color: "#f8fafc",
     });
   }
 }

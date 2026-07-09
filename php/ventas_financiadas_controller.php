@@ -166,6 +166,29 @@ function normalizar_metodo_pago(string $metodo): string
 
 function recalcular_estado_venta(mysqli $conexion, int $ventaId): void
 {
+    // Si la venta está cancelada, no se debe recalcular ni reactivar
+    $sqlEstado = "
+        SELECT estado
+        FROM ventas_financiadas
+        WHERE id = ?
+        LIMIT 1
+    ";
+
+    $stmt = $conexion->prepare($sqlEstado);
+    $stmt->bind_param('i', $ventaId);
+    $stmt->execute();
+
+    $venta = $stmt->get_result()->fetch_assoc();
+
+    if (!$venta) {
+        return;
+    }
+
+    if ($venta['estado'] === 'cancelada') {
+        return;
+    }
+
+    $hoy = date('Y-m-d');
     $hoy = date('Y-m-d');
 
     // Actualizar cuotas vencidas
@@ -1165,31 +1188,31 @@ function registrar_abono(mysqli $conexion): void
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
 ";
 
-$stmt = $conexion->prepare($sqlPago);
-$stmt->bind_param(
-    'iidsssi',
-    $ventaId,
-    $cuotaPagoId,
-    $monto,
-    $metodoPago,
-    $referencia,
-    $observaciones,
-    $usuarioId
-);
-$stmt->execute();
+        $stmt = $conexion->prepare($sqlPago);
+        $stmt->bind_param(
+            'iidsssi',
+            $ventaId,
+            $cuotaPagoId,
+            $monto,
+            $metodoPago,
+            $referencia,
+            $observaciones,
+            $usuarioId
+        );
+        $stmt->execute();
 
-$pagoId = $conexion->insert_id;
+        $pagoId = $conexion->insert_id;
 
-/* Guardar cómo se aplicó el pago a las cuotas */
-foreach ($cuotasAplicadas as $aplicacion) {
-    $cuotaAplicadaId = (int) $aplicacion['cuota_id'];
-    $montoAplicado = round((float) $aplicacion['monto'], 2);
+        /* Guardar cómo se aplicó el pago a las cuotas */
+        foreach ($cuotasAplicadas as $aplicacion) {
+            $cuotaAplicadaId = (int) $aplicacion['cuota_id'];
+            $montoAplicado = round((float) $aplicacion['monto'], 2);
 
-    if ($cuotaAplicadaId <= 0 || $montoAplicado <= 0) {
-        continue;
-    }
+            if ($cuotaAplicadaId <= 0 || $montoAplicado <= 0) {
+                continue;
+            }
 
-    $sqlAplicacion = "
+            $sqlAplicacion = "
         INSERT INTO ventas_financiadas_pagos_aplicaciones (
             pago_id,
             venta_financiada_id,
@@ -1198,24 +1221,25 @@ foreach ($cuotasAplicadas as $aplicacion) {
         ) VALUES (?, ?, ?, ?)
     ";
 
-    $stmtAplicacion = $conexion->prepare($sqlAplicacion);
-    $stmtAplicacion->bind_param(
-        'iiid',
-        $pagoId,
-        $ventaId,
-        $cuotaAplicadaId,
-        $montoAplicado
-    );
-    $stmtAplicacion->execute();
-}
+            $stmtAplicacion = $conexion->prepare($sqlAplicacion);
+            $stmtAplicacion->bind_param(
+                'iiid',
+                $pagoId,
+                $ventaId,
+                $cuotaAplicadaId,
+                $montoAplicado
+            );
+            $stmtAplicacion->execute();
+        }
 
-recalcular_estado_venta($conexion, $ventaId);
+        recalcular_estado_venta($conexion, $ventaId);
 
         $conexion->commit();
 
         responder(true, [
             'mensaje' => 'Abono registrado correctamente.',
             'venta_id' => $ventaId,
+            'pago_id' => $pagoId,
             'monto' => $monto,
             'cuotas_aplicadas' => $cuotasAplicadas
         ]);
@@ -1243,20 +1267,61 @@ function cancelar_venta_financiada(mysqli $conexion): void
         responder(false, ['error' => 'ID inválido.'], 400);
     }
 
-    $sql = "
-        UPDATE ventas_financiadas
-        SET estado = 'cancelada'
-        WHERE id = ?
-          AND estado <> 'cancelada'
-    ";
+    try {
+        $conexion->begin_transaction();
 
-    $stmt = $conexion->prepare($sql);
-    $stmt->bind_param('i', $ventaId);
-    $stmt->execute();
+        $sqlVenta = "
+            SELECT id, estado
+            FROM ventas_financiadas
+            WHERE id = ?
+            FOR UPDATE
+        ";
 
-    responder(true, [
-        'mensaje' => 'Venta financiada cancelada correctamente.'
-    ]);
+        $stmt = $conexion->prepare($sqlVenta);
+        $stmt->bind_param('i', $ventaId);
+        $stmt->execute();
+
+        $venta = $stmt->get_result()->fetch_assoc();
+
+        if (!$venta) {
+            throw new Exception('No se encontró la venta financiada.');
+        }
+
+        if ($venta['estado'] === 'cancelada') {
+            throw new Exception('Esta venta ya está cancelada.');
+        }
+
+        if ($venta['estado'] === 'liquidada') {
+            throw new Exception('No se puede cancelar una venta liquidada.');
+        }
+
+        $sql = "
+            UPDATE ventas_financiadas
+            SET 
+                estado = 'cancelada',
+                fecha_cancelacion = NOW()
+            WHERE id = ?
+        ";
+
+        $stmt = $conexion->prepare($sql);
+        $stmt->bind_param('i', $ventaId);
+        $stmt->execute();
+
+        $conexion->commit();
+
+        responder(true, [
+            'mensaje' => 'Venta financiada cancelada correctamente.',
+            'venta_id' => $ventaId
+        ]);
+
+    } catch (Throwable $e) {
+        $conexion->rollback();
+
+        responder(false, [
+            'error' => 'No se pudo cancelar la venta.',
+            'detalle' => $e->getMessage()
+        ], 500);
+    }
 }
 function listar_pagos_proximos_dashboard(mysqli $conexion): void
 {
@@ -1391,6 +1456,30 @@ function eliminar_pago_financiado(mysqli $conexion): void
         }
 
         $ventaId = (int) $pago['venta_financiada_id'];
+
+        $ventaId = (int) $pago['venta_financiada_id'];
+
+        $sqlVenta = "
+    SELECT id, estado
+    FROM ventas_financiadas
+    WHERE id = ?
+    FOR UPDATE
+";
+
+        $stmt = $conexion->prepare($sqlVenta);
+        $stmt->bind_param('i', $ventaId);
+        $stmt->execute();
+
+        $venta = $stmt->get_result()->fetch_assoc();
+
+        if (!$venta) {
+            throw new Exception('No se encontró la venta relacionada al pago.');
+        }
+
+        if ($venta['estado'] === 'cancelada') {
+            throw new Exception('No puedes eliminar pagos de una venta cancelada.');
+        }
+
         $montoPago = round((float) $pago['monto'], 2);
         $referencia = strtoupper(trim((string) ($pago['referencia'] ?? '')));
 
@@ -1630,7 +1719,103 @@ function eliminar_pago_financiado(mysqli $conexion): void
         ], 500);
     }
 }
+function obtener_ticket_pago_financiado(mysqli $conexion): void
+{
+    $pagoId = input_int('id');
 
+    if ($pagoId <= 0) {
+        responder(false, ['error' => 'ID de pago inválido.'], 400);
+    }
+
+    $sqlPago = "
+        SELECT 
+            p.*,
+            u.nombre AS recibido_por_nombre
+        FROM ventas_financiadas_pagos p
+        LEFT JOIN usuarios u ON u.id = p.recibido_por
+        WHERE p.id = ?
+        LIMIT 1
+    ";
+
+    $stmt = $conexion->prepare($sqlPago);
+    $stmt->bind_param('i', $pagoId);
+    $stmt->execute();
+
+    $pago = $stmt->get_result()->fetch_assoc();
+
+    if (!$pago) {
+        responder(false, ['error' => 'No se encontró el pago.'], 404);
+    }
+
+    $ventaId = (int) $pago['venta_financiada_id'];
+
+    $sqlVenta = "
+        SELECT *
+        FROM ventas_financiadas
+        WHERE id = ?
+        LIMIT 1
+    ";
+
+    $stmt = $conexion->prepare($sqlVenta);
+    $stmt->bind_param('i', $ventaId);
+    $stmt->execute();
+
+    $venta = $stmt->get_result()->fetch_assoc();
+
+    if (!$venta) {
+        responder(false, ['error' => 'No se encontró la venta relacionada.'], 404);
+    }
+
+    $sqlDetalle = "
+        SELECT *
+        FROM ventas_financiadas_detalle
+        WHERE venta_financiada_id = ?
+        ORDER BY id ASC
+    ";
+
+    $stmt = $conexion->prepare($sqlDetalle);
+    $stmt->bind_param('i', $ventaId);
+    $stmt->execute();
+
+    $detalle = [];
+    $res = $stmt->get_result();
+
+    while ($row = $res->fetch_assoc()) {
+        $detalle[] = $row;
+    }
+
+    $branding = [
+        'app_name' => 'Smartgate',
+        'mail' => '',
+        'logo_base64' => ''
+    ];
+
+    $sqlBranding = "
+        SELECT app_name, mail, logo_blob, logo_mime
+        FROM config_branding
+        WHERE id = 1
+        LIMIT 1
+    ";
+
+    $resBranding = $conexion->query($sqlBranding);
+
+    if ($resBranding && $rowBranding = $resBranding->fetch_assoc()) {
+        $branding['app_name'] = $rowBranding['app_name'] ?: 'Smartgate';
+        $branding['mail'] = $rowBranding['mail'] ?: '';
+
+        if (!empty($rowBranding['logo_blob'])) {
+            $mime = $rowBranding['logo_mime'] ?: 'image/png';
+            $branding['logo_base64'] = 'data:' . $mime . ';base64,' . base64_encode($rowBranding['logo_blob']);
+        }
+    }
+
+    responder(true, [
+        'venta' => $venta,
+        'pago' => $pago,
+        'detalle' => $detalle,
+        'branding' => $branding
+    ]);
+}
 /* =========================================================
    ROUTER
 ========================================================= */
@@ -1670,8 +1855,11 @@ try {
             listar_pagos_proximos_dashboard($conexion);
             break;
         case 'eliminar_pago_financiado':
-        eliminar_pago_financiado($conexion);
-        break;    
+            eliminar_pago_financiado($conexion);
+            break;
+            case 'obtener_ticket_pago_financiado':
+                obtener_ticket_pago_financiado($conexion);
+            break;
         default:
             responder(false, [
                 'error' => 'Acción no válida.',
