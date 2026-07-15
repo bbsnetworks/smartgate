@@ -51,6 +51,7 @@ $pagos = [];
 $total_efectivo = 0;
 $total_tarjeta = 0;
 $total_transferencia = 0;
+$resumen_tarifas = [];
 
 /* =========================
    VARIABLES PAGOS FINANCIADOS
@@ -67,34 +68,64 @@ $financiados_por_metodo = [
 
 if (!$isTodos) {
   $stmt = $conexion->prepare("
-    SELECT 
-      c.nombre, 
-      c.apellido, 
-      p.monto, 
-      p.descuento, 
-      p.metodo_pago, 
-      p.fecha_pago, 
-      p.cliente_id
+    SELECT
+      c.nombre,
+      c.apellido,
+
+      p.monto,
+      p.descuento,
+      p.metodo_pago,
+      p.fecha_pago,
+      p.cliente_id,
+      p.tarifa_id,
+
+      t.nombre AS tarifa_nombre,
+      t.monto AS tarifa_monto
+
     FROM pagos p
-    LEFT JOIN clientes c ON p.cliente_id = c.id
-    WHERE p.usuario_id = ? 
+
+    LEFT JOIN clientes c
+      ON p.cliente_id = c.id
+
+    LEFT JOIN tarifas t
+      ON p.tarifa_id = t.id
+
+    WHERE p.usuario_id = ?
       AND DATE(p.fecha_pago) BETWEEN ? AND ?
+
+    ORDER BY p.fecha_pago ASC
   ");
+
   $stmt->bind_param("iss", $usuario, $inicio, $fin);
 } else {
   $stmt = $conexion->prepare("
-    SELECT 
-      c.nombre, 
-      c.apellido, 
-      p.monto, 
-      p.descuento, 
-      p.metodo_pago, 
-      p.fecha_pago, 
-      p.cliente_id
+    SELECT
+      c.nombre,
+      c.apellido,
+
+      p.monto,
+      p.descuento,
+      p.metodo_pago,
+      p.fecha_pago,
+      p.cliente_id,
+      p.tarifa_id,
+
+      t.nombre AS tarifa_nombre,
+      t.monto AS tarifa_monto
+
     FROM pagos p
-    LEFT JOIN clientes c ON p.cliente_id = c.id
+
+    LEFT JOIN clientes c
+      ON p.cliente_id = c.id
+
+    LEFT JOIN tarifas t
+      ON p.tarifa_id = t.id
+
     WHERE DATE(p.fecha_pago) BETWEEN ? AND ?
+
+    ORDER BY p.fecha_pago ASC
   ");
+
   $stmt->bind_param("ss", $inicio, $fin);
 }
 
@@ -109,6 +140,102 @@ while ($row = $res->fetch_assoc()) {
   $monto = (float)($row['monto'] ?? 0);
   $descuento = (float)($row['descuento'] ?? 0);
   $montoFinal = $monto - $descuento;
+      /*
+  |--------------------------------------------------------------------------
+  | Identificar la tarifa del pago
+  |--------------------------------------------------------------------------
+  */
+
+  $tarifaId = $row["tarifa_id"] !== null
+    ? (int)$row["tarifa_id"]
+    : null;
+
+  /*
+   * Se necesita una llave especial para los pagos que no tienen tarifa,
+   * porque PHP convierte algunas llaves NULL en cadena vacía.
+   */
+  $tarifaKey = $tarifaId !== null
+    ? "tarifa_" . $tarifaId
+    : "sin_tarifa";
+
+  if (!empty($row["tarifa_nombre"])) {
+    $tarifaNombre = trim($row["tarifa_nombre"]);
+  } elseif ($tarifaId === null) {
+    $tarifaNombre = "Sin tarifa asignada";
+  } else {
+    $tarifaNombre = "Tarifa eliminada #{$tarifaId}";
+  }
+
+  $tarifaMonto = $row["tarifa_monto"] !== null
+    ? (float)$row["tarifa_monto"]
+    : null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Normalizar método de pago
+  |--------------------------------------------------------------------------
+  */
+
+  $metodoNormalizado = strtolower(
+    trim((string)($row["metodo_pago"] ?? ""))
+  );
+
+  if (!in_array(
+    $metodoNormalizado,
+    ["efectivo", "tarjeta", "transferencia"],
+    true
+  )) {
+    $metodoNormalizado = "otro";
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Crear la tarifa la primera vez que aparece
+  |--------------------------------------------------------------------------
+  */
+
+  if (!isset($resumen_tarifas[$tarifaKey])) {
+    $resumen_tarifas[$tarifaKey] = [
+      "tarifa_id" => $tarifaId,
+      "nombre" => $tarifaNombre,
+      "monto_tarifa" => $tarifaMonto,
+
+      "cantidad_pagos" => 0,
+      "total" => 0,
+
+      "efectivo" => [
+        "cantidad" => 0,
+        "total" => 0
+      ],
+
+      "tarjeta" => [
+        "cantidad" => 0,
+        "total" => 0
+      ],
+
+      "transferencia" => [
+        "cantidad" => 0,
+        "total" => 0
+      ],
+
+      "otro" => [
+        "cantidad" => 0,
+        "total" => 0
+      ]
+    ];
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Acumular pago en su tarifa
+  |--------------------------------------------------------------------------
+  */
+
+  $resumen_tarifas[$tarifaKey]["cantidad_pagos"]++;
+  $resumen_tarifas[$tarifaKey]["total"] += $montoFinal;
+
+  $resumen_tarifas[$tarifaKey][$metodoNormalizado]["cantidad"]++;
+  $resumen_tarifas[$tarifaKey][$metodoNormalizado]["total"] += $montoFinal;
 
   $pagos[] = [
     "nombre" => trim($nombreCliente),
@@ -135,6 +262,34 @@ while ($row = $res->fetch_assoc()) {
 
 $stmt->close();
 
+/*
+|--------------------------------------------------------------------------
+| Preparar resumen de tarifas
+|--------------------------------------------------------------------------
+*/
+
+$resumen_tarifas = array_values($resumen_tarifas);
+
+usort(
+  $resumen_tarifas,
+  function ($a, $b) {
+    /*
+     * Dejamos "Sin tarifa asignada" al final.
+     */
+    if ($a["tarifa_id"] === null && $b["tarifa_id"] !== null) {
+      return 1;
+    }
+
+    if ($a["tarifa_id"] !== null && $b["tarifa_id"] === null) {
+      return -1;
+    }
+
+    return strcasecmp(
+      (string)$a["nombre"],
+      (string)$b["nombre"]
+    );
+  }
+);
 /* =========================
    PAGOS FINANCIADOS
 ========================= */
@@ -418,6 +573,7 @@ echo json_encode([
   "success" => true,
 
   "pagos" => $pagos,
+  "resumen_tarifas" => $resumen_tarifas,
   "ventas" => array_values($ventasAgrupadas),
 
   "pagos_financiados" => $pagos_financiados,

@@ -65,8 +65,21 @@ $accion = $_GET['accion'] ?? '';
 
 switch ($method) {
   case 'GET':
-  if (isset($_GET['accion']) && $_GET['accion'] === 'validar_codigo') { include 'validar_codigo_admin.php'; exit; }
-  if (isset($_GET['accion']) && $_GET['accion'] === 'reporte_movimientos') { reporteMovimientos($conexion); exit; }
+  if ($accion === 'validar_codigo') {
+    include 'validar_codigo_admin.php';
+    exit;
+  }
+
+  if ($accion === 'reporte_movimientos') {
+    reporteMovimientos($conexion);
+    exit;
+  }
+
+  if ($accion === 'inventario_ticket') {
+    obtenerInventarioTicket($conexion);
+    exit;
+  }
+
   obtenerProductos($conexion);
   break;
 
@@ -552,3 +565,101 @@ function reporteMovimientos(mysqli $conexion) {
 
 }
 
+function obtenerInventarioTicket(mysqli $conexion): void
+{
+  try {
+    $sql = "
+      SELECT
+        p.id,
+        p.codigo,
+        p.nombre,
+        p.descripcion,
+        p.precio,
+        p.precio_proveedor,
+        p.stock,
+        p.categoria_id,
+        p.proveedor_id,
+        COALESCE(c.nombre, 'Sin categoría') AS categoria,
+        COALESCE(pr.nombre, 'Sin proveedor') AS proveedor_nombre
+      FROM productos p
+      LEFT JOIN categorias c
+        ON c.id = p.categoria_id
+      LEFT JOIN proveedores pr
+        ON pr.id = p.proveedor_id
+      ORDER BY
+        COALESCE(c.nombre, 'Sin categoría') ASC,
+        p.nombre ASC,
+        p.codigo ASC
+    ";
+
+    $resultado = $conexion->query($sql);
+
+    if (!$resultado) {
+      throw new Exception(
+        "No se pudo consultar el inventario: " . $conexion->error
+      );
+    }
+
+    $productos = [];
+    $cantidadProductos = 0;
+    $cantidadTotalStock = 0.0;
+    $valorVentaInventario = 0.0;
+    $valorCostoInventario = 0.0;
+
+    while ($producto = $resultado->fetch_assoc()) {
+      /*
+       * Excluir el producto reservado de visitas.
+       * Esto también excluye códigos como 01, 001 o 0001.
+       */
+      if (esCodigoReservadoVisita($producto['codigo'])) {
+        continue;
+      }
+
+      $stock = (float)($producto['stock'] ?? 0);
+      $precioVenta = (float)($producto['precio'] ?? 0);
+      $precioProveedor = (float)($producto['precio_proveedor'] ?? 0);
+
+      $productos[] = [
+        'id' => (int)$producto['id'],
+        'codigo' => (string)$producto['codigo'],
+        'nombre' => (string)$producto['nombre'],
+        'descripcion' => (string)($producto['descripcion'] ?? ''),
+        'precio' => $precioVenta,
+        'precio_proveedor' => $precioProveedor,
+        'stock' => $stock,
+        'categoria_id' => $producto['categoria_id'] !== null
+          ? (int)$producto['categoria_id']
+          : null,
+        'categoria' => (string)$producto['categoria'],
+        'proveedor_id' => $producto['proveedor_id'] !== null
+          ? (int)$producto['proveedor_id']
+          : null,
+        'proveedor_nombre' => (string)$producto['proveedor_nombre']
+      ];
+
+      $cantidadProductos++;
+      $cantidadTotalStock += $stock;
+      $valorVentaInventario += $stock * $precioVenta;
+      $valorCostoInventario += $stock * $precioProveedor;
+    }
+
+    echo json_encode([
+      'success' => true,
+      'productos' => $productos,
+      'resumen' => [
+        'cantidad_productos' => $cantidadProductos,
+        'cantidad_total_stock' => $cantidadTotalStock,
+        'valor_venta_inventario' => $valorVentaInventario,
+        'valor_costo_inventario' => $valorCostoInventario
+      ]
+    ], JSON_UNESCAPED_UNICODE);
+
+  } catch (Throwable $e) {
+    http_response_code(500);
+
+    echo json_encode([
+      'success' => false,
+      'error' => $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
+  }
+}

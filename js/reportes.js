@@ -6,7 +6,34 @@ document.addEventListener("DOMContentLoaded", () => {
   const hoy = `${yyyy}-${mm}-${dd}`;
   document.getElementById("fecha_dia").value = hoy;
 });
+async function obtenerBrandingTicket() {
+  const brandingPorDefecto = {
+    app_name: "Gym Admin",
+    logo: "../php/logo_branding.php",
+  };
 
+  try {
+    const res = await fetch("../php/obtener_branding.php", {
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    return {
+      app_name: data.app_name || "Gym Admin",
+      logo: data.logo_etag
+        ? `../php/logo_branding.php?v=${encodeURIComponent(data.logo_etag)}`
+        : "../php/logo_branding.php",
+    };
+  } catch (error) {
+    console.warn("No se pudo cargar el branding:", error);
+    return brandingPorDefecto;
+  }
+}
 async function buscarReportes() {
   const btn = document.getElementById("btnBuscarReporte");
   if (btn?.disabled) return; // evita doble click
@@ -97,6 +124,9 @@ async function buscarReportes() {
       cantidad_financiados,
 
       total_general,
+
+      // Nuevo desglose de pagos por tarifa
+      resumen_tarifas = [],
     } = data;
 
     container.innerHTML += crearCard(
@@ -113,6 +143,9 @@ async function buscarReportes() {
       "text-blue-500",
       "bg-sky-100",
     );
+
+    container.innerHTML += crearCardDesgloseTarifas(resumen_tarifas);
+
     container.innerHTML += crearCard(
       "Total en Pagos Financiados",
       `$${parseFloat(total_financiados || 0).toFixed(2)}`,
@@ -227,7 +260,293 @@ function crearCard(titulo, valor, icono, iconColor, bgColor) {
     </div>
   `;
 }
+function crearCardDesgloseTarifas(tarifas = []) {
+  const dinero = (valor) =>
+    `$${Number(valor || 0).toLocaleString("es-MX", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
+  const cantidad = (valor) => parseInt(valor || 0, 10);
+
+  if (!Array.isArray(tarifas) || tarifas.length === 0) {
+    return `
+      <div class="col-span-1 md:col-span-2 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70 shadow-xl">
+        <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 px-6 py-5 text-white">
+          <div class="flex items-center gap-3">
+            <i class="bi bi-tags-fill text-3xl"></i>
+
+            <div>
+              <h2 class="text-xl font-bold">
+                Pagos por tarifa
+              </h2>
+
+              <p class="text-sm text-blue-100">
+                Cantidades y totales por método de pago
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-8 text-center text-slate-400">
+          <i class="bi bi-inbox text-4xl"></i>
+
+          <p class="mt-3 font-medium">
+            No se encontraron pagos por tarifa en el periodo seleccionado.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  const filas = tarifas
+    .map((tarifa) => {
+      const nombre = tarifa.nombre || "Tarifa eliminada";
+
+      const efectivoCantidad = cantidad(
+        tarifa.efectivo?.cantidad ?? tarifa.cantidad_efectivo,
+      );
+
+      const efectivoTotal = Number(
+        tarifa.efectivo?.total ?? tarifa.total_efectivo ?? 0,
+      );
+
+      const tarjetaCantidad = cantidad(
+        tarifa.tarjeta?.cantidad ?? tarifa.cantidad_tarjeta,
+      );
+
+      const tarjetaTotal = Number(
+        tarifa.tarjeta?.total ?? tarifa.total_tarjeta ?? 0,
+      );
+
+      const transferenciaCantidad = cantidad(
+        tarifa.transferencia?.cantidad ?? tarifa.cantidad_transferencia,
+      );
+
+      const transferenciaTotal = Number(
+        tarifa.transferencia?.total ?? tarifa.total_transferencia ?? 0,
+      );
+
+      const totalCantidad = cantidad(
+        tarifa.cantidad_pagos ??
+          efectivoCantidad + tarjetaCantidad + transferenciaCantidad,
+      );
+
+      const totalCobrado = Number(
+        tarifa.total ?? efectivoTotal + tarjetaTotal + transferenciaTotal,
+      );
+
+      return `
+        <div class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/80 shadow-lg">
+          
+          <div class="flex flex-col gap-4 border-b border-slate-700 bg-slate-800 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+            
+            <div>
+              <div class="flex items-center gap-2">
+                <i class="bi bi-tag-fill text-indigo-400"></i>
+
+                <h3 class="text-lg font-bold text-white">
+                  ${escapeHTMLReporte(nombre)}
+                </h3>
+              </div>
+
+              ${
+                tarifa.monto_tarifa != null
+                  ? `
+                    <p class="mt-1 text-sm text-slate-400">
+                      Precio registrado de la tarifa:
+                      <span class="font-semibold text-slate-200">
+                        ${dinero(tarifa.monto_tarifa)}
+                      </span>
+                    </p>
+                  `
+                  : ""
+              }
+            </div>
+
+            <div class="flex flex-wrap gap-3">
+              
+              <div class="min-w-[105px] rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-center">
+                <div class="text-xs font-semibold uppercase tracking-wide text-indigo-300">
+                  Pagos
+                </div>
+
+                <div class="text-xl font-bold text-white">
+                  ${totalCantidad}
+                </div>
+              </div>
+
+              <div class="min-w-[125px] rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-center">
+                <div class="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                  Total
+                </div>
+
+                <div class="text-xl font-bold text-emerald-400">
+                  ${dinero(totalCobrado)}
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 bg-slate-900/40 p-5 md:grid-cols-3">
+            
+            ${crearMetodoTarifaHTML({
+              titulo: "Efectivo",
+              icono: "bi-cash-stack",
+              cantidad: efectivoCantidad,
+              total: efectivoTotal,
+              clases: {
+                fondo: "bg-emerald-500/10",
+                borde: "border-emerald-500/30",
+                icono: "text-emerald-400",
+                texto: "text-emerald-400",
+              },
+            })}
+
+            ${crearMetodoTarifaHTML({
+              titulo: "Tarjeta",
+              icono: "bi-credit-card-2-front-fill",
+              cantidad: tarjetaCantidad,
+              total: tarjetaTotal,
+              clases: {
+                fondo: "bg-blue-500/10",
+                borde: "border-blue-500/30",
+                icono: "text-blue-400",
+                texto: "text-blue-400",
+              },
+            })}
+
+            ${crearMetodoTarifaHTML({
+              titulo: "Transferencia",
+              icono: "bi-bank",
+              cantidad: transferenciaCantidad,
+              total: transferenciaTotal,
+              clases: {
+                fondo: "bg-violet-500/10",
+                borde: "border-violet-500/30",
+                icono: "text-violet-400",
+                texto: "text-violet-400",
+              },
+            })}
+
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  const totalPagosTarifas = tarifas.reduce(
+    (acumulado, tarifa) => acumulado + cantidad(tarifa.cantidad_pagos),
+    0,
+  );
+
+  const totalDineroTarifas = tarifas.reduce(
+    (acumulado, tarifa) => acumulado + Number(tarifa.total || 0),
+    0,
+  );
+
+  return `
+    <div class="col-span-1 md:col-span-2 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70 shadow-xl">
+      
+      <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 px-6 py-5 text-white">
+        
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          
+          <div class="flex items-center gap-3">
+            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+              <i class="bi bi-tags-fill text-3xl"></i>
+            </div>
+
+            <div>
+              <h2 class="text-xl font-bold">
+                Pagos por tarifa
+              </h2>
+
+              <p class="text-sm text-blue-100">
+                Cantidades y totales por método de pago
+              </p>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-3">
+            
+            <div class="min-w-[150px] rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-center backdrop-blur">
+              <div class="text-xs uppercase tracking-wide text-blue-100">
+                Pagos registrados
+              </div>
+
+              <div class="text-xl font-bold text-white">
+                ${totalPagosTarifas}
+              </div>
+            </div>
+
+            <div class="min-w-[150px] rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-center backdrop-blur">
+              <div class="text-xs uppercase tracking-wide text-blue-100">
+                Total cobrado
+              </div>
+
+              <div class="text-xl font-bold text-emerald-300">
+                ${dinero(totalDineroTarifas)}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-5 bg-slate-900/60 p-5">
+        ${filas}
+      </div>
+
+    </div>
+  `;
+}
+function crearMetodoTarifaHTML({ titulo, icono, cantidad, total, clases }) {
+  const totalFormateado = Number(total || 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  return `
+    <div class="${clases.fondo} ${clases.borde} rounded-xl border p-4 shadow-sm">
+      
+      <div class="flex items-start justify-between gap-3">
+        
+        <div>
+          <div class="flex items-center gap-2">
+            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-950/30">
+              <i class="bi ${icono} ${clases.icono} text-xl"></i>
+            </div>
+
+            <span class="font-semibold text-slate-200">
+              ${titulo}
+            </span>
+          </div>
+
+          <div class="mt-4 text-sm text-slate-400">
+            Pagos realizados
+          </div>
+
+          <div class="text-2xl font-bold ${clases.texto}">
+            ${parseInt(cantidad || 0, 10)}
+          </div>
+        </div>
+
+        <div class="text-right">
+          <div class="text-sm text-slate-400">
+            Total
+          </div>
+
+          <div class="mt-1 text-xl font-bold ${clases.texto}">
+            $${totalFormateado}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
 function mostrarFiltros() {
   document.getElementById("fecha_dia").classList.add("hidden");
   document.getElementById("fecha_mes").classList.add("hidden");
@@ -246,7 +565,14 @@ function mostrarFiltros() {
     document.getElementById("rango_fechas").classList.remove("hidden");
   }
 }
-
+function escapeHTMLReporte(valor) {
+  return String(valor ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 // Agrega este botón justo debajo del div con ID "reporteContainer"
 function agregarBotonesAccionReporte() {
   const container = document.getElementById("reporteContainer");
@@ -258,7 +584,7 @@ function agregarBotonesAccionReporte() {
   const wrap = document.createElement("div");
   wrap.id = "accionesReporteWrap";
   wrap.className =
-    "col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6";
+    "col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6";
 
   // Card PDF
   const cardPDF = document.createElement("div");
@@ -288,10 +614,31 @@ function agregarBotonesAccionReporte() {
 
   cardCorreo.appendChild(btnCorreo);
 
+  // Card Ticket 58 mm
+const cardTicket = document.createElement("div");
+
+cardTicket.className =
+  "rounded-xl shadow text-2xl text-center flex items-center justify-center overflow-hidden bg-white";
+
+const btnTicket = document.createElement("button");
+
+btnTicket.type = "button";
+btnTicket.textContent = "🧾 Ticket 58 mm";
+
+btnTicket.className =
+  "bg-amber-600 h-full w-full hover:bg-amber-700 text-white px-6 py-5 rounded-xl font-semibold shadow transition";
+
+btnTicket.onclick = generarTicketCorte58mm;
+
+cardTicket.appendChild(btnTicket);
+  
   wrap.appendChild(cardPDF);
   wrap.appendChild(cardCorreo);
+  wrap.appendChild(cardTicket);
 
   container.appendChild(wrap);
+
+  
 }
 
 async function construirPDFReporte() {
@@ -384,7 +731,34 @@ async function construirPDFReporte() {
     }
     return y;
   }
+  function renderTituloSeccion({
+    titulo,
+    subtitulo = "",
+    colorFondo = [30, 64, 175],
+    colorTexto = [255, 255, 255],
+    colorSubtitulo = [219, 234, 254],
+  }) {
+    const alto = subtitulo ? 25 : 18;
 
+    y = ensureSpace(doc, y, alto + 8);
+
+    doc.setFillColor(...colorFondo);
+    doc.roundedRect(10, y, 190, alto, 3, 3, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(...colorTexto);
+    doc.text(titulo.toUpperCase(), 16, y + 9);
+
+    if (subtitulo) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...colorSubtitulo);
+      doc.text(subtitulo, 16, y + 16);
+    }
+
+    y += alto + 8;
+  }
   function lineAmount(
     doc,
     x,
@@ -392,9 +766,9 @@ async function construirPDFReporte() {
     label,
     amount,
     rightBound,
-    color = PALETTE.text,
+    labelColor = PALETTE.text,
+    amountColor = labelColor,
   ) {
-    doc.setTextColor(...color);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
 
@@ -416,17 +790,23 @@ async function construirPDFReporte() {
       labelShown += "…";
     }
 
+    // Texto izquierdo
+    doc.setTextColor(...labelColor);
     doc.text(labelShown, x, y);
 
     const labelW = doc.getTextWidth(labelShown);
     const dotsStart = x + labelW + 2;
+
     if (dotEnd > dotsStart) {
       doc.setDrawColor(...PALETTE.stroke);
       doc.setLineWidth(0.2);
       doc.line(dotsStart, y - 1.2, dotEnd, y - 1.2);
     }
 
+    // Monto derecho
+    doc.setTextColor(...amountColor);
     doc.text(price, right - wPrice, y);
+
     return y + 6;
   }
 
@@ -601,6 +981,298 @@ async function construirPDFReporte() {
     });
 
     y += 4;
+  };
+  const renderMetodoTarifaPDF = ({
+    posicionY,
+    titulo,
+    cantidad,
+    total,
+    color,
+  }) => {
+    const xInicial = 17;
+    const limiteDerecho = 193;
+
+    const cantidadNumero = parseInt(cantidad || 0, 10);
+    const totalNumero = Number(total || 0);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...color);
+    doc.text(titulo, xInicial, posicionY);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(203, 213, 225);
+
+    const cantidadTexto = `${cantidadNumero} pago${
+      cantidadNumero === 1 ? "" : "s"
+    }`;
+
+    doc.text(cantidadTexto, 70, posicionY);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...color);
+
+    const totalTexto = fmtMoney(totalNumero);
+
+    doc.text(
+      totalTexto,
+      limiteDerecho - doc.getTextWidth(totalTexto),
+      posicionY,
+    );
+
+    return posicionY + 8;
+  };
+
+  // =========================
+  // 5.2) DESGLOSE POR TARIFA
+  // =========================
+  const renderResumenTarifasPDF = () => {
+    const tarifas = Array.isArray(data.resumen_tarifas)
+      ? data.resumen_tarifas
+      : [];
+
+    if (tarifas.length === 0) {
+      return;
+    }
+
+    const numeroEntero = (valor) => parseInt(valor || 0, 10);
+    const numeroDecimal = (valor) => Number(valor || 0);
+
+    const totalPagosTarifas = tarifas.reduce(
+      (acumulado, tarifa) => acumulado + numeroEntero(tarifa.cantidad_pagos),
+      0,
+    );
+
+    const totalCobradoTarifas = tarifas.reduce(
+      (acumulado, tarifa) => acumulado + numeroDecimal(tarifa.total),
+      0,
+    );
+
+    /*
+  |--------------------------------------------------------------------------
+  | Encabezado
+  |--------------------------------------------------------------------------
+  */
+
+    y = ensureSpace(doc, y, 35);
+
+    doc.setFillColor(30, 64, 175);
+    doc.roundedRect(10, y, 190, 25, 3, 3, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(255, 255, 255);
+    doc.text("PAGOS POR TARIFA", 16, y + 9);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(219, 234, 254);
+    doc.text("Cantidades y totales por método de pago", 16, y + 16);
+
+    const pagosTexto = `Pagos: ${totalPagosTarifas}`;
+    const totalTexto = `Total: ${fmtMoney(totalCobradoTarifas)}`;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+
+    doc.text(pagosTexto, 194 - doc.getTextWidth(pagosTexto), y + 9);
+
+    doc.setTextColor(167, 243, 208);
+
+    doc.text(totalTexto, 194 - doc.getTextWidth(totalTexto), y + 17);
+
+    y += 32;
+
+    /*
+  |--------------------------------------------------------------------------
+  | Tarifa individual
+  |--------------------------------------------------------------------------
+  */
+
+    tarifas.forEach((tarifa) => {
+      const nombreTarifa = String(tarifa.nombre || "Tarifa eliminada");
+
+      const cantidadPagos = numeroEntero(tarifa.cantidad_pagos);
+
+      const totalTarifa = numeroDecimal(tarifa.total);
+
+      const cantidadEfectivo = numeroEntero(
+        tarifa.efectivo?.cantidad ?? tarifa.cantidad_efectivo,
+      );
+
+      const totalEfectivo = numeroDecimal(
+        tarifa.efectivo?.total ?? tarifa.total_efectivo,
+      );
+
+      const cantidadTarjeta = numeroEntero(
+        tarifa.tarjeta?.cantidad ?? tarifa.cantidad_tarjeta,
+      );
+
+      const totalTarjeta = numeroDecimal(
+        tarifa.tarjeta?.total ?? tarifa.total_tarjeta,
+      );
+
+      const cantidadTransferencia = numeroEntero(
+        tarifa.transferencia?.cantidad ?? tarifa.cantidad_transferencia,
+      );
+
+      const totalTransferencia = numeroDecimal(
+        tarifa.transferencia?.total ?? tarifa.total_transferencia,
+      );
+
+      const cantidadOtro = numeroEntero(
+        tarifa.otro?.cantidad ?? tarifa.cantidad_otro,
+      );
+
+      const totalOtro = numeroDecimal(tarifa.otro?.total ?? tarifa.total_otro);
+
+      const mostrarOtro = cantidadOtro > 0 || totalOtro > 0;
+
+      const altoCaja = mostrarOtro ? 69 : 61;
+
+      y = ensureSpace(doc, y, altoCaja + 10);
+
+      /*
+    |--------------------------------------------------------------------------
+    | Fondo de la tarifa
+    |--------------------------------------------------------------------------
+    */
+
+      doc.setDrawColor(71, 85, 105);
+      doc.setFillColor(30, 41, 59);
+      doc.roundedRect(10, y, 190, altoCaja, 3, 3, "FD");
+
+      /*
+    |--------------------------------------------------------------------------
+    | Nombre y precio registrado
+    |--------------------------------------------------------------------------
+    */
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(248, 250, 252);
+
+      const nombreDividido = doc.splitTextToSize(nombreTarifa, 100);
+
+      doc.text(nombreDividido, 16, y + 10);
+
+      if (tarifa.monto_tarifa != null) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+
+        doc.text(
+          `Precio registrado: ${fmtMoney(tarifa.monto_tarifa)}`,
+          16,
+          y + 18,
+        );
+      }
+
+      /*
+    |--------------------------------------------------------------------------
+    | Caja de cantidad de pagos
+    |--------------------------------------------------------------------------
+    */
+
+      doc.setFillColor(49, 46, 129);
+      doc.roundedRect(130, y + 5, 27, 18, 2, 2, "F");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(199, 210, 254);
+      doc.text("PAGOS", 143.5, y + 11, {
+        align: "center",
+      });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(255, 255, 255);
+      doc.text(String(cantidadPagos), 143.5, y + 19, {
+        align: "center",
+      });
+
+      /*
+    |--------------------------------------------------------------------------
+    | Caja de total
+    |--------------------------------------------------------------------------
+    */
+
+      doc.setFillColor(6, 78, 59);
+      doc.roundedRect(160, y + 5, 34, 18, 2, 2, "F");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(167, 243, 208);
+      doc.text("TOTAL", 177, y + 11, {
+        align: "center",
+      });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(110, 231, 183);
+      doc.text(fmtMoney(totalTarifa), 177, y + 19, {
+        align: "center",
+      });
+
+      /*
+    |--------------------------------------------------------------------------
+    | Separador
+    |--------------------------------------------------------------------------
+    */
+
+      doc.setDrawColor(71, 85, 105);
+      doc.setLineWidth(0.25);
+      doc.line(16, y + 28, 194, y + 28);
+
+      /*
+    |--------------------------------------------------------------------------
+    | Métodos de pago
+    |--------------------------------------------------------------------------
+    */
+
+      let posicionMetodo = y + 38;
+
+      posicionMetodo = renderMetodoTarifaPDF({
+        posicionY: posicionMetodo,
+        titulo: "Efectivo",
+        cantidad: cantidadEfectivo,
+        total: totalEfectivo,
+        color: [52, 211, 153],
+      });
+
+      posicionMetodo = renderMetodoTarifaPDF({
+        posicionY: posicionMetodo,
+        titulo: "Tarjeta",
+        cantidad: cantidadTarjeta,
+        total: totalTarjeta,
+        color: [96, 165, 250],
+      });
+
+      posicionMetodo = renderMetodoTarifaPDF({
+        posicionY: posicionMetodo,
+        titulo: "Transferencia",
+        cantidad: cantidadTransferencia,
+        total: totalTransferencia,
+        color: [167, 139, 250],
+      });
+
+      if (mostrarOtro) {
+        renderMetodoTarifaPDF({
+          posicionY: posicionMetodo,
+          titulo: "Otro",
+          cantidad: cantidadOtro,
+          total: totalOtro,
+          color: [251, 191, 36],
+        });
+      }
+
+      y += altoCaja + 8;
+    });
+
+    y += 3;
   };
   // =========================
   // 6) Desglose PRODUCTOS
@@ -872,17 +1544,28 @@ async function construirPDFReporte() {
     y += boxHv + 10;
 
     if (tipo === "dia" && String(usuarioId) !== "todos") {
+      const suscripcionesEfectivo = totalSuscripcionesPorMetodo.efectivo || 0;
+
+      const productosEfectivo = ventaEfectivo || 0;
+
+      const financiadosEfectivo = totalFinanciadosPorMetodo.efectivo || 0;
+
+      const visitasEfectivo = Number(data.visitas_por_metodo?.efectivo || 0);
+
       const efectivoEsperado =
-        (totalSuscripcionesPorMetodo.efectivo || 0) +
-        (ventaEfectivo || 0) +
-        (totalFinanciadosPorMetodo.efectivo || 0);
+        suscripcionesEfectivo +
+        productosEfectivo +
+        financiadosEfectivo +
+        visitasEfectivo;
+
       const netoMovs = parseFloat(data.caja_neto || 0);
       const dejado = Number(document.getElementById("monto_caja")?.value || 0);
       const totalEntregar = efectivoEsperado + netoMovs + dejado;
 
       const boxX = 10,
         boxW = 190,
-        boxH = 56;
+        boxH = 78;
+
       y = ensureSpace(doc, y, boxH + 10);
 
       doc.setDrawColor(...PALETTE.stroke);
@@ -901,10 +1584,49 @@ async function construirPDFReporte() {
         doc,
         boxX + 8,
         yK,
-        "Total General efectivo",
-        efectivoEsperado,
+        "Suscripciones efectivo",
+        suscripcionesEfectivo,
         rb,
       );
+
+      yK = lineAmount(
+        doc,
+        boxX + 8,
+        yK,
+        "Ventas de productos efectivo",
+        productosEfectivo,
+        rb,
+      );
+
+      yK = lineAmount(
+        doc,
+        boxX + 8,
+        yK,
+        "Pagos financiados efectivo",
+        financiadosEfectivo,
+        rb,
+      );
+
+      yK = lineAmount(
+        doc,
+        boxX + 8,
+        yK,
+        "Visitas efectivo",
+        visitasEfectivo,
+        rb,
+      );
+
+      yK = lineAmount(
+        doc,
+        boxX + 8,
+        yK,
+        "Subtotal efectivo",
+        efectivoEsperado,
+        rb,
+        PALETTE.ok, // texto verde
+        [37, 204, 0],
+      );
+
       yK = lineAmount(
         doc,
         boxX + 8,
@@ -913,6 +1635,7 @@ async function construirPDFReporte() {
         netoMovs,
         rb,
       );
+
       yK = lineAmount(doc, boxX + 8, yK, "Caja", dejado, rb);
 
       doc.setDrawColor(...PALETTE.stroke);
@@ -922,8 +1645,10 @@ async function construirPDFReporte() {
 
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...PALETTE.ok);
+
       const label = "TOTAL A ENTREGAR";
       const amount = fmtMoney(totalEntregar);
+
       doc.text(label, boxX + 8, yK);
       doc.text(amount, boxX + boxW - 8 - doc.getTextWidth(amount), yK);
 
@@ -975,14 +1700,8 @@ async function construirPDFReporte() {
   // =========================
   const renderMovimientosCajaPDF = () => {
     const movs = data.movimientos_caja || [];
-    if (!movs.length) return;
 
-    y = ensureSpace(doc, y, 22);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(...PALETTE.title);
-    doc.text("Detalle de movimientos de caja", 10, y);
-    y += 8;
+    if (!movs.length) return;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
@@ -1056,10 +1775,23 @@ async function construirPDFReporte() {
       (p) => (p.metodo || "").toLowerCase() === "transferencia",
     ),
   };
+  const hayPagosSuscripciones =
+    pagos.efectivo.length > 0 ||
+    pagos.tarjeta.length > 0 ||
+    pagos.transferencia.length > 0;
 
+  if (hayPagosSuscripciones) {
+    renderTituloSeccion({
+      titulo: "Pagos de suscripciones",
+      subtitulo: "Detalle de mensualidades cobradas por método de pago",
+      colorFondo: [30, 64, 175],
+      colorSubtitulo: [219, 234, 254],
+    });
+  }
   renderPagos("Pagos por Efectivo:", pagos.efectivo, "efectivo");
   renderPagos("Pagos por Tarjeta:", pagos.tarjeta, "tarjeta");
   renderPagos("Pagos por Transferencia:", pagos.transferencia, "transferencia");
+  renderResumenTarifasPDF();
   const pagosFinanciados = {
     efectivo: (data.pagos_financiados || []).filter(
       (p) => (p.metodo_pago || p.metodo || "").toLowerCase() === "efectivo",
@@ -1075,7 +1807,20 @@ async function construirPDFReporte() {
       (p) => (p.metodo_pago || p.metodo || "").toLowerCase() === "otro",
     ),
   };
+  const hayPagosFinanciados =
+    pagosFinanciados.efectivo.length > 0 ||
+    pagosFinanciados.tarjeta.length > 0 ||
+    pagosFinanciados.transferencia.length > 0 ||
+    pagosFinanciados.otro.length > 0;
 
+  if (hayPagosFinanciados) {
+    renderTituloSeccion({
+      titulo: "Pagos financiados",
+      subtitulo: "Abonos registrados de ventas financiadas",
+      colorFondo: [8, 145, 178],
+      colorSubtitulo: [207, 250, 254],
+    });
+  }
   renderPagosFinanciados(
     "Pagos Financiados - Efectivo:",
     pagosFinanciados.efectivo,
@@ -1110,18 +1855,1200 @@ async function construirPDFReporte() {
       (v) => (v.metodo_pago || "").toLowerCase() === "transferencia",
     ),
   };
+  const hayVentasProductos =
+    ventas.efectivo.length > 0 ||
+    ventas.tarjeta.length > 0 ||
+    ventas.transferencia.length > 0;
 
+  if (hayVentasProductos) {
+    renderTituloSeccion({
+      titulo: "Ventas de productos",
+      subtitulo: "Detalle de productos vendidos por método de pago",
+      colorFondo: [5, 150, 105],
+      colorSubtitulo: [209, 250, 229],
+    });
+  }
   renderVentas("Ventas de Productos - Efectivo:", ventas.efectivo);
   renderVentas("Ventas de Productos - Tarjeta:", ventas.tarjeta);
   renderVentas("Ventas de Productos - Transferencia:", ventas.transferencia);
 
-  if (tipo === "dia" && String(usuarioId) !== "todos") {
+  if (
+    tipo === "dia" &&
+    String(usuarioId) !== "todos" &&
+    Array.isArray(data.movimientos_caja) &&
+    data.movimientos_caja.length > 0
+  ) {
+    renderTituloSeccion({
+      titulo: "Movimientos de caja",
+      subtitulo: "Ingresos y egresos registrados durante el día",
+      colorFondo: [180, 83, 9],
+      colorSubtitulo: [254, 243, 199],
+    });
+
     renderMovimientosCajaPDF();
   }
 
   renderTotales();
 
   return doc;
+}
+function centrarTextoTicket(doc, texto, y, ancho = 58) {
+  doc.text(String(texto), ancho / 2, y, {
+    align: "center",
+  });
+}
+
+function lineaTicket(doc, y, caracter = "-") {
+  doc.setFont("courier", "normal");
+  doc.setFontSize(7);
+
+  centrarTextoTicket(
+    doc,
+    caracter.repeat(32),
+    y,
+  );
+
+  return y + 3.5;
+}
+
+function tituloTicket(doc, titulo, y) {
+  y += 1;
+
+  doc.setFont("courier", "bold");
+  doc.setFontSize(8.5);
+
+  centrarTextoTicket(
+    doc,
+    `== ${String(titulo).toUpperCase()} ==`,
+    y,
+  );
+
+  return y + 4.5;
+}
+
+function textoTicketIzquierdaDerecha(
+  doc,
+  izquierda,
+  derecha,
+  y,
+  {
+    negrita = false,
+    tamano = 7.5,
+    margenIzquierdo = 3,
+    margenDerecho = 55,
+  } = {},
+) {
+  doc.setFont(
+    "courier",
+    negrita ? "bold" : "normal",
+  );
+
+  doc.setFontSize(tamano);
+
+  const derechaTxt = String(derecha ?? "");
+  const anchoDerecha = doc.getTextWidth(derechaTxt);
+
+  const maxAnchoIzquierda =
+    margenDerecho -
+    margenIzquierdo -
+    anchoDerecha -
+    2;
+
+  let izquierdaTxt = String(izquierda ?? "");
+
+  while (
+    izquierdaTxt.length > 1 &&
+    doc.getTextWidth(izquierdaTxt) > maxAnchoIzquierda
+  ) {
+    izquierdaTxt = izquierdaTxt.slice(0, -1);
+  }
+
+  doc.text(
+    izquierdaTxt,
+    margenIzquierdo,
+    y,
+  );
+
+  doc.text(
+    derechaTxt,
+    margenDerecho,
+    y,
+    {
+      align: "right",
+    },
+  );
+
+  return y + 4;
+}
+
+function textoTicketMultilinea(
+  doc,
+  texto,
+  y,
+  {
+    margen = 3,
+    tamano = 7.5,
+    negrita = false,
+    centrado = false,
+  } = {},
+) {
+  doc.setFont(
+    "courier",
+    negrita ? "bold" : "normal",
+  );
+
+  doc.setFontSize(tamano);
+
+  const lineas = doc.splitTextToSize(
+    String(texto ?? ""),
+    52,
+  );
+
+  if (centrado) {
+    lineas.forEach((linea) => {
+      centrarTextoTicket(doc, linea, y);
+      y += 3.8;
+    });
+  } else {
+    doc.text(lineas, margen, y);
+    y += lineas.length * 3.8;
+  }
+
+  return y;
+}
+
+function dineroTicket(valor) {
+  return `$${Number(valor || 0).toLocaleString(
+    "es-MX",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    },
+  )}`;
+}
+
+function metodoNormalizadoTicket(valor) {
+  const metodo = String(valor || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    metodo === "efectivo" ||
+    metodo === "tarjeta" ||
+    metodo === "transferencia"
+  ) {
+    return metodo;
+  }
+
+  return "otro";
+}
+async function construirTicketCorte58mm() {
+  const { jsPDF } = window.jspdf;
+
+  const usuarioId =
+    document.getElementById("usuario").value;
+
+  const tipo =
+    document.getElementById("tipoPeriodo").value;
+
+  let fecha = "";
+  let inicio = "";
+  let fin = "";
+
+  if (tipo === "dia") {
+    fecha =
+      document.getElementById("fecha_dia").value;
+  } else if (tipo === "mes") {
+    fecha =
+      document.getElementById("fecha_mes").value;
+  } else if (tipo === "anio") {
+    fecha =
+      document.getElementById("fecha_anio").value;
+  } else if (tipo === "rango") {
+    inicio =
+      document.getElementById("rango_inicio").value;
+
+    fin =
+      document.getElementById("rango_fin").value;
+  }
+
+  const params = new URLSearchParams({
+    usuario: usuarioId,
+    tipo,
+    fecha,
+    inicio,
+    fin,
+  });
+
+  const response = await fetch(
+    `../php/obtener_reportes_detalle.php?${params.toString()}`,
+  );
+
+  const data = await response.json();
+
+  if (!data.success) {
+    throw new Error(
+      data.error ||
+        "No se pudo obtener el detalle del corte.",
+    );
+  }
+  const branding = await obtenerBrandingTicket();
+
+const nombreGym =
+  branding.app_name ||
+  "Gym Admin";
+
+const logoBranding = await cargarImagenBase64(
+  branding.logo,
+);
+  const usuarioSelect =
+    document.getElementById("usuario");
+
+  const nombreUsuario =
+    usuarioSelect.options[
+      usuarioSelect.selectedIndex
+    ]?.text || "Usuario";
+
+  /*
+  |--------------------------------------------------------------------------
+  | Calcular altura aproximada
+  |--------------------------------------------------------------------------
+  */
+
+  const cantidadPagos = Array.isArray(data.pagos)
+  ? data.pagos.length
+  : 0;
+
+const cantidadTarifas = Array.isArray(data.resumen_tarifas)
+  ? data.resumen_tarifas.length
+  : 0;
+
+const cantidadMetodosTarifas = (data.resumen_tarifas || []).reduce(
+  (total, tarifa) => {
+    let metodosConDatos = 0;
+
+    if (
+      Number(tarifa.efectivo?.cantidad || 0) > 0 ||
+      Number(tarifa.efectivo?.total || 0) > 0
+    ) {
+      metodosConDatos++;
+    }
+
+    if (
+      Number(tarifa.tarjeta?.cantidad || 0) > 0 ||
+      Number(tarifa.tarjeta?.total || 0) > 0
+    ) {
+      metodosConDatos++;
+    }
+
+    if (
+      Number(tarifa.transferencia?.cantidad || 0) > 0 ||
+      Number(tarifa.transferencia?.total || 0) > 0
+    ) {
+      metodosConDatos++;
+    }
+
+    return total + metodosConDatos;
+  },
+  0,
+);
+
+const cantidadFinanciados = Array.isArray(data.pagos_financiados)
+  ? data.pagos_financiados.length
+  : 0;
+
+const cantidadVentas = Array.isArray(data.ventas)
+  ? data.ventas.length
+  : 0;
+
+const cantidadProductos = (data.ventas || []).reduce(
+  (total, venta) => {
+    return total + (Array.isArray(venta.productos) ? venta.productos.length : 0);
+  },
+  0,
+);
+
+const cantidadMovimientos = Array.isArray(data.movimientos_caja)
+  ? data.movimientos_caja.length
+  : 0;
+
+/*
+ * Altura base:
+ * branding, encabezado, resumen, caja, títulos, visitas,
+ * total general y pie del ticket.
+ */
+let altoTicket = 230;
+
+/* Registros variables */
+altoTicket += cantidadPagos * 5;
+altoTicket += cantidadTarifas * 6;
+altoTicket += cantidadMetodosTarifas * 4;
+altoTicket += cantidadFinanciados * 5;
+altoTicket += cantidadVentas * 3;
+altoTicket += cantidadProductos * 5;
+altoTicket += cantidadMovimientos * 5;
+
+/*
+ * Margen de seguridad para nombres largos que puedan ocupar más de una línea.
+ */
+altoTicket += 40;
+
+/*
+ * Solo dejamos una altura mínima. No usamos Math.min(), porque eso era
+ * lo que cortaba el final del ticket cuando era muy largo.
+ */
+altoTicket = Math.max(altoTicket, 260);
+
+  const doc = new jsPDF({
+    unit: "mm",
+    format: [58, altoTicket],
+    orientation: "portrait",
+  });
+
+  let y = 4;
+
+  /*
+|--------------------------------------------------------------------------
+| Logo del gimnasio
+|--------------------------------------------------------------------------
+*/
+
+if (logoBranding) {
+  try {
+    /*
+     * Logo centrado dentro de un espacio máximo de 30 x 18 mm.
+     */
+    doc.addImage(
+      logoBranding,
+      "PNG",
+      14,
+      y,
+      30,
+      18,
+    );
+
+    y += 21;
+  } catch (error) {
+    console.warn(
+      "No se pudo agregar el logo del branding al ticket:",
+      error,
+    );
+  }
+}
+
+  /*
+  |--------------------------------------------------------------------------
+  | Encabezado
+  |--------------------------------------------------------------------------
+  |
+  | Puedes cambiar estos datos por los reales del gimnasio.
+  |--------------------------------------------------------------------------
+  */
+
+  doc.setFont("courier", "bold");
+doc.setFontSize(10);
+
+/*
+ * Divide el nombre en varias líneas si es demasiado largo
+ * para el ancho de 58 mm.
+ */
+const lineasNombreGym = doc.splitTextToSize(
+  String(nombreGym),
+  50,
+);
+
+lineasNombreGym.forEach((linea) => {
+  centrarTextoTicket(
+    doc,
+    linea,
+    y,
+  );
+
+  y += 4;
+});
+
+y += 1;
+
+  doc.setFont("courier", "normal");
+  doc.setFontSize(7);
+
+  y = textoTicketMultilinea(
+    doc,
+    "CORTE DE TURNO",
+    y,
+    {
+      centrado: true,
+      negrita: true,
+      tamano: 8,
+    },
+  );
+
+  y = lineaTicket(doc, y, "=");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Datos del reporte
+  |--------------------------------------------------------------------------
+  */
+
+  const fechaGeneracion =
+    new Date().toLocaleDateString("es-MX", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+  const horaGeneracion =
+    new Date().toLocaleTimeString("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "REALIZADO:",
+    `${fechaGeneracion} ${horaGeneracion}`,
+    y,
+    {
+      tamano: 6.5,
+    },
+  );
+
+  y = textoTicketMultilinea(
+    doc,
+    `CAJERO: ${nombreUsuario}`,
+    y,
+    {
+      negrita: true,
+      tamano: 7,
+    },
+  );
+
+  let periodoTexto = "";
+
+  if (tipo === "dia") {
+    periodoTexto = formatearFecha(fecha);
+  } else if (tipo === "mes") {
+    periodoTexto = fecha;
+  } else if (tipo === "anio") {
+    periodoTexto = fecha;
+  } else {
+    periodoTexto =
+      `${formatearFecha(inicio)} A ` +
+      formatearFecha(fin);
+  }
+
+  y = textoTicketMultilinea(
+    doc,
+    `PERIODO: ${periodoTexto}`,
+    y,
+    {
+      tamano: 7,
+    },
+  );
+
+  y = lineaTicket(doc, y);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Totales principales
+  |--------------------------------------------------------------------------
+  */
+
+  const totalSuscripciones = (
+    data.pagos || []
+  ).reduce(
+    (suma, pago) =>
+      suma +
+      Number(pago.monto || 0) -
+      Number(pago.descuento || 0),
+    0,
+  );
+
+  const totalProductos = (
+    data.ventas || []
+  ).reduce(
+    (suma, venta) =>
+      suma +
+      (venta.productos || []).reduce(
+        (subtotal, producto) =>
+          subtotal +
+          Number(producto.total || 0),
+        0,
+      ),
+    0,
+  );
+
+  const totalFinanciados = Number(
+    data.total_financiados || 0,
+  );
+
+  const totalVisitas = Number(
+    data.visitas_total || 0,
+  );
+
+  const totalVentas =
+    totalSuscripciones +
+    totalProductos +
+    totalFinanciados +
+    totalVisitas;
+
+  const cantidadOperaciones =
+    cantidadPagos +
+    cantidadVentas +
+    cantidadFinanciados +
+    Number(data.visitas_cantidad || 0);
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "VENTAS TOTALES",
+    dineroTicket(totalVentas),
+    y,
+    {
+      negrita: true,
+      tamano: 8,
+    },
+  );
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "OPERACIONES",
+    cantidadOperaciones,
+    y,
+    {
+      negrita: true,
+      tamano: 8,
+    },
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Dinero en caja
+  |--------------------------------------------------------------------------
+  */
+
+  y = tituloTicket(
+    doc,
+    "DINERO EN CAJA",
+    y + 2,
+  );
+
+  const suscripcionesEfectivo = (
+    data.pagos || []
+  )
+    .filter(
+      (pago) =>
+        metodoNormalizadoTicket(pago.metodo) ===
+        "efectivo",
+    )
+    .reduce(
+      (suma, pago) =>
+        suma +
+        Number(pago.monto || 0) -
+        Number(pago.descuento || 0),
+      0,
+    );
+
+  const productosEfectivo = (
+    data.ventas || []
+  )
+    .filter(
+      (venta) =>
+        metodoNormalizadoTicket(
+          venta.metodo_pago,
+        ) === "efectivo",
+    )
+    .reduce(
+      (suma, venta) =>
+        suma +
+        (venta.productos || []).reduce(
+          (subtotal, producto) =>
+            subtotal +
+            Number(producto.total || 0),
+          0,
+        ),
+      0,
+    );
+
+  const financiadosEfectivo = (
+    data.pagos_financiados || []
+  )
+    .filter(
+      (pago) =>
+        metodoNormalizadoTicket(
+          pago.metodo_pago || pago.metodo,
+        ) === "efectivo",
+    )
+    .reduce(
+      (suma, pago) =>
+        suma + Number(pago.monto || 0),
+      0,
+    );
+
+  const visitasEfectivo = Number(
+    data.visitas_por_metodo?.efectivo || 0,
+  );
+
+  const ventasEfectivo =
+    suscripcionesEfectivo +
+    productosEfectivo +
+    financiadosEfectivo +
+    visitasEfectivo;
+
+  const cajaInicial = Number(
+    document.getElementById("monto_caja")
+      ?.value || 0,
+  );
+
+  const entradas = Number(
+    data.caja_ingresos || 0,
+  );
+
+  const salidas = Number(
+    data.caja_egresos || 0,
+  );
+
+  const efectivoCaja =
+    cajaInicial +
+    ventasEfectivo +
+    entradas -
+    salidas;
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "FONDO DE CAJA",
+    dineroTicket(cajaInicial),
+    y,
+  );
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "VENTAS EFECTIVO",
+    `+${dineroTicket(ventasEfectivo)}`,
+    y,
+  );
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "ENTRADAS",
+    `+${dineroTicket(entradas)}`,
+    y,
+  );
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "SALIDAS",
+    `-${dineroTicket(salidas)}`,
+    y,
+  );
+
+  y = lineaTicket(doc, y);
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "EFECTIVO EN CAJA",
+    dineroTicket(efectivoCaja),
+    y,
+    {
+      negrita: true,
+      tamano: 8,
+    },
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Entradas
+  |--------------------------------------------------------------------------
+  */
+
+  y = tituloTicket(
+    doc,
+    "ENTRADAS EFECTIVO",
+    y + 2,
+  );
+
+  const movimientosEntrada = (
+    data.movimientos_caja || []
+  ).filter(
+    (movimiento) =>
+      String(movimiento.tipo).toUpperCase() ===
+      "INGRESO",
+  );
+
+  if (!movimientosEntrada.length) {
+    y = textoTicketMultilinea(
+      doc,
+      "NO HUBO ENTRADAS",
+      y,
+      {
+        centrado: true,
+      },
+    );
+  } else {
+    movimientosEntrada.forEach(
+      (movimiento) => {
+        y = textoTicketIzquierdaDerecha(
+          doc,
+          movimiento.concepto || "Entrada",
+          dineroTicket(movimiento.monto),
+          y,
+        );
+      },
+    );
+  }
+
+  y = lineaTicket(doc, y);
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "TOTAL ENTRADAS",
+    dineroTicket(entradas),
+    y,
+    {
+      negrita: true,
+    },
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Salidas
+  |--------------------------------------------------------------------------
+  */
+
+  y = tituloTicket(
+    doc,
+    "SALIDAS EFECTIVO",
+    y + 2,
+  );
+
+  const movimientosSalida = (
+    data.movimientos_caja || []
+  ).filter(
+    (movimiento) =>
+      String(movimiento.tipo).toUpperCase() ===
+      "EGRESO",
+  );
+
+  if (!movimientosSalida.length) {
+    y = textoTicketMultilinea(
+      doc,
+      "NO HUBO SALIDAS",
+      y,
+      {
+        centrado: true,
+      },
+    );
+  } else {
+    movimientosSalida.forEach(
+      (movimiento) => {
+        y = textoTicketIzquierdaDerecha(
+          doc,
+          movimiento.concepto || "Salida",
+          dineroTicket(movimiento.monto),
+          y,
+        );
+      },
+    );
+  }
+
+  y = lineaTicket(doc, y);
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "TOTAL SALIDAS",
+    dineroTicket(salidas),
+    y,
+    {
+      negrita: true,
+    },
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Ventas por método
+  |--------------------------------------------------------------------------
+  */
+
+  y = tituloTicket(doc, "VENTAS", y + 2);
+
+  const ventasMetodo = {
+    efectivo: 0,
+    tarjeta: 0,
+    transferencia: 0,
+    otro: 0,
+  };
+
+  (data.pagos || []).forEach((pago) => {
+    const metodo =
+      metodoNormalizadoTicket(pago.metodo);
+
+    ventasMetodo[metodo] +=
+      Number(pago.monto || 0) -
+      Number(pago.descuento || 0);
+  });
+
+  (data.pagos_financiados || []).forEach(
+    (pago) => {
+      const metodo =
+        metodoNormalizadoTicket(
+          pago.metodo_pago || pago.metodo,
+        );
+
+      ventasMetodo[metodo] += Number(
+        pago.monto || 0,
+      );
+    },
+  );
+
+  (data.ventas || []).forEach((venta) => {
+    const metodo =
+      metodoNormalizadoTicket(
+        venta.metodo_pago,
+      );
+
+    const totalVenta = (
+      venta.productos || []
+    ).reduce(
+      (suma, producto) =>
+        suma + Number(producto.total || 0),
+      0,
+    );
+
+    ventasMetodo[metodo] += totalVenta;
+  });
+
+  Object.entries(
+    data.visitas_por_metodo || {},
+  ).forEach(([metodoOriginal, total]) => {
+    const metodo =
+      metodoNormalizadoTicket(
+        metodoOriginal,
+      );
+
+    ventasMetodo[metodo] += Number(
+      total || 0,
+    );
+  });
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "EN EFECTIVO",
+    dineroTicket(ventasMetodo.efectivo),
+    y,
+  );
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "CON TARJETA",
+    dineroTicket(ventasMetodo.tarjeta),
+    y,
+  );
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "TRANSFERENCIA",
+    dineroTicket(
+      ventasMetodo.transferencia,
+    ),
+    y,
+  );
+
+  if (ventasMetodo.otro > 0) {
+    y = textoTicketIzquierdaDerecha(
+      doc,
+      "OTROS",
+      dineroTicket(ventasMetodo.otro),
+      y,
+    );
+  }
+
+  y = lineaTicket(doc, y);
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "TOTAL VENTAS",
+    dineroTicket(totalVentas),
+    y,
+    {
+      negrita: true,
+      tamano: 8,
+    },
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Pagos por tarifa
+  |--------------------------------------------------------------------------
+  */
+
+  y = tituloTicket(
+    doc,
+    "PAGOS POR TARIFA",
+    y + 2,
+  );
+
+  const tarifas =
+    data.resumen_tarifas || [];
+
+  if (!tarifas.length) {
+    y = textoTicketMultilinea(
+      doc,
+      "NO HUBO PAGOS DE TARIFAS",
+      y,
+      {
+        centrado: true,
+      },
+    );
+  } else {
+    tarifas.forEach((tarifa) => {
+      y = textoTicketIzquierdaDerecha(
+        doc,
+        `${tarifa.nombre} (${tarifa.cantidad_pagos})`,
+        dineroTicket(tarifa.total),
+        y,
+        {
+          negrita: true,
+        },
+      );
+
+      const metodos = [
+        ["Efectivo", tarifa.efectivo],
+        ["Tarjeta", tarifa.tarjeta],
+        [
+          "Transferencia",
+          tarifa.transferencia,
+        ],
+      ];
+
+      metodos.forEach(
+        ([nombreMetodo, informacion]) => {
+          const cantidad = Number(
+            informacion?.cantidad || 0,
+          );
+
+          const total = Number(
+            informacion?.total || 0,
+          );
+
+          if (cantidad <= 0 && total <= 0) {
+            return;
+          }
+
+          y = textoTicketIzquierdaDerecha(
+            doc,
+            `  ${nombreMetodo} x${cantidad}`,
+            dineroTicket(total),
+            y,
+            {
+              tamano: 6.8,
+            },
+          );
+        },
+      );
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Pagos financiados
+  |--------------------------------------------------------------------------
+  */
+
+  y = tituloTicket(
+    doc,
+    "PAGOS FINANCIADOS",
+    y + 2,
+  );
+
+  if (!(data.pagos_financiados || []).length) {
+    y = textoTicketMultilinea(
+      doc,
+      "NO HUBO PAGOS FINANCIADOS",
+      y,
+      {
+        centrado: true,
+      },
+    );
+  } else {
+    (data.pagos_financiados || []).forEach(
+      (pago) => {
+        const descripcion =
+          `Venta ${pago.venta_financiada_id} ` +
+          `Cuota ${pago.cuota_id}`;
+
+        y = textoTicketIzquierdaDerecha(
+          doc,
+          descripcion,
+          dineroTicket(pago.monto),
+          y,
+        );
+      },
+    );
+
+    y = lineaTicket(doc, y);
+
+    y = textoTicketIzquierdaDerecha(
+      doc,
+      "TOTAL FINANCIADOS",
+      dineroTicket(totalFinanciados),
+      y,
+      {
+        negrita: true,
+      },
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Productos
+  |--------------------------------------------------------------------------
+  */
+
+  y = tituloTicket(
+    doc,
+    "VENTAS DE PRODUCTOS",
+    y + 2,
+  );
+
+  if (!(data.ventas || []).length) {
+    y = textoTicketMultilinea(
+      doc,
+      "NO HUBO VENTAS DE PRODUCTOS",
+      y,
+      {
+        centrado: true,
+      },
+    );
+  } else {
+    (data.ventas || []).forEach((venta) => {
+      (venta.productos || []).forEach(
+        (producto) => {
+          y = textoTicketIzquierdaDerecha(
+            doc,
+            `${producto.nombre} x${producto.cantidad}`,
+            dineroTicket(producto.total),
+            y,
+          );
+        },
+      );
+    });
+
+    y = lineaTicket(doc, y);
+
+    y = textoTicketIzquierdaDerecha(
+      doc,
+      "TOTAL PRODUCTOS",
+      dineroTicket(totalProductos),
+      y,
+      {
+        negrita: true,
+      },
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Visitas
+  |--------------------------------------------------------------------------
+  */
+
+  y = tituloTicket(doc, "VISITAS", y + 2);
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    `VISITAS REGISTRADAS`,
+    Number(data.visitas_cantidad || 0),
+    y,
+  );
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "TOTAL VISITAS",
+    dineroTicket(totalVisitas),
+    y,
+    {
+      negrita: true,
+    },
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Total final
+  |--------------------------------------------------------------------------
+  */
+
+  y = lineaTicket(doc, y + 2, "=");
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "TOTAL GENERAL",
+    dineroTicket(totalVentas),
+    y,
+    {
+      negrita: true,
+      tamano: 9,
+    },
+  );
+
+  y = lineaTicket(doc, y, "=");
+
+  doc.setFont("courier", "bold");
+  doc.setFontSize(7.5);
+
+  centrarTextoTicket(
+    doc,
+    "FIN DEL CORTE",
+    y + 2,
+  );
+
+  y += 7;
+
+  doc.setFont("courier", "normal");
+  doc.setFontSize(6.5);
+
+  centrarTextoTicket(
+  doc,
+  "SMARTGATE",
+  y,
+);
+
+y += 10;
+
+return doc;
+}
+async function generarTicketCorte58mm() {
+  try {
+    swalInfo.fire({
+      title: "Generando ticket...",
+      text: "Preparando el corte en formato 58 mm",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    const doc =
+      await construirTicketCorte58mm();
+
+    Swal.close();
+
+    window.open(
+      doc.output("bloburl"),
+      "_blank",
+    );
+  } catch (error) {
+    console.error(
+      "Error al generar ticket de corte:",
+      error,
+    );
+
+    Swal.close();
+
+    swalError.fire(
+      "Error",
+      error.message ||
+        "No se pudo generar el ticket.",
+      "error",
+    );
+  }
 }
 async function generarPDFReporte() {
   try {
@@ -1197,15 +3124,61 @@ function formatearFechaLarga(fechaISO) {
 
 function cargarImagenBase64(ruta) {
   return new Promise((resolve) => {
+    if (!ruta) {
+      resolve(null);
+      return;
+    }
+
     const img = new Image();
-    img.crossOrigin = "Anonymous";
+
     img.onload = function () {
-      const canvas = document.createElement("canvas");
-      canvas.width = this.naturalWidth;
-      canvas.height = this.naturalHeight;
-      canvas.getContext("2d").drawImage(this, 0, 0);
-      resolve(canvas.toDataURL("image/png"));
+      try {
+        const canvas =
+          document.createElement("canvas");
+
+        canvas.width =
+          this.naturalWidth || this.width;
+
+        canvas.height =
+          this.naturalHeight || this.height;
+
+        const contexto =
+          canvas.getContext("2d");
+
+        contexto.drawImage(
+          this,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        );
+
+        resolve(
+          canvas.toDataURL("image/png"),
+        );
+      } catch (error) {
+        console.warn(
+          "No se pudo convertir la imagen a base64:",
+          error,
+        );
+
+        resolve(null);
+      }
     };
+
+    img.onerror = function () {
+      console.warn(
+        "No se pudo cargar la imagen:",
+        ruta,
+      );
+
+      resolve(null);
+    };
+
+    /*
+     * No hace falta crossOrigin porque logo_branding.php
+     * está dentro del mismo dominio.
+     */
     img.src = ruta;
   });
 }
@@ -1231,8 +3204,10 @@ async function getEfectivoEsperado(params) {
   const qs = new URLSearchParams(params).toString();
   const res = await fetch(`../php/obtener_reportes_detalle.php?${qs}`);
   const data = await res.json();
-  if (!data.success)
+
+  if (!data.success) {
     throw new Error(data.error || "No se pudo calcular el efectivo.");
+  }
 
   // Suscripciones en efectivo (monto - descuento)
   const efectivoSuscripciones = (data.pagos || [])
@@ -1243,7 +3218,7 @@ async function getEfectivoEsperado(params) {
       0,
     );
 
-  // Ventas en efectivo
+  // Ventas normales en efectivo
   const efectivoVentas = (data.ventas || [])
     .filter((v) => (v.metodo_pago || "").toLowerCase() === "efectivo")
     .reduce(
@@ -1260,11 +3235,18 @@ async function getEfectivoEsperado(params) {
     )
     .reduce((sum, p) => sum + parseFloat(p.monto || 0), 0);
 
+  // ✅ Visitas en efectivo
+  const efectivoVisitas = parseFloat(data.visitas_por_metodo?.efectivo || 0);
+
   return {
     esperado:
       (efectivoSuscripciones || 0) +
       (efectivoVentas || 0) +
-      (efectivoFinanciados || 0),
+      (efectivoFinanciados || 0) +
+      (efectivoVisitas || 0),
+
+    // opcional: sirve si después quieres mostrar desglose en pantalla
+    visitas_efectivo: efectivoVisitas,
   };
 }
 

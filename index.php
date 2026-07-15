@@ -154,6 +154,10 @@
               class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
               <i class="bi bi-person-vcard icon-20 text-amber-400"></i><span>Administrar Empleados / Gerencia</span>
             </a>
+            <a href="vistas/tarifas.php"
+              class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
+              <i class="bi bi-cash-stack icon-20 text-amber-400"></i><span>Administrar Tarifas</span>
+            </a>
             <a href="vistas/usuarios.php"
               class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
               <i class="bi bi-people-fill icon-20 text-amber-400"></i><span>Administrar Usuarios</span>

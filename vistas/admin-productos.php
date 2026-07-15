@@ -87,23 +87,40 @@ endif;
     </div>
 
     <!-- Derecha: acciones -->
-    <div class="flex items-center gap-2">
-      <button onclick="abrirModalAgregar()"
-        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg shadow">
-        ➕ Agregar Producto
-      </button>
-      <button onclick="abrirModalMovimiento()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">
-        ＋／－ Movimiento
-      </button>
-      <button onclick="abrirModalReporte()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">
-        📑 Reporte
-      </button>
-    </div>
+    <!-- Derecha: acciones -->
+<div class="flex flex-wrap items-center gap-2">
+  <button
+    type="button"
+    onclick="abrirModalAgregar()"
+    class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg shadow">
+    ➕ Agregar Producto
+  </button>
+
+  <button
+    type="button"
+    onclick="abrirModalMovimiento()"
+    class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">
+    ＋／－ Movimiento
+  </button>
+
+  <button
+    type="button"
+    onclick="abrirModalReporte()"
+    class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white">
+    📑 Reporte
+  </button>
+
+  <button
+    type="button"
+    onclick="generarTicketInventario58mm()"
+    class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow">
+    🧾 Ticket inventario
+  </button>
+</div>
   </div>
 </div>
 
 <!-- Tabla -->
-<!-- Tabla de productos -->
 <div class="overflow-x-auto max-w-6xl mx-auto mt-4">
   <table class="min-w-full table-fixed bg-slate-800 text-slate-100 rounded-xl overflow-hidden shadow-xl">
     <thead class="bg-slate-700 text-slate-200 text-left">

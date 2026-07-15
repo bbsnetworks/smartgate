@@ -47,6 +47,78 @@ let offset = 0;
 let ultimaBusqueda = "";
 let paginaActualClientes = 1;
 let pagoEnProceso = false;
+let tarifasPagoCache = [];
+
+async function cargarTarifasPago() {
+  try {
+    const res = await fetch(
+      "../php/tarifas_controller.php?accion=listar&pagina=1&limite=500&activo=1",
+    );
+    const data = await res.json();
+
+    if (!data.success) {
+      console.warn("No se pudieron cargar tarifas:", data.error);
+      return [];
+    }
+
+    tarifasPagoCache = Array.isArray(data.tarifas) ? data.tarifas : [];
+    return tarifasPagoCache;
+  } catch (error) {
+    console.error("Error cargando tarifas:", error);
+    return [];
+  }
+}
+
+function renderOptionsTarifas(tarifas = []) {
+  if (!tarifas.length) {
+    return `<option value="">No hay tarifas activas</option>`;
+  }
+
+  return `
+    <option value="">Selecciona una tarifa</option>
+    ${tarifas
+      .map(
+        (t) => `
+      <option 
+        value="${t.id}" 
+        data-monto="${Number(t.monto || 0)}"
+        data-nombre="${escapeHtml(t.nombre || "")}">
+        ${escapeHtml(t.nombre || "")} - $${Number(t.monto || 0).toFixed(2)}
+      </option>
+    `,
+      )
+      .join("")}
+  `;
+}
+
+function conectarSelectTarifa() {
+  const $tarifa = document.getElementById("tarifa_id");
+  const $monto = document.getElementById("monto");
+  const $desc = document.getElementById("descuento");
+  const $rec = document.getElementById("recibido");
+
+  if (!$tarifa || !$monto) return;
+
+  function aplicarTarifa() {
+    const option = $tarifa.options[$tarifa.selectedIndex];
+    const monto = Number(option?.dataset?.monto || 0);
+
+    $monto.value = monto > 0 ? monto.toFixed(2) : "0";
+
+    if ($desc) {
+      $desc.max = monto;
+      if ((Number($desc.value) || 0) > monto) {
+        $desc.value = monto.toFixed(2);
+      }
+    }
+
+    $monto.dispatchEvent(new Event("input"));
+    $desc?.dispatchEvent(new Event("input"));
+    $rec?.dispatchEvent(new Event("input"));
+  }
+
+  $tarifa.addEventListener("change", aplicarTarifa);
+}
 
 function debounce(func, delay = 300) {
   let timeout;
@@ -188,6 +260,9 @@ function renderPaginacionClientes(total, limit, paginaActual) {
 }
 
 async function abrirModalPago() {
+  const tarifas = await cargarTarifasPago();
+  const optionsTarifas = renderOptionsTarifas(tarifas);
+
   let html = `<div id="formulario-pago" class="space-y-5">
 
   <!-- FILA 1: Inicio / Fin -->
@@ -263,14 +338,45 @@ async function abrirModalPago() {
     <p id="authMsg" class="mt-3 text-xs text-slate-400"></p>
   </div>
 
-  <!-- FILA 2: Monto / Descuento -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <!-- FILA 2: Tarifa / Monto / Descuento -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-    <div>
-      <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-        <i data-lucide="dollar-sign" class="w-4 h-4 text-yellow-400"></i> Monto Total:
-      </label>
-      <input id="monto" type="text" inputmode="decimal" value="0"
+  <div>
+    <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+      <i data-lucide="badge-dollar-sign" class="w-4 h-4 text-emerald-400"></i> Tarifa:
+    </label>
+    <select id="tarifa_id"
+      class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+             focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      ${optionsTarifas}
+    </select>
+  </div>
+
+  <div>
+    <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+      <i data-lucide="dollar-sign" class="w-4 h-4 text-yellow-400"></i> Monto Total:
+    </label>
+    <input id="monto" type="text" inputmode="decimal" value="0" readonly
+      class="w-full border border-slate-600 bg-slate-950 text-slate-300 px-3 py-2 rounded-lg
+             opacity-80 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-yellow-500">
+  </div>
+
+  <div>
+    <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+      <i data-lucide="gift" class="w-4 h-4 text-pink-400"></i> Descuento:
+    </label>
+    <input id="descuento" type="text" inputmode="decimal" value="0"
+      class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+             focus:outline-none focus:ring-2 focus:ring-pink-500"
+      onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+      oninput="
+        this.value = this.value.replace(',', '.').replace(/[^\d.]/g,'');
+        if ((this.value.match(/\./g)||[]).length > 1) this.value = this.value.replace(/\.(?=.*\.)/g,'');
+        this.value = this.value.replace(/^(\d*)(?:\.(\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+      ">
+  </div>
+
+</div>
         class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
                focus:outline-none focus:ring-2 focus:ring-yellow-500"
         onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
@@ -401,7 +507,9 @@ async function abrirModalPago() {
         }
 
         return {
-          cliente_id: Number(seleccionado.dataset.id), // <-- NUEVO
+          cliente_id: Number(seleccionado.dataset.id),
+          tarifa_id: tarifaId,
+          tarifa_nombre: tarifaNombre,
           nombre: seleccionado.dataset.nombre,
           apellido: seleccionado.dataset.apellido,
           telefono: seleccionado.dataset.telefono,
@@ -507,7 +615,7 @@ async function abrirModalPago() {
   </div>
 `;
                   lucide.createIcons();
-
+                  conectarSelectTarifa();
                   // 🔁 Aquí consultamos la última fecha pagada del cliente
                   // 🔁 Aquí consultamos la última fecha pagada del cliente
                   try {
@@ -595,6 +703,7 @@ async function abrirModalPago() {
               }
             });
         });
+        conectarSelectTarifa();
         lucide.createIcons();
       },
     })
@@ -629,6 +738,8 @@ async function abrirModalPago() {
                 descuento: result.value.descuento,
                 fecha_pago: new Date().toISOString(),
                 usuario: window.usuarioActual?.nombre || "Usuario desconocido",
+                tarifa_nombre: result.value.tarifa_nombre,
+                tarifa_id: result.value.tarifa_id,
                 // NUEVO:
                 recibido,
                 cambio,
@@ -707,7 +818,8 @@ async function abrirModalPagoConCliente(cliente) {
     ""
   ).trim();
   const comentario = escapeHtml(comentarioRaw);
-
+  const tarifas = await cargarTarifasPago();
+  const optionsTarifas = renderOptionsTarifas(tarifas);
   const html = `
   <div class="relative space-y-4 text-left text-slate-200">
 
@@ -780,42 +892,48 @@ async function abrirModalPagoConCliente(cliente) {
           </div>
         </div>
 
-        <!-- FILA 2: Monto / Descuento -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- FILA 2: Tarifa / Monto / Descuento -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-          <div>
-            <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-              <i data-lucide="dollar-sign" class="w-4 h-4 text-yellow-400"></i>
-              Monto Total:
-            </label>
-            <input id="monto" type="text" inputmode="decimal" value="0"
-              class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
-                     focus:outline-none focus:ring-2 focus:ring-yellow-500"
-              onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
-              oninput="
-                this.value = this.value.replace(',', '.').replace(/[^\\d.]/g,'');
-                if ((this.value.match(/\\./g)||[]).length > 1) this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
-                this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
-              ">
-          </div>
+  <div>
+    <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+      <i data-lucide="badge-dollar-sign" class="w-4 h-4 text-emerald-400"></i>
+      Tarifa:
+    </label>
+    <select id="tarifa_id"
+      class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+             focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      ${optionsTarifas}
+    </select>
+  </div>
 
-          <div>
-            <label class="block mb-1 text-sm font-medium flex items-center gap-1">
-              <i data-lucide="gift" class="w-4 h-4 text-pink-400"></i>
-              Descuento:
-            </label>
-            <input id="descuento" type="text" inputmode="decimal" value="0"
-              class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
-                     focus:outline-none focus:ring-2 focus:ring-pink-500"
-              onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
-              oninput="
-                this.value = this.value.replace(',', '.').replace(/[^\\d.]/g,'');
-                if ((this.value.match(/\\./g)||[]).length > 1) this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
-                this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
-              ">
-          </div>
+  <div>
+    <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+      <i data-lucide="dollar-sign" class="w-4 h-4 text-yellow-400"></i>
+      Monto Total:
+    </label>
+    <input id="monto" type="text" inputmode="decimal" value="0" readonly
+      class="w-full border border-slate-600 bg-slate-950 text-slate-300 px-3 py-2 rounded-lg
+             opacity-80 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-yellow-500">
+  </div>
 
-        </div>
+  <div>
+    <label class="block mb-1 text-sm font-medium flex items-center gap-1">
+      <i data-lucide="gift" class="w-4 h-4 text-pink-400"></i>
+      Descuento:
+    </label>
+    <input id="descuento" type="text" inputmode="decimal" value="0"
+      class="w-full border border-slate-600 bg-slate-900 text-slate-100 px-3 py-2 rounded-lg
+             focus:outline-none focus:ring-2 focus:ring-pink-500"
+      onkeydown="if(['-','+','e','E'].includes(event.key)) return false;"
+      oninput="
+        this.value = this.value.replace(',', '.').replace(/[^\\d.]/g,'');
+        if ((this.value.match(/\\./g)||[]).length > 1) this.value = this.value.replace(/\\.(?=.*\\.)/g,'');
+        this.value = this.value.replace(/^(\\d*)(?:\\.(\\d{0,2})?).*$/, function(_, e, d){ return e + (d ? '.'+d : ''); });
+      ">
+  </div>
+
+</div>
 
         <!-- FILA 3: Recibido / Método -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1111,13 +1229,20 @@ async function abrirModalPagoConCliente(cliente) {
 
         window.__pagoInicioOriginal = inicioOriginal;
         window.__pagoInicioAutorizado = inicioAutorizado;
-
+        conectarSelectTarifa();
         lucide.createIcons();
       },
 
       preConfirm: () => {
         const inicio = document.getElementById("fecha_inicio").value;
         const fin = document.getElementById("fecha_fin").value;
+
+        const tarifaSelect = document.getElementById("tarifa_id");
+        const tarifaId = Number(tarifaSelect.value) || 0;
+        const tarifaNombre =
+          tarifaSelect.options[tarifaSelect.selectedIndex]?.dataset?.nombre ||
+          "";
+
         const monto = Number(document.getElementById("monto").value) || 0;
         const descuento =
           Number(document.getElementById("descuento").value) || 0;
@@ -1135,6 +1260,11 @@ async function abrirModalPagoConCliente(cliente) {
           );
           return false;
         }
+        if (!tarifaId) {
+          Swal.showValidationMessage("Debes seleccionar una tarifa.");
+          return false;
+        }
+
         if (monto <= 0) {
           Swal.showValidationMessage("El monto debe ser mayor a 0.");
           return false;
@@ -1171,6 +1301,8 @@ async function abrirModalPagoConCliente(cliente) {
 
         return {
           cliente_id: Number(cliente.id),
+          tarifa_id: tarifaId,
+          tarifa_nombre: tarifaNombre,
           nombre: cliente.nombre,
           apellido: cliente.apellido,
           telefono: cliente.telefono,
@@ -1228,6 +1360,8 @@ async function abrirModalPagoConCliente(cliente) {
           descuento: result.value.descuento,
           fecha_pago: new Date().toISOString(),
           usuario: window.usuarioActual?.nombre || "Usuario desconocido",
+          tarifa_nombre: result.value.tarifa_nombre,
+          tarifa_id: result.value.tarifa_id,
           recibido,
           cambio,
         };
@@ -1612,6 +1746,13 @@ async function generarTicketPago(data) {
   doc.text("Método:", 5, (y += salto));
   doc.setFont("courier", "normal");
   doc.text(data.metodo, 5, (y += salto));
+
+  if (data.tarifa_nombre) {
+  doc.setFont("courier", "bold");
+  doc.text("Tarifa:", 5, (y += salto));
+  doc.setFont("courier", "normal");
+  doc.text(String(data.tarifa_nombre), 5, (y += salto));
+  }
 
   doc.setFont("courier", "bold");
   doc.text("Monto original:", 5, (y += salto));
