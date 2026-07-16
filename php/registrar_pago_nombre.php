@@ -238,53 +238,65 @@ if (empty($cliente['data'])) {
   ], 400);
 }
 
-// ====== No duplicar meses pagados ======
+// ====== Validar que no existan días previamente pagados ======
+//
+// Un periodo se cruza cuando:
+// - El inicio existente es menor o igual al nuevo final.
+// - El final existente es mayor o igual al nuevo inicio.
+//
+// Las comparaciones son inclusivas porque fecha_fin representa
+// un día completo y se almacena con hora 23:59:59.
+
 $stmt = $conexion->prepare("
-  SELECT fecha_aplicada
+  SELECT
+    id,
+    fecha_aplicada,
+    fecha_fin
   FROM pagos
   WHERE cliente_id = ?
+    AND DATE(fecha_aplicada) < ?
+    AND DATE(fecha_fin) > ?
+  ORDER BY fecha_aplicada ASC
+  LIMIT 1
 ");
 
 if (!$stmt) {
   responder([
     "success" => false,
-    "error" => "No se pudo validar el historial de pagos."
+    "error" => "No se pudo validar el periodo del pago."
   ], 500);
 }
 
-$stmt->bind_param("i", $cliente_id);
-$stmt->execute();
-
-$res = $stmt->get_result();
-$mesesPagados = [];
-
-while ($row = $res->fetch_assoc()) {
-  $mes = substr((string)$row['fecha_aplicada'], 0, 7);
-
-  if ($mes !== '') {
-    $mesesPagados[$mes] = true;
-  }
-}
-
-$stmt->close();
-
-$periodo = new DatePeriod(
-  clone $fecha_inicio,
-  new DateInterval('P1M'),
-  (clone $fecha_fin)->modify('+1 day')
+$stmt->bind_param(
+  "iss",
+  $cliente_id,
+  $finSQL,
+  $beginSQL
 );
 
-foreach ($periodo as $fechaPeriodo) {
-  $ym = $fechaPeriodo->format('Y-m');
+$stmt->execute();
 
-  if (isset($mesesPagados[$ym])) {
-    responder([
-      "success" => false,
-      "error" => "Ya existe un pago registrado para el mes de {$ym}."
-    ], 409);
-  }
+$pagoSuperpuesto = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if ($pagoSuperpuesto) {
+  $inicioExistente = date(
+    "d/m/Y",
+    strtotime($pagoSuperpuesto["fecha_aplicada"])
+  );
+
+  $finExistente = date(
+    "d/m/Y",
+    strtotime($pagoSuperpuesto["fecha_fin"])
+  );
+
+  responder([
+    "success" => false,
+    "error" =>
+      "No se puede registrar el pago porque incluye días que ya están pagados. " .
+      "El periodo existente comprende del {$inicioExistente} al {$finExistente}."
+  ], 409);
 }
-
 // ====== Calcular nuevo endTime global ======
 $maxFinActual = null;
 

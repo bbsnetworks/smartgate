@@ -47,6 +47,7 @@ let offset = 0;
 let ultimaBusqueda = "";
 let paginaActualClientes = 1;
 let pagoEnProceso = false;
+let eliminacionEnProceso = false;
 let tarifasPagoCache = [];
 
 async function cargarTarifasPago() {
@@ -468,9 +469,9 @@ async function abrirModalPago() {
           Swal.showValidationMessage("Debes seleccionar ambas fechas.");
           return false;
         }
-        if (new Date(inicio) >= new Date(fin)) {
+        if (inicio >= fin) {
           Swal.showValidationMessage(
-            "La fecha de fin debe ser mayor que la de inicio.",
+            "La fecha de fin debe ser posterior a la fecha de inicio.",
           );
           return false;
         }
@@ -1254,9 +1255,9 @@ async function abrirModalPagoConCliente(cliente) {
           Swal.showValidationMessage("Debes seleccionar ambas fechas.");
           return false;
         }
-        if (new Date(inicio) >= new Date(fin)) {
+        if (inicio >= fin) {
           Swal.showValidationMessage(
-            "La fecha de fin debe ser mayor que la de inicio.",
+          "La fecha de fin debe ser posterior a la fecha de inicio.",
           );
           return false;
         }
@@ -1451,23 +1452,78 @@ function eliminarPago(idPago, clienteId, nombreCompleto) {
   //console.log("DELETE pago ->", { idPago, clienteId });
   const tipoUsuario = window.usuarioActual?.tipo;
 
-  const confirmarYBorrar = () => {
-    fetch(`../php/eliminar_pago.php?id=${idPago}&cliente=${clienteId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          swalSuccess
-            .fire("Eliminado", data.msg, "success")
-            .then(() => verPagos(clienteId, nombreCompleto));
-          buscarClientes(ultimaBusqueda, paginaActualClientes); // reutiliza el mismo nombre
-        } else {
-          swalError.fire("Error", data.error || "No se pudo eliminar", "error");
-        }
-      })
-      .catch(() =>
-        swalError.fire("Error", "No se pudo conectar con el servidor", "error"),
+  const confirmarYBorrar = async () => {
+  // Evita ejecutar dos eliminaciones simultáneamente.
+  if (eliminacionEnProceso) return;
+
+  eliminacionEnProceso = true;
+
+  // Mostrar spinner y bloquear completamente la pantalla.
+  swalcard.fire({
+    title: "Eliminando pago...",
+    html: `
+      <p class="text-slate-300">
+        Actualizando el historial y la vigencia del cliente.
+      </p>
+    `,
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    allowEnterKey: false,
+    showConfirmButton: false,
+    showCancelButton: false,
+    backdrop: true,
+    didOpen: () => {
+      Swal.showLoading();
+    },
+  });
+
+  try {
+    const respuesta = await fetch(
+      `../php/eliminar_pago.php?id=${encodeURIComponent(
+        idPago,
+      )}&cliente=${encodeURIComponent(clienteId)}`,
+    );
+
+    const data = await respuesta.json();
+
+    // Cerrar el spinner.
+    Swal.close();
+
+    if (!respuesta.ok || !data.success) {
+      await swalError.fire(
+        "Error",
+        data.error || "No se pudo eliminar el pago.",
+        "error",
       );
-  };
+      return;
+    }
+
+    await swalSuccess.fire(
+      "Eliminado",
+      data.msg || "El pago fue eliminado correctamente.",
+      "success",
+    );
+
+    // Actualizar la tabla principal.
+    buscarClientes(ultimaBusqueda, paginaActualClientes);
+
+    // Mostrar nuevamente el historial con los datos actualizados.
+    verPagos(clienteId, nombreCompleto);
+  } catch (error) {
+    Swal.close();
+
+    console.error("Error eliminando pago:", error);
+
+    await swalError.fire(
+      "Error",
+      "No se pudo conectar con el servidor.",
+      "error",
+    );
+  } finally {
+    // Siempre permitir una nueva eliminación al terminar.
+    eliminacionEnProceso = false;
+  }
+};
 
   if (tipoUsuario === "admin" || tipoUsuario === "root") {
     swalInfo

@@ -866,6 +866,7 @@ endif;
   </div>
 
   <script src="../js/swalConfig.js"></script>
+  <script src="../js/jspdf.umd.min.js"></script>
   <script src="../js/ventas-financiadas.js"></script>
 
   <script>

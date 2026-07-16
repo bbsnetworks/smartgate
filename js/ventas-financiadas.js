@@ -1422,24 +1422,35 @@ function renderDetallePagos(pagos, venta = {}) {
         <td class="px-4 py-3 text-slate-300">${escapeHTML(pago.referencia || "-")}</td>
         <td class="px-4 py-3 text-slate-300">${escapeHTML(pago.observaciones || "-")}</td>
         <td class="px-4 py-3 text-center">
-          ${
-            puedeEliminar
-              ? `
-                <button type="button"
-                  onclick="eliminarPagoFinanciado(${pago.id})"
-                  class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30"
-                  title="Eliminar pago y restaurar saldo">
-                  <i data-lucide="trash-2" class="w-4 h-4"></i>
-                </button>
-              `
-              : `
-                <span class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-slate-700/60 text-slate-500"
-                  title="${tituloBloqueo}">
-                  <i data-lucide="lock" class="w-4 h-4"></i>
-                </span>
-              `
-          }
-        </td>
+  <div class="flex items-center justify-center gap-2">
+
+    <button type="button"
+      onclick="imprimirTicketPagoFinanciado(${Number(pago.id)})"
+      class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30"
+      title="Reimprimir ticket">
+      <i data-lucide="printer" class="w-4 h-4"></i>
+    </button>
+
+    ${
+      puedeEliminar
+        ? `
+          <button type="button"
+            onclick="eliminarPagoFinanciado(${Number(pago.id)})"
+            class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30"
+            title="Eliminar pago y restaurar saldo">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        `
+        : `
+          <span
+            class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-slate-700/60 text-slate-500"
+            title="${tituloBloqueo}">
+            <i data-lucide="lock" class="w-4 h-4"></i>
+          </span>
+        `
+    }
+  </div>
+</td>
       </tr>
     `;
     })
@@ -1561,23 +1572,46 @@ async function guardarAbono() {
   observaciones: textValue("abonoObservaciones"),
 });
 
+    closeModal("modalAbono");
+
+if (!$("modalDetalleVenta")?.classList.contains("hidden")) {
+  await verDetalleVentaFinanciada(ventaId);
+}
+
+await listarVentasFinanciadas();
+
+const resultado = await Swal.fire({
+  icon: "success",
+  title: "Abono registrado",
+  text: "El pago se guardó correctamente.",
+  showCancelButton: true,
+  confirmButtonText: "Imprimir ticket",
+  cancelButtonText: "Cerrar",
+  background: "#1e293b",
+  color: "#f8fafc",
+  confirmButtonColor: "#2563eb",
+  cancelButtonColor: "#475569",
+});
+
+if (resultado.isConfirmed && dataAbono.pago_id) {
+  try {
+    if (typeof imprimirTicketPagoFinanciado !== "function") {
+      throw new Error(
+        "La función para generar el ticket todavía no está disponible.",
+      );
+    }
+
+    await imprimirTicketPagoFinanciado(dataAbono.pago_id);
+  } catch (ticketError) {
     await Swal.fire({
-      icon: "success",
-      title: "Abono registrado",
-      text: "El pago se guardó correctamente.",
+      icon: "warning",
+      title: "Pago guardado, pero no se imprimió",
+      text: ticketError.message,
       background: "#1e293b",
       color: "#f8fafc",
     });
-    if (dataAbono.pago_id) {
-      await imprimirTicketPagoFinanciado(dataAbono.pago_id);
-    }
-    closeModal("modalAbono");
-
-    if (!$("modalDetalleVenta")?.classList.contains("hidden")) {
-      await verDetalleVentaFinanciada(ventaId);
-    }
-
-    listarVentasFinanciadas();
+  }
+}
   } catch (error) {
     Swal.fire({
       icon: "error",
@@ -1594,7 +1628,315 @@ async function guardarAbono() {
     }
   }
 }
+/* =========================================================
+   TICKET DE PAGO FINANCIADO 58 MM
+========================================================= */
 
+async function imprimirTicketPagoFinanciado(pagoId) {
+  pagoId = Number(pagoId || 0);
+
+  if (pagoId <= 0) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Pago inválido",
+      text: "No se encontró el pago que deseas imprimir.",
+      background: "#1e293b",
+      color: "#f8fafc",
+    });
+    return;
+  }
+
+  try {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      throw new Error("No se encontró la librería jsPDF.");
+    }
+
+    Swal.fire({
+      title: "Generando ticket",
+      text: "Espera un momento...",
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      background: "#1e293b",
+      color: "#f8fafc",
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    const data = await apiRequest({
+      accion: "obtener_ticket_pago_financiado",
+      id: pagoId,
+    });
+
+    generarTicketPagoFinanciado(data);
+
+    Swal.close();
+  } catch (error) {
+    Swal.close();
+
+    await Swal.fire({
+      icon: "error",
+      title: "No se pudo generar el ticket",
+      text: error.message,
+      background: "#1e293b",
+      color: "#f8fafc",
+    });
+  }
+}
+
+function generarTicketPagoFinanciado(data) {
+  const { jsPDF } = window.jspdf;
+
+  const venta = data.venta || {};
+  const pago = data.pago || {};
+  const branding = data.branding || {};
+  const aplicaciones = data.aplicaciones || [];
+
+  const nombreEmpresa =
+    branding.app_name ||
+    branding.nombre ||
+    "SMARTGATE";
+
+  const logoDataUrl =
+  branding.logo_base64 ||
+  branding.logo_data_url ||
+  branding.logo ||
+  "";
+
+  /*
+   * Se calcula una altura aproximada para evitar que el
+   * contenido se corte cuando existan varias cuotas aplicadas.
+   */
+  const altoBase = 142;
+  const altoAplicaciones = aplicaciones.length * 8;
+  const altoTicket = Math.max(150, altoBase + altoAplicaciones);
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: [58, altoTicket],
+  });
+
+  const anchoPagina = 58;
+  const margen = 4;
+  const anchoContenido = anchoPagina - margen * 2;
+
+  let y = 5;
+
+  function textoCentro(texto, size = 8, negrita = false) {
+    doc.setFont("helvetica", negrita ? "bold" : "normal");
+    doc.setFontSize(size);
+
+    const lineas = doc.splitTextToSize(
+      String(texto ?? ""),
+      anchoContenido,
+    );
+
+    doc.text(lineas, anchoPagina / 2, y, {
+      align: "center",
+    });
+
+    y += lineas.length * (size * 0.38) + 1;
+  }
+
+  function textoIzquierda(texto, size = 7, negrita = false) {
+    doc.setFont("helvetica", negrita ? "bold" : "normal");
+    doc.setFontSize(size);
+
+    const lineas = doc.splitTextToSize(
+      String(texto ?? ""),
+      anchoContenido,
+    );
+
+    doc.text(lineas, margen, y);
+
+    y += lineas.length * (size * 0.38) + 1;
+  }
+
+  function fila(etiqueta, valor, negrita = false) {
+    doc.setFontSize(7);
+    doc.setFont("helvetica", negrita ? "bold" : "normal");
+
+    doc.text(String(etiqueta ?? ""), margen, y);
+
+    doc.text(String(valor ?? ""), anchoPagina - margen, y, {
+      align: "right",
+    });
+
+    y += 4;
+  }
+
+  function linea() {
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.2);
+    doc.setLineDashPattern([1, 1], 0);
+
+    doc.line(margen, y, anchoPagina - margen, y);
+
+    doc.setLineDashPattern([], 0);
+    y += 3;
+  }
+
+  /*
+   * El backend enviará logo_data_url con un formato parecido a:
+   * data:image/png;base64,.....
+   */
+  if (logoDataUrl) {
+    try {
+      const formatoLogo = obtenerFormatoImagenBase64(logoDataUrl);
+
+      const anchoLogo = 24;
+      const altoLogo = 14;
+
+      doc.addImage(
+        logoDataUrl,
+        formatoLogo,
+        (anchoPagina - anchoLogo) / 2,
+        y,
+        anchoLogo,
+        altoLogo,
+      );
+
+      y += altoLogo + 2;
+    } catch (error) {
+      console.warn("No se pudo colocar el logo en el ticket:", error);
+    }
+  }
+
+  textoCentro(nombreEmpresa, 11, true);
+  textoCentro("COMPROBANTE DE PAGO", 9, true);
+  textoCentro("VENTA FINANCIADA", 8, true);
+
+  linea();
+
+  fila("Folio venta:", venta.folio || "-");
+  fila("Folio pago:", pago.folio || `PAGO-${pago.id || "-"}`);
+  fila("Fecha:", formatDateTime(pago.fecha_pago));
+  fila("Atendió:",  pago.recibido_por_nombre || pago.usuario_nombre || pago.usuario || "-",);
+
+  linea();
+
+  textoIzquierda("CLIENTE", 8, true);
+  textoIzquierda(venta.cliente_nombre || "-", 8, false);
+
+  if (venta.cliente_telefono) {
+    textoIzquierda(`Teléfono: ${venta.cliente_telefono}`, 7);
+  }
+
+  linea();
+
+  textoIzquierda("INFORMACIÓN DEL PAGO", 8, true);
+
+  fila("Método:", capitalizarTexto(pago.metodo_pago || "-"));
+  fila("Referencia:", pago.referencia || "-");
+  fila("Monto pagado:", money(pago.monto), true);
+
+  if (aplicaciones.length) {
+    linea();
+
+    textoIzquierda("APLICACIÓN DEL PAGO", 8, true);
+
+    aplicaciones.forEach((aplicacion) => {
+      const numeroCuota =
+        aplicacion.numero_cuota ||
+        aplicacion.cuota_numero ||
+        "-";
+
+      fila(
+        `Cuota ${numeroCuota}:`,
+        money(aplicacion.monto_aplicado),
+      );
+    });
+  }
+
+  linea();
+
+  fila(
+    "Total financiado:",
+    money(venta.total_financiado),
+  );
+
+  fila(
+    "Saldo anterior:",
+    money(
+      pago.saldo_anterior ??
+      Number(venta.saldo_actual || 0) + Number(pago.monto || 0),
+    ),
+  );
+
+  fila(
+    "Pago recibido:",
+    money(pago.monto),
+    true,
+  );
+
+  fila(
+    "Saldo restante:",
+    money(
+      pago.saldo_posterior ??
+      venta.saldo_actual,
+    ),
+    true,
+  );
+
+  if (pago.observaciones) {
+    linea();
+    textoIzquierda("OBSERVACIONES", 8, true);
+    textoIzquierda(pago.observaciones, 7);
+  }
+
+  linea();
+
+  textoCentro("Gracias por su pago", 9, true);
+  textoCentro(
+    "Conserve este comprobante para cualquier aclaración.",
+    7,
+  );
+
+  y += 2;
+
+  textoCentro(
+    `Impreso: ${new Date().toLocaleString("es-MX")}`,
+    6,
+  );
+
+  /*
+   * Abre el diálogo de impresión del visor PDF.
+   */
+  doc.autoPrint();
+
+  const pdfUrl = doc.output("bloburl");
+  const ventana = window.open(pdfUrl, "_blank");
+
+  if (!ventana) {
+    doc.save(
+      `ticket-pago-${pago.id || Date.now()}.pdf`,
+    );
+  }
+}
+
+function obtenerFormatoImagenBase64(dataUrl) {
+  const valor = String(dataUrl || "").toLowerCase();
+
+  if (valor.includes("image/jpeg") || valor.includes("image/jpg")) {
+    return "JPEG";
+  }
+
+  if (valor.includes("image/webp")) {
+    return "WEBP";
+  }
+
+  return "PNG";
+}
+
+function capitalizarTexto(value) {
+  const texto = String(value || "").trim();
+
+  if (!texto) return "-";
+
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
 /* =========================================================
    CANCELAR VENTA
 ========================================================= */
