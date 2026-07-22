@@ -119,7 +119,8 @@ async function buscarReportes() {
       cantidad_productos,
       visitas_cantidad,
       visitas_total,
-
+      clase_funcional_cantidad,
+      clase_funcional_total,
       total_financiados,
       cantidad_financiados,
 
@@ -191,6 +192,29 @@ async function buscarReportes() {
       "text-purple-500",
       "bg-purple-100",
     );
+    // ✅ CLASE FUNCIONAL DE ADULTOS (código 2)
+    // Solo se muestran las cards cuando existen registros.
+    const cantidadClaseFuncional = parseInt(clase_funcional_cantidad || 0, 10);
+
+    const totalClaseFuncional = parseFloat(clase_funcional_total || 0);
+
+    if (cantidadClaseFuncional > 0) {
+      container.innerHTML += crearCard(
+        "Clase Funcional de Adultos",
+        cantidadClaseFuncional,
+        "bi-people-fill",
+        "text-orange-600",
+        "bg-orange-100",
+      );
+
+      container.innerHTML += crearCard(
+        "Total Clase Funcional",
+        `$${totalClaseFuncional.toFixed(2)}`,
+        "bi-activity",
+        "text-orange-500",
+        "bg-orange-100",
+      );
+    }
     container.innerHTML += crearCard(
       "Total General",
       `$${parseFloat(total_general).toFixed(2)}`,
@@ -615,30 +639,28 @@ function agregarBotonesAccionReporte() {
   cardCorreo.appendChild(btnCorreo);
 
   // Card Ticket 58 mm
-const cardTicket = document.createElement("div");
+  const cardTicket = document.createElement("div");
 
-cardTicket.className =
-  "rounded-xl shadow text-2xl text-center flex items-center justify-center overflow-hidden bg-white";
+  cardTicket.className =
+    "rounded-xl shadow text-2xl text-center flex items-center justify-center overflow-hidden bg-white";
 
-const btnTicket = document.createElement("button");
+  const btnTicket = document.createElement("button");
 
-btnTicket.type = "button";
-btnTicket.textContent = "🧾 Ticket 58 mm";
+  btnTicket.type = "button";
+  btnTicket.textContent = "🧾 Ticket";
 
-btnTicket.className =
-  "bg-amber-600 h-full w-full hover:bg-amber-700 text-white px-6 py-5 rounded-xl font-semibold shadow transition";
+  btnTicket.className =
+    "bg-amber-600 h-full w-full hover:bg-amber-700 text-white px-6 py-5 rounded-xl font-semibold shadow transition";
 
-btnTicket.onclick = generarTicketCorte58mm;
+  btnTicket.onclick = generarTicketCorte58mm;
 
-cardTicket.appendChild(btnTicket);
-  
+  cardTicket.appendChild(btnTicket);
+
   wrap.appendChild(cardPDF);
   wrap.appendChild(cardCorreo);
   wrap.appendChild(cardTicket);
 
   container.appendChild(wrap);
-
-  
 }
 
 async function construirPDFReporte() {
@@ -1502,46 +1524,143 @@ async function construirPDFReporte() {
       y += boxHf + 10;
     }
 
+    /*
+|--------------------------------------------------------------------------
+| Visitas — código 1
+|--------------------------------------------------------------------------
+*/
+
     const visitasTotal = Number(data.visitas_total || 0);
+
     const visitasCantidad = Number(data.visitas_cantidad || 0);
+
     const visitasMetodo = data.visitas_por_metodo || {};
 
     const vEfe = Number(visitasMetodo.efectivo || 0);
+
     const vTar = Number(visitasMetodo.tarjeta || 0);
+
     const vTra = Number(visitasMetodo.transferencia || 0);
 
-    const boxXv = 10,
-      boxWv = 190,
-      boxHv = 34;
+    const boxXv = 10;
+    const boxWv = 190;
+    const boxHv = 34;
+
     y = ensureSpace(doc, y, boxHv + 10);
 
     doc.setDrawColor(...PALETTE.stroke);
     doc.setFillColor(250, 245, 255);
+
     doc.roundedRect(boxXv, y, boxWv, boxHv, 3, 3, "FD");
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(124, 58, 237);
+
     doc.text("VISITAS (código 1)", boxXv + 6, y + 9);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
     doc.setTextColor(...PALETTE.title);
+
     doc.text(String(visitasCantidad), boxXv + 6, y + 22);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.setTextColor(...PALETTE.ok);
-    const totalTxt = fmtMoney(visitasTotal);
-    doc.text(totalTxt, boxXv + boxWv - 6 - doc.getTextWidth(totalTxt), y + 22);
+
+    const totalVisitasTxt = fmtMoney(visitasTotal);
+
+    doc.text(
+      totalVisitasTxt,
+      boxXv + boxWv - 6 - doc.getTextWidth(totalVisitasTxt),
+      y + 22,
+    );
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...PALETTE.mute);
-    const mini = `Efe: ${fmtMoney(vEfe)}  ·  Tar: ${fmtMoney(vTar)}  ·  Trans: ${fmtMoney(vTra)}`;
-    doc.text(mini, boxXv + 6, y + 31);
+
+    const metodosVisitasTxt =
+      `Efe: ${fmtMoney(vEfe)}  ·  ` +
+      `Tar: ${fmtMoney(vTar)}  ·  ` +
+      `Trans: ${fmtMoney(vTra)}`;
+
+    doc.text(metodosVisitasTxt, boxXv + 6, y + 31);
 
     y += boxHv + 10;
+
+    /*
+|--------------------------------------------------------------------------
+| Clase funcional de adultos — código 2
+|--------------------------------------------------------------------------
+*/
+
+    const claseFuncionalCantidad = Number(data.clase_funcional_cantidad || 0);
+
+    const claseFuncionalTotalPDF = Number(data.clase_funcional_total || 0);
+
+    const claseFuncionalMetodo = data.clase_funcional_por_metodo || {};
+
+    const cfEfectivo = Number(claseFuncionalMetodo.efectivo || 0);
+
+    const cfTarjeta = Number(claseFuncionalMetodo.tarjeta || 0);
+
+    const cfTransferencia = Number(claseFuncionalMetodo.transferencia || 0);
+
+    /*
+     * El bloque solo aparece cuando existen
+     * entradas de clase funcional.
+     */
+    if (claseFuncionalCantidad > 0) {
+      const boxXcf = 10;
+      const boxWcf = 190;
+      const boxHcf = 34;
+
+      y = ensureSpace(doc, y, boxHcf + 10);
+
+      doc.setDrawColor(...PALETTE.stroke);
+      doc.setFillColor(255, 247, 237);
+
+      doc.roundedRect(boxXcf, y, boxWcf, boxHcf, 3, 3, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(234, 88, 12);
+
+      doc.text("CLASE FUNCIONAL DE ADULTOS (código 2)", boxXcf + 6, y + 9);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(...PALETTE.title);
+
+      doc.text(String(claseFuncionalCantidad), boxXcf + 6, y + 22);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(...PALETTE.ok);
+
+      const totalClaseFuncionalTxt = fmtMoney(claseFuncionalTotalPDF);
+
+      doc.text(
+        totalClaseFuncionalTxt,
+        boxXcf + boxWcf - 6 - doc.getTextWidth(totalClaseFuncionalTxt),
+        y + 22,
+      );
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...PALETTE.mute);
+
+      const metodosClaseFuncionalTxt =
+        `Efe: ${fmtMoney(cfEfectivo)}  ·  ` +
+        `Tar: ${fmtMoney(cfTarjeta)}  ·  ` +
+        `Trans: ${fmtMoney(cfTransferencia)}`;
+
+      doc.text(metodosClaseFuncionalTxt, boxXcf + 6, y + 31);
+
+      y += boxHcf + 10;
+    }
 
     if (tipo === "dia" && String(usuarioId) !== "todos") {
       const suscripcionesEfectivo = totalSuscripcionesPorMetodo.efectivo || 0;
@@ -1552,11 +1671,16 @@ async function construirPDFReporte() {
 
       const visitasEfectivo = Number(data.visitas_por_metodo?.efectivo || 0);
 
+      const claseFuncionalEfectivo = Number(
+        data.clase_funcional_por_metodo?.efectivo || 0,
+      );
+
       const efectivoEsperado =
         suscripcionesEfectivo +
         productosEfectivo +
         financiadosEfectivo +
-        visitasEfectivo;
+        visitasEfectivo +
+        claseFuncionalEfectivo;
 
       const netoMovs = parseFloat(data.caja_neto || 0);
       const dejado = Number(document.getElementById("monto_caja")?.value || 0);
@@ -1615,7 +1739,14 @@ async function construirPDFReporte() {
         visitasEfectivo,
         rb,
       );
-
+      yK = lineAmount(
+        doc,
+        boxX + 8,
+        yK,
+        "Clase funcional efectivo",
+        claseFuncionalEfectivo,
+        rb,
+      );
       yK = lineAmount(
         doc,
         boxX + 8,
@@ -1667,7 +1798,8 @@ async function construirPDFReporte() {
       totalVentasCalc +
       totalSuscripciones +
       totalFinanciadosPDF +
-      Number(data.visitas_total || 0);
+      Number(data.visitas_total || 0) +
+      Number(data.clase_funcional_total || 0);
 
     if (tipo === "dia" && String(usuarioId) !== "todos") {
       const netoMovs = parseFloat(data.caja_neto || 0);
@@ -1899,31 +2031,31 @@ function centrarTextoTicket(doc, texto, y, ancho = 58) {
 }
 
 function lineaTicket(doc, y, caracter = "-") {
-  doc.setFont("courier", "normal");
-  doc.setFontSize(7);
+  doc.setDrawColor(20);
 
-  centrarTextoTicket(
-    doc,
-    caracter.repeat(32),
-    y,
-  );
+  if (caracter === "=") {
+    doc.setLineWidth(0.5);
+    doc.setLineDashPattern([], 0);
+  } else {
+    doc.setLineWidth(0.3);
+    doc.setLineDashPattern([0.8, 0.8], 0);
+  }
+
+  doc.line(3, y, 55, y);
+  doc.setLineDashPattern([], 0);
 
   return y + 3.5;
 }
 
 function tituloTicket(doc, titulo, y) {
-  y += 1;
+  y += 1.5;
 
-  doc.setFont("courier", "bold");
-  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
 
-  centrarTextoTicket(
-    doc,
-    `== ${String(titulo).toUpperCase()} ==`,
-    y,
-  );
+  centrarTextoTicket(doc, String(titulo || "").toUpperCase(), y);
 
-  return y + 4.5;
+  return y + 5;
 }
 
 function textoTicketIzquierdaDerecha(
@@ -1931,28 +2063,16 @@ function textoTicketIzquierdaDerecha(
   izquierda,
   derecha,
   y,
-  {
-    negrita = false,
-    tamano = 7.5,
-    margenIzquierdo = 3,
-    margenDerecho = 55,
-  } = {},
+  { negrita = true, tamano = 8, margenIzquierdo = 3, margenDerecho = 55 } = {},
 ) {
-  doc.setFont(
-    "courier",
-    negrita ? "bold" : "normal",
-  );
+  doc.setFont("helvetica", negrita ? "bold" : "normal");
 
   doc.setFontSize(tamano);
 
   const derechaTxt = String(derecha ?? "");
   const anchoDerecha = doc.getTextWidth(derechaTxt);
 
-  const maxAnchoIzquierda =
-    margenDerecho -
-    margenIzquierdo -
-    anchoDerecha -
-    2;
+  const maxAnchoIzquierda = margenDerecho - margenIzquierdo - anchoDerecha - 2;
 
   let izquierdaTxt = String(izquierda ?? "");
 
@@ -1963,68 +2083,45 @@ function textoTicketIzquierdaDerecha(
     izquierdaTxt = izquierdaTxt.slice(0, -1);
   }
 
-  doc.text(
-    izquierdaTxt,
-    margenIzquierdo,
-    y,
-  );
+  doc.text(izquierdaTxt, margenIzquierdo, y);
 
-  doc.text(
-    derechaTxt,
-    margenDerecho,
-    y,
-    {
-      align: "right",
-    },
-  );
+  doc.text(derechaTxt, margenDerecho, y, {
+    align: "right",
+  });
 
-  return y + 4;
+  return y + 4.5;
 }
 
 function textoTicketMultilinea(
   doc,
   texto,
   y,
-  {
-    margen = 3,
-    tamano = 7.5,
-    negrita = false,
-    centrado = false,
-  } = {},
+  { margen = 3, tamano = 8, negrita = true, centrado = false } = {},
 ) {
-  doc.setFont(
-    "courier",
-    negrita ? "bold" : "normal",
-  );
+  doc.setFont("helvetica", negrita ? "bold" : "normal");
 
   doc.setFontSize(tamano);
 
-  const lineas = doc.splitTextToSize(
-    String(texto ?? ""),
-    52,
-  );
+  const lineas = doc.splitTextToSize(String(texto ?? ""), 52);
 
-  if (centrado) {
-    lineas.forEach((linea) => {
+  lineas.forEach((linea) => {
+    if (centrado) {
       centrarTextoTicket(doc, linea, y);
-      y += 3.8;
-    });
-  } else {
-    doc.text(lineas, margen, y);
-    y += lineas.length * 3.8;
-  }
+    } else {
+      doc.text(linea, margen, y);
+    }
+
+    y += 4.3;
+  });
 
   return y;
 }
 
 function dineroTicket(valor) {
-  return `$${Number(valor || 0).toLocaleString(
-    "es-MX",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    },
-  )}`;
+  return `$${Number(valor || 0).toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function metodoNormalizadoTicket(valor) {
@@ -2045,31 +2142,24 @@ function metodoNormalizadoTicket(valor) {
 async function construirTicketCorte58mm() {
   const { jsPDF } = window.jspdf;
 
-  const usuarioId =
-    document.getElementById("usuario").value;
+  const usuarioId = document.getElementById("usuario").value;
 
-  const tipo =
-    document.getElementById("tipoPeriodo").value;
+  const tipo = document.getElementById("tipoPeriodo").value;
 
   let fecha = "";
   let inicio = "";
   let fin = "";
 
   if (tipo === "dia") {
-    fecha =
-      document.getElementById("fecha_dia").value;
+    fecha = document.getElementById("fecha_dia").value;
   } else if (tipo === "mes") {
-    fecha =
-      document.getElementById("fecha_mes").value;
+    fecha = document.getElementById("fecha_mes").value;
   } else if (tipo === "anio") {
-    fecha =
-      document.getElementById("fecha_anio").value;
+    fecha = document.getElementById("fecha_anio").value;
   } else if (tipo === "rango") {
-    inicio =
-      document.getElementById("rango_inicio").value;
+    inicio = document.getElementById("rango_inicio").value;
 
-    fin =
-      document.getElementById("rango_fin").value;
+    fin = document.getElementById("rango_fin").value;
   }
 
   const params = new URLSearchParams({
@@ -2087,27 +2177,17 @@ async function construirTicketCorte58mm() {
   const data = await response.json();
 
   if (!data.success) {
-    throw new Error(
-      data.error ||
-        "No se pudo obtener el detalle del corte.",
-    );
+    throw new Error(data.error || "No se pudo obtener el detalle del corte.");
   }
   const branding = await obtenerBrandingTicket();
 
-const nombreGym =
-  branding.app_name ||
-  "Gym Admin";
+  const nombreGym = branding.app_name || "Gym Admin";
 
-const logoBranding = await cargarImagenBase64(
-  branding.logo,
-);
-  const usuarioSelect =
-    document.getElementById("usuario");
+  const logoBranding = await cargarImagenBase64(branding.logo);
+  const usuarioSelect = document.getElementById("usuario");
 
   const nombreUsuario =
-    usuarioSelect.options[
-      usuarioSelect.selectedIndex
-    ]?.text || "Usuario";
+    usuarioSelect.options[usuarioSelect.selectedIndex]?.text || "Usuario";
 
   /*
   |--------------------------------------------------------------------------
@@ -2115,89 +2195,84 @@ const logoBranding = await cargarImagenBase64(
   |--------------------------------------------------------------------------
   */
 
-  const cantidadPagos = Array.isArray(data.pagos)
-  ? data.pagos.length
-  : 0;
+  const cantidadPagos = Array.isArray(data.pagos) ? data.pagos.length : 0;
 
-const cantidadTarifas = Array.isArray(data.resumen_tarifas)
-  ? data.resumen_tarifas.length
-  : 0;
+  const cantidadTarifas = Array.isArray(data.resumen_tarifas)
+    ? data.resumen_tarifas.length
+    : 0;
 
-const cantidadMetodosTarifas = (data.resumen_tarifas || []).reduce(
-  (total, tarifa) => {
-    let metodosConDatos = 0;
+  const cantidadMetodosTarifas = (data.resumen_tarifas || []).reduce(
+    (total, tarifa) => {
+      let metodosConDatos = 0;
 
-    if (
-      Number(tarifa.efectivo?.cantidad || 0) > 0 ||
-      Number(tarifa.efectivo?.total || 0) > 0
-    ) {
-      metodosConDatos++;
-    }
+      if (
+        Number(tarifa.efectivo?.cantidad || 0) > 0 ||
+        Number(tarifa.efectivo?.total || 0) > 0
+      ) {
+        metodosConDatos++;
+      }
 
-    if (
-      Number(tarifa.tarjeta?.cantidad || 0) > 0 ||
-      Number(tarifa.tarjeta?.total || 0) > 0
-    ) {
-      metodosConDatos++;
-    }
+      if (
+        Number(tarifa.tarjeta?.cantidad || 0) > 0 ||
+        Number(tarifa.tarjeta?.total || 0) > 0
+      ) {
+        metodosConDatos++;
+      }
 
-    if (
-      Number(tarifa.transferencia?.cantidad || 0) > 0 ||
-      Number(tarifa.transferencia?.total || 0) > 0
-    ) {
-      metodosConDatos++;
-    }
+      if (
+        Number(tarifa.transferencia?.cantidad || 0) > 0 ||
+        Number(tarifa.transferencia?.total || 0) > 0
+      ) {
+        metodosConDatos++;
+      }
 
-    return total + metodosConDatos;
-  },
-  0,
-);
+      return total + metodosConDatos;
+    },
+    0,
+  );
 
-const cantidadFinanciados = Array.isArray(data.pagos_financiados)
-  ? data.pagos_financiados.length
-  : 0;
+  const cantidadFinanciados = Array.isArray(data.pagos_financiados)
+    ? data.pagos_financiados.length
+    : 0;
 
-const cantidadVentas = Array.isArray(data.ventas)
-  ? data.ventas.length
-  : 0;
+  const cantidadVentas = Array.isArray(data.ventas) ? data.ventas.length : 0;
 
-const cantidadProductos = (data.ventas || []).reduce(
-  (total, venta) => {
-    return total + (Array.isArray(venta.productos) ? venta.productos.length : 0);
-  },
-  0,
-);
+  const cantidadProductos = (data.ventas || []).reduce((total, venta) => {
+    return (
+      total + (Array.isArray(venta.productos) ? venta.productos.length : 0)
+    );
+  }, 0);
 
-const cantidadMovimientos = Array.isArray(data.movimientos_caja)
-  ? data.movimientos_caja.length
-  : 0;
+  const cantidadMovimientos = Array.isArray(data.movimientos_caja)
+    ? data.movimientos_caja.length
+    : 0;
 
-/*
- * Altura base:
- * branding, encabezado, resumen, caja, títulos, visitas,
- * total general y pie del ticket.
- */
-let altoTicket = 230;
+  /*
+   * Altura base:
+   * branding, encabezado, resumen, caja, títulos, visitas,
+   * total general y pie del ticket.
+   */
+  let altoTicket = 230;
 
-/* Registros variables */
-altoTicket += cantidadPagos * 5;
-altoTicket += cantidadTarifas * 6;
-altoTicket += cantidadMetodosTarifas * 4;
-altoTicket += cantidadFinanciados * 5;
-altoTicket += cantidadVentas * 3;
-altoTicket += cantidadProductos * 5;
-altoTicket += cantidadMovimientos * 5;
+  /* Registros variables */
+  altoTicket += cantidadPagos * 5;
+  altoTicket += cantidadTarifas * 6;
+  altoTicket += cantidadMetodosTarifas * 4;
+  altoTicket += cantidadFinanciados * 5;
+  altoTicket += cantidadVentas * 3;
+  altoTicket += cantidadProductos * 5;
+  altoTicket += cantidadMovimientos * 5;
 
-/*
- * Margen de seguridad para nombres largos que puedan ocupar más de una línea.
- */
-altoTicket += 40;
+  /*
+   * Margen de seguridad para nombres largos que puedan ocupar más de una línea.
+   */
+  altoTicket += 40;
 
-/*
- * Solo dejamos una altura mínima. No usamos Math.min(), porque eso era
- * lo que cortaba el final del ticket cuando era muy largo.
- */
-altoTicket = Math.max(altoTicket, 260);
+  /*
+   * Solo dejamos una altura mínima. No usamos Math.min(), porque eso era
+   * lo que cortaba el final del ticket cuando era muy largo.
+   */
+  altoTicket = Math.max(altoTicket, 260);
 
   const doc = new jsPDF({
     unit: "mm",
@@ -2213,21 +2288,34 @@ altoTicket = Math.max(altoTicket, 260);
 |--------------------------------------------------------------------------
 */
 
-if (logoBranding) {
+  if (logoBranding) {
   try {
-    /*
-     * Logo centrado dentro de un espacio máximo de 30 x 18 mm.
-     */
-    doc.addImage(
+    const propiedadesLogo = doc.getImageProperties(
       logoBranding,
-      "PNG",
-      14,
-      y,
-      30,
-      18,
     );
 
-    y += 21;
+    // Misma medida usada en los demás tickets de 58 mm
+    const anchoLogo = 38;
+
+    // Conserva la proporción original
+    const altoLogo =
+      (propiedadesLogo.height * anchoLogo) /
+      propiedadesLogo.width;
+
+    // Centra el logo en el papel de 58 mm
+    const posicionX = (58 - anchoLogo) / 2;
+
+    doc.addImage(
+      logoBranding,
+      undefined,
+      posicionX,
+      y,
+      anchoLogo,
+      altoLogo,
+    );
+
+    // Coloca el encabezado debajo del logo
+    y += altoLogo + 10;
   } catch (error) {
     console.warn(
       "No se pudo agregar el logo del branding al ticket:",
@@ -2245,43 +2333,28 @@ if (logoBranding) {
   |--------------------------------------------------------------------------
   */
 
-  doc.setFont("courier", "bold");
-doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
 
-/*
- * Divide el nombre en varias líneas si es demasiado largo
- * para el ancho de 58 mm.
- */
-const lineasNombreGym = doc.splitTextToSize(
-  String(nombreGym),
-  50,
-);
+  /*
+   * Divide el nombre en varias líneas si es demasiado largo
+   * para el ancho de 58 mm.
+   */
+  const lineasNombreGym = doc.splitTextToSize(String(nombreGym), 50);
 
-lineasNombreGym.forEach((linea) => {
-  centrarTextoTicket(
-    doc,
-    linea,
-    y,
-  );
+  lineasNombreGym.forEach((linea) => {
+    centrarTextoTicket(doc, linea, y);
 
-  y += 4;
-});
+    y += 4.5;
+  });
 
-y += 1;
+  y += 1;
 
-  doc.setFont("courier", "normal");
-  doc.setFontSize(7);
-
-  y = textoTicketMultilinea(
-    doc,
-    "CORTE DE TURNO",
-    y,
-    {
-      centrado: true,
-      negrita: true,
-      tamano: 8,
-    },
-  );
+  y = textoTicketMultilinea(doc, "CORTE DE TURNO", y, {
+    centrado: true,
+    negrita: true,
+    tamano: 10,
+  });
 
   y = lineaTicket(doc, y, "=");
 
@@ -2291,18 +2364,16 @@ y += 1;
   |--------------------------------------------------------------------------
   */
 
-  const fechaGeneracion =
-    new Date().toLocaleDateString("es-MX", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+  const fechaGeneracion = new Date().toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
-  const horaGeneracion =
-    new Date().toLocaleTimeString("es-MX", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const horaGeneracion = new Date().toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   y = textoTicketIzquierdaDerecha(
     doc,
@@ -2310,19 +2381,14 @@ y += 1;
     `${fechaGeneracion} ${horaGeneracion}`,
     y,
     {
-      tamano: 6.5,
+      tamano: 8,
     },
   );
 
-  y = textoTicketMultilinea(
-    doc,
-    `CAJERO: ${nombreUsuario}`,
-    y,
-    {
-      negrita: true,
-      tamano: 7,
-    },
-  );
+  y = textoTicketMultilinea(doc, `CAJERO: ${nombreUsuario}`, y, {
+    negrita: true,
+    tamano: 8,
+  });
 
   let periodoTexto = "";
 
@@ -2333,19 +2399,12 @@ y += 1;
   } else if (tipo === "anio") {
     periodoTexto = fecha;
   } else {
-    periodoTexto =
-      `${formatearFecha(inicio)} A ` +
-      formatearFecha(fin);
+    periodoTexto = `${formatearFecha(inicio)} A ` + formatearFecha(fin);
   }
 
-  y = textoTicketMultilinea(
-    doc,
-    `PERIODO: ${periodoTexto}`,
-    y,
-    {
-      tamano: 7,
-    },
-  );
+  y = textoTicketMultilinea(doc, `PERIODO: ${periodoTexto}`, y, {
+    tamano: 8,
+  });
 
   y = lineaTicket(doc, y);
 
@@ -2355,49 +2414,39 @@ y += 1;
   |--------------------------------------------------------------------------
   */
 
-  const totalSuscripciones = (
-    data.pagos || []
-  ).reduce(
+  const totalSuscripciones = (data.pagos || []).reduce(
     (suma, pago) =>
-      suma +
-      Number(pago.monto || 0) -
-      Number(pago.descuento || 0),
+      suma + Number(pago.monto || 0) - Number(pago.descuento || 0),
     0,
   );
 
-  const totalProductos = (
-    data.ventas || []
-  ).reduce(
+  const totalProductos = (data.ventas || []).reduce(
     (suma, venta) =>
       suma +
       (venta.productos || []).reduce(
-        (subtotal, producto) =>
-          subtotal +
-          Number(producto.total || 0),
+        (subtotal, producto) => subtotal + Number(producto.total || 0),
         0,
       ),
     0,
   );
 
-  const totalFinanciados = Number(
-    data.total_financiados || 0,
-  );
+  const totalFinanciados = Number(data.total_financiados || 0);
 
-  const totalVisitas = Number(
-    data.visitas_total || 0,
-  );
-
+  const totalVisitas = Number(data.visitas_total || 0);
+  const totalClaseFuncional = Number(data.clase_funcional_total || 0);
   const totalVentas =
     totalSuscripciones +
     totalProductos +
     totalFinanciados +
-    totalVisitas;
+    totalVisitas +
+    totalClaseFuncional;
 
   const cantidadOperaciones =
     cantidadPagos +
     cantidadVentas +
     cantidadFinanciados +
-    Number(data.visitas_cantidad || 0);
+    Number(data.visitas_cantidad || 0) +
+    Number(data.clase_funcional_cantidad || 0);
 
   y = textoTicketIzquierdaDerecha(
     doc,
@@ -2410,16 +2459,10 @@ y += 1;
     },
   );
 
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "OPERACIONES",
-    cantidadOperaciones,
-    y,
-    {
-      negrita: true,
-      tamano: 8,
-    },
-  );
+  y = textoTicketIzquierdaDerecha(doc, "OPERACIONES", cantidadOperaciones, y, {
+    negrita: true,
+    tamano: 8,
+  });
 
   /*
   |--------------------------------------------------------------------------
@@ -2427,92 +2470,57 @@ y += 1;
   |--------------------------------------------------------------------------
   */
 
-  y = tituloTicket(
-    doc,
-    "DINERO EN CAJA",
-    y + 2,
-  );
+  y = tituloTicket(doc, "DINERO EN CAJA", y + 2);
 
-  const suscripcionesEfectivo = (
-    data.pagos || []
-  )
-    .filter(
-      (pago) =>
-        metodoNormalizadoTicket(pago.metodo) ===
-        "efectivo",
-    )
+  const suscripcionesEfectivo = (data.pagos || [])
+    .filter((pago) => metodoNormalizadoTicket(pago.metodo) === "efectivo")
     .reduce(
       (suma, pago) =>
-        suma +
-        Number(pago.monto || 0) -
-        Number(pago.descuento || 0),
+        suma + Number(pago.monto || 0) - Number(pago.descuento || 0),
       0,
     );
 
-  const productosEfectivo = (
-    data.ventas || []
-  )
+  const productosEfectivo = (data.ventas || [])
     .filter(
-      (venta) =>
-        metodoNormalizadoTicket(
-          venta.metodo_pago,
-        ) === "efectivo",
+      (venta) => metodoNormalizadoTicket(venta.metodo_pago) === "efectivo",
     )
     .reduce(
       (suma, venta) =>
         suma +
         (venta.productos || []).reduce(
-          (subtotal, producto) =>
-            subtotal +
-            Number(producto.total || 0),
+          (subtotal, producto) => subtotal + Number(producto.total || 0),
           0,
         ),
       0,
     );
 
-  const financiadosEfectivo = (
-    data.pagos_financiados || []
-  )
+  const financiadosEfectivo = (data.pagos_financiados || [])
     .filter(
       (pago) =>
-        metodoNormalizadoTicket(
-          pago.metodo_pago || pago.metodo,
-        ) === "efectivo",
+        metodoNormalizadoTicket(pago.metodo_pago || pago.metodo) === "efectivo",
     )
-    .reduce(
-      (suma, pago) =>
-        suma + Number(pago.monto || 0),
-      0,
-    );
+    .reduce((suma, pago) => suma + Number(pago.monto || 0), 0);
 
-  const visitasEfectivo = Number(
-    data.visitas_por_metodo?.efectivo || 0,
+  const visitasEfectivo = Number(data.visitas_por_metodo?.efectivo || 0);
+
+  const claseFuncionalEfectivo = Number(
+    data.clase_funcional_por_metodo?.efectivo || 0,
   );
 
   const ventasEfectivo =
     suscripcionesEfectivo +
     productosEfectivo +
     financiadosEfectivo +
-    visitasEfectivo;
+    visitasEfectivo +
+    claseFuncionalEfectivo;
 
-  const cajaInicial = Number(
-    document.getElementById("monto_caja")
-      ?.value || 0,
-  );
+  const cajaInicial = Number(document.getElementById("monto_caja")?.value || 0);
 
-  const entradas = Number(
-    data.caja_ingresos || 0,
-  );
+  const entradas = Number(data.caja_ingresos || 0);
 
-  const salidas = Number(
-    data.caja_egresos || 0,
-  );
+  const salidas = Number(data.caja_egresos || 0);
 
-  const efectivoCaja =
-    cajaInicial +
-    ventasEfectivo +
-    entradas -
-    salidas;
+  const efectivoCaja = cajaInicial + ventasEfectivo + entradas - salidas;
 
   y = textoTicketIzquierdaDerecha(
     doc,
@@ -2561,40 +2569,25 @@ y += 1;
   |--------------------------------------------------------------------------
   */
 
-  y = tituloTicket(
-    doc,
-    "ENTRADAS EFECTIVO",
-    y + 2,
-  );
+  y = tituloTicket(doc, "ENTRADAS EFECTIVO", y + 2);
 
-  const movimientosEntrada = (
-    data.movimientos_caja || []
-  ).filter(
-    (movimiento) =>
-      String(movimiento.tipo).toUpperCase() ===
-      "INGRESO",
+  const movimientosEntrada = (data.movimientos_caja || []).filter(
+    (movimiento) => String(movimiento.tipo).toUpperCase() === "INGRESO",
   );
 
   if (!movimientosEntrada.length) {
-    y = textoTicketMultilinea(
-      doc,
-      "NO HUBO ENTRADAS",
-      y,
-      {
-        centrado: true,
-      },
-    );
+    y = textoTicketMultilinea(doc, "NO HUBO ENTRADAS", y, {
+      centrado: true,
+    });
   } else {
-    movimientosEntrada.forEach(
-      (movimiento) => {
-        y = textoTicketIzquierdaDerecha(
-          doc,
-          movimiento.concepto || "Entrada",
-          dineroTicket(movimiento.monto),
-          y,
-        );
-      },
-    );
+    movimientosEntrada.forEach((movimiento) => {
+      y = textoTicketIzquierdaDerecha(
+        doc,
+        movimiento.concepto || "Entrada",
+        dineroTicket(movimiento.monto),
+        y,
+      );
+    });
   }
 
   y = lineaTicket(doc, y);
@@ -2615,40 +2608,25 @@ y += 1;
   |--------------------------------------------------------------------------
   */
 
-  y = tituloTicket(
-    doc,
-    "SALIDAS EFECTIVO",
-    y + 2,
-  );
+  y = tituloTicket(doc, "SALIDAS EFECTIVO", y + 2);
 
-  const movimientosSalida = (
-    data.movimientos_caja || []
-  ).filter(
-    (movimiento) =>
-      String(movimiento.tipo).toUpperCase() ===
-      "EGRESO",
+  const movimientosSalida = (data.movimientos_caja || []).filter(
+    (movimiento) => String(movimiento.tipo).toUpperCase() === "EGRESO",
   );
 
   if (!movimientosSalida.length) {
-    y = textoTicketMultilinea(
-      doc,
-      "NO HUBO SALIDAS",
-      y,
-      {
-        centrado: true,
-      },
-    );
+    y = textoTicketMultilinea(doc, "NO HUBO SALIDAS", y, {
+      centrado: true,
+    });
   } else {
-    movimientosSalida.forEach(
-      (movimiento) => {
-        y = textoTicketIzquierdaDerecha(
-          doc,
-          movimiento.concepto || "Salida",
-          dineroTicket(movimiento.monto),
-          y,
-        );
-      },
-    );
+    movimientosSalida.forEach((movimiento) => {
+      y = textoTicketIzquierdaDerecha(
+        doc,
+        movimiento.concepto || "Salida",
+        dineroTicket(movimiento.monto),
+        y,
+      );
+    });
   }
 
   y = lineaTicket(doc, y);
@@ -2679,56 +2657,36 @@ y += 1;
   };
 
   (data.pagos || []).forEach((pago) => {
-    const metodo =
-      metodoNormalizadoTicket(pago.metodo);
+    const metodo = metodoNormalizadoTicket(pago.metodo);
 
     ventasMetodo[metodo] +=
-      Number(pago.monto || 0) -
-      Number(pago.descuento || 0);
+      Number(pago.monto || 0) - Number(pago.descuento || 0);
   });
 
-  (data.pagos_financiados || []).forEach(
-    (pago) => {
-      const metodo =
-        metodoNormalizadoTicket(
-          pago.metodo_pago || pago.metodo,
-        );
+  (data.pagos_financiados || []).forEach((pago) => {
+    const metodo = metodoNormalizadoTicket(pago.metodo_pago || pago.metodo);
 
-      ventasMetodo[metodo] += Number(
-        pago.monto || 0,
-      );
-    },
-  );
+    ventasMetodo[metodo] += Number(pago.monto || 0);
+  });
 
   (data.ventas || []).forEach((venta) => {
-    const metodo =
-      metodoNormalizadoTicket(
-        venta.metodo_pago,
-      );
+    const metodo = metodoNormalizadoTicket(venta.metodo_pago);
 
-    const totalVenta = (
-      venta.productos || []
-    ).reduce(
-      (suma, producto) =>
-        suma + Number(producto.total || 0),
+    const totalVenta = (venta.productos || []).reduce(
+      (suma, producto) => suma + Number(producto.total || 0),
       0,
     );
 
     ventasMetodo[metodo] += totalVenta;
   });
 
-  Object.entries(
-    data.visitas_por_metodo || {},
-  ).forEach(([metodoOriginal, total]) => {
-    const metodo =
-      metodoNormalizadoTicket(
-        metodoOriginal,
-      );
+  Object.entries(data.visitas_por_metodo || {}).forEach(
+    ([metodoOriginal, total]) => {
+      const metodo = metodoNormalizadoTicket(metodoOriginal);
 
-    ventasMetodo[metodo] += Number(
-      total || 0,
-    );
-  });
+      ventasMetodo[metodo] += Number(total || 0);
+    },
+  );
 
   y = textoTicketIzquierdaDerecha(
     doc,
@@ -2747,9 +2705,7 @@ y += 1;
   y = textoTicketIzquierdaDerecha(
     doc,
     "TRANSFERENCIA",
-    dineroTicket(
-      ventasMetodo.transferencia,
-    ),
+    dineroTicket(ventasMetodo.transferencia),
     y,
   );
 
@@ -2781,24 +2737,14 @@ y += 1;
   |--------------------------------------------------------------------------
   */
 
-  y = tituloTicket(
-    doc,
-    "PAGOS POR TARIFA",
-    y + 2,
-  );
+  y = tituloTicket(doc, "PAGOS POR TARIFA", y + 2);
 
-  const tarifas =
-    data.resumen_tarifas || [];
+  const tarifas = data.resumen_tarifas || [];
 
   if (!tarifas.length) {
-    y = textoTicketMultilinea(
-      doc,
-      "NO HUBO PAGOS DE TARIFAS",
-      y,
-      {
-        centrado: true,
-      },
-    );
+    y = textoTicketMultilinea(doc, "NO HUBO PAGOS DE TARIFAS", y, {
+      centrado: true,
+    });
   } else {
     tarifas.forEach((tarifa) => {
       y = textoTicketIzquierdaDerecha(
@@ -2814,37 +2760,28 @@ y += 1;
       const metodos = [
         ["Efectivo", tarifa.efectivo],
         ["Tarjeta", tarifa.tarjeta],
-        [
-          "Transferencia",
-          tarifa.transferencia,
-        ],
+        ["Transferencia", tarifa.transferencia],
       ];
 
-      metodos.forEach(
-        ([nombreMetodo, informacion]) => {
-          const cantidad = Number(
-            informacion?.cantidad || 0,
-          );
+      metodos.forEach(([nombreMetodo, informacion]) => {
+        const cantidad = Number(informacion?.cantidad || 0);
 
-          const total = Number(
-            informacion?.total || 0,
-          );
+        const total = Number(informacion?.total || 0);
 
-          if (cantidad <= 0 && total <= 0) {
-            return;
-          }
+        if (cantidad <= 0 && total <= 0) {
+          return;
+        }
 
-          y = textoTicketIzquierdaDerecha(
-            doc,
-            `  ${nombreMetodo} x${cantidad}`,
-            dineroTicket(total),
-            y,
-            {
-              tamano: 6.8,
-            },
-          );
-        },
-      );
+        y = textoTicketIzquierdaDerecha(
+          doc,
+          `  ${nombreMetodo} x${cantidad}`,
+          dineroTicket(total),
+          y,
+          {
+            tamano: 8,
+          },
+        );
+      });
     });
   }
 
@@ -2854,36 +2791,24 @@ y += 1;
   |--------------------------------------------------------------------------
   */
 
-  y = tituloTicket(
-    doc,
-    "PAGOS FINANCIADOS",
-    y + 2,
-  );
+  y = tituloTicket(doc, "PAGOS FINANCIADOS", y + 2);
 
   if (!(data.pagos_financiados || []).length) {
-    y = textoTicketMultilinea(
-      doc,
-      "NO HUBO PAGOS FINANCIADOS",
-      y,
-      {
-        centrado: true,
-      },
-    );
+    y = textoTicketMultilinea(doc, "NO HUBO PAGOS FINANCIADOS", y, {
+      centrado: true,
+    });
   } else {
-    (data.pagos_financiados || []).forEach(
-      (pago) => {
-        const descripcion =
-          `Venta ${pago.venta_financiada_id} ` +
-          `Cuota ${pago.cuota_id}`;
+    (data.pagos_financiados || []).forEach((pago) => {
+      const descripcion =
+        `Venta ${pago.venta_financiada_id} ` + `Cuota ${pago.cuota_id}`;
 
-        y = textoTicketIzquierdaDerecha(
-          doc,
-          descripcion,
-          dineroTicket(pago.monto),
-          y,
-        );
-      },
-    );
+      y = textoTicketIzquierdaDerecha(
+        doc,
+        descripcion,
+        dineroTicket(pago.monto),
+        y,
+      );
+    });
 
     y = lineaTicket(doc, y);
 
@@ -2904,36 +2829,67 @@ y += 1;
   |--------------------------------------------------------------------------
   */
 
-  y = tituloTicket(
-    doc,
-    "VENTAS DE PRODUCTOS",
-    y + 2,
-  );
+  y = tituloTicket(doc, "VENTAS DE PRODUCTOS", y + 2);
 
   if (!(data.ventas || []).length) {
-    y = textoTicketMultilinea(
-      doc,
-      "NO HUBO VENTAS DE PRODUCTOS",
-      y,
-      {
-        centrado: true,
-      },
-    );
-  } else {
-    (data.ventas || []).forEach((venta) => {
-      (venta.productos || []).forEach(
-        (producto) => {
-          y = textoTicketIzquierdaDerecha(
-            doc,
-            `${producto.nombre} x${producto.cantidad}`,
-            dineroTicket(producto.total),
-            y,
-          );
-        },
-      );
+    y = textoTicketMultilinea(doc, "NO HUBO VENTAS DE PRODUCTOS", y, {
+      centrado: true,
     });
+  } else {
+  /*
+   * Agrupa el mismo producto aunque aparezca
+   * en distintas ventas.
+   */
+  const productosAgrupados = new Map();
 
-    y = lineaTicket(doc, y);
+  (data.ventas || []).forEach((venta) => {
+    (venta.productos || []).forEach((producto) => {
+      /*
+       * Utiliza el ID o código cuando esté disponible.
+       * Si el back no lo envía, utiliza el nombre normalizado.
+       */
+      const claveProducto = String(
+        producto.producto_id ||
+          producto.id ||
+          producto.codigo ||
+          producto.nombre ||
+          "",
+      )
+        .trim()
+        .toLowerCase();
+
+      const cantidad = Number(producto.cantidad || 0);
+      const total = Number(producto.total || 0);
+
+      if (productosAgrupados.has(claveProducto)) {
+        const productoExistente =
+          productosAgrupados.get(claveProducto);
+
+        productoExistente.cantidad += cantidad;
+        productoExistente.total += total;
+      } else {
+        productosAgrupados.set(claveProducto, {
+          nombre: producto.nombre || "PRODUCTO",
+          cantidad,
+          total,
+        });
+      }
+    });
+  });
+
+  /*
+   * Imprime una sola línea por producto.
+   */
+  productosAgrupados.forEach((producto) => {
+    y = textoTicketIzquierdaDerecha(
+      doc,
+      `${producto.nombre} x${producto.cantidad}`,
+      dineroTicket(producto.total),
+      y,
+    );
+  });
+
+  y = lineaTicket(doc, y);
 
     y = textoTicketIzquierdaDerecha(
       doc,
@@ -2970,7 +2926,30 @@ y += 1;
       negrita: true,
     },
   );
+  /*
+|--------------------------------------------------------------------------
+| Clase funcional de adultos
+|--------------------------------------------------------------------------
+*/
 
+  y = tituloTicket(doc, "CLASE FUNCIONAL ADULTOS", y + 2);
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "ENTRADAS REGISTRADAS",
+    Number(data.clase_funcional_cantidad || 0),
+    y,
+  );
+
+  y = textoTicketIzquierdaDerecha(
+    doc,
+    "TOTAL CLASE FUNCIONAL",
+    dineroTicket(totalClaseFuncional),
+    y,
+    {
+      negrita: true,
+    },
+  );
   /*
   |--------------------------------------------------------------------------
   | Total final
@@ -2992,29 +2971,21 @@ y += 1;
 
   y = lineaTicket(doc, y, "=");
 
-  doc.setFont("courier", "bold");
-  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
 
-  centrarTextoTicket(
-    doc,
-    "FIN DEL CORTE",
-    y + 2,
-  );
+  centrarTextoTicket(doc, "FIN DEL CORTE", y + 2);
 
   y += 7;
 
-  doc.setFont("courier", "normal");
-  doc.setFontSize(6.5);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
 
-  centrarTextoTicket(
-  doc,
-  "SMARTGATE",
-  y,
-);
+  centrarTextoTicket(doc, "SMARTGATE", y);
 
-y += 10;
+  y += 10;
 
-return doc;
+  return doc;
 }
 async function generarTicketCorte58mm() {
   try {
@@ -3025,27 +2996,19 @@ async function generarTicketCorte58mm() {
       didOpen: () => Swal.showLoading(),
     });
 
-    const doc =
-      await construirTicketCorte58mm();
+    const doc = await construirTicketCorte58mm();
 
     Swal.close();
 
-    window.open(
-      doc.output("bloburl"),
-      "_blank",
-    );
+    window.open(doc.output("bloburl"), "_blank");
   } catch (error) {
-    console.error(
-      "Error al generar ticket de corte:",
-      error,
-    );
+    console.error("Error al generar ticket de corte:", error);
 
     Swal.close();
 
     swalError.fire(
       "Error",
-      error.message ||
-        "No se pudo generar el ticket.",
+      error.message || "No se pudo generar el ticket.",
       "error",
     );
   }
@@ -3133,44 +3096,26 @@ function cargarImagenBase64(ruta) {
 
     img.onload = function () {
       try {
-        const canvas =
-          document.createElement("canvas");
+        const canvas = document.createElement("canvas");
 
-        canvas.width =
-          this.naturalWidth || this.width;
+        canvas.width = this.naturalWidth || this.width;
 
-        canvas.height =
-          this.naturalHeight || this.height;
+        canvas.height = this.naturalHeight || this.height;
 
-        const contexto =
-          canvas.getContext("2d");
+        const contexto = canvas.getContext("2d");
 
-        contexto.drawImage(
-          this,
-          0,
-          0,
-          canvas.width,
-          canvas.height,
-        );
+        contexto.drawImage(this, 0, 0, canvas.width, canvas.height);
 
-        resolve(
-          canvas.toDataURL("image/png"),
-        );
+        resolve(canvas.toDataURL("image/png"));
       } catch (error) {
-        console.warn(
-          "No se pudo convertir la imagen a base64:",
-          error,
-        );
+        console.warn("No se pudo convertir la imagen a base64:", error);
 
         resolve(null);
       }
     };
 
     img.onerror = function () {
-      console.warn(
-        "No se pudo cargar la imagen:",
-        ruta,
-      );
+      console.warn("No se pudo cargar la imagen:", ruta);
 
       resolve(null);
     };
@@ -3237,16 +3182,21 @@ async function getEfectivoEsperado(params) {
 
   // ✅ Visitas en efectivo
   const efectivoVisitas = parseFloat(data.visitas_por_metodo?.efectivo || 0);
+  const efectivoClaseFuncional = parseFloat(
+    data.clase_funcional_por_metodo?.efectivo || 0,
+  );
 
   return {
     esperado:
       (efectivoSuscripciones || 0) +
       (efectivoVentas || 0) +
       (efectivoFinanciados || 0) +
-      (efectivoVisitas || 0),
+      (efectivoVisitas || 0) +
+      (efectivoClaseFuncional || 0),
 
     // opcional: sirve si después quieres mostrar desglose en pantalla
     visitas_efectivo: efectivoVisitas,
+    clase_funcional_efectivo: efectivoClaseFuncional,
   };
 }
 

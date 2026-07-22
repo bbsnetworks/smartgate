@@ -1476,10 +1476,17 @@ function centrarInventarioTicket(doc, texto, y) {
 }
 
 function lineaInventarioTicket(doc, y, caracter = "-") {
-  doc.setFont("courier", "normal");
-  doc.setFontSize(7);
+  doc.setDrawColor(20);
+  doc.setLineWidth(caracter === "=" ? 0.5 : 0.3);
 
-  centrarInventarioTicket(doc, caracter.repeat(32), y);
+  if (caracter === "-") {
+    doc.setLineDashPattern([1, 0.7], 0);
+  } else {
+    doc.setLineDashPattern([], 0);
+  }
+
+  doc.line(3, y, 55, y);
+  doc.setLineDashPattern([], 0);
 
   return y + 3.5;
 }
@@ -1497,18 +1504,18 @@ function separadorProductoInventario(doc, y) {
   return y + 3;
 }
 function tituloInventarioTicket(doc, titulo, y) {
-  y += 1;
+  y += 1.5;
 
-  doc.setFont("courier", "bold");
-  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
 
   centrarInventarioTicket(
     doc,
-    `== ${String(titulo || "").toUpperCase()} ==`,
+    String(titulo || "").toUpperCase(),
     y,
   );
 
-  return y + 4.5;
+  return y + 5;
 }
 
 function textoInventarioIzquierdaDerecha(
@@ -1517,20 +1524,19 @@ function textoInventarioIzquierdaDerecha(
   derecha,
   y,
   {
-    negrita = false,
-    tamano = 7.3,
+    negrita = true,
+    tamano = 8,
     margenIzquierdo = 3,
     margenDerecho = 55,
   } = {},
 ) {
-  doc.setFont("courier", negrita ? "bold" : "normal");
-
+  doc.setFont("helvetica", negrita ? "bold" : "normal");
   doc.setFontSize(tamano);
 
   const textoDerecha = String(derecha ?? "");
   const anchoDerecha = doc.getTextWidth(textoDerecha);
-
-  const anchoIzquierda = margenDerecho - margenIzquierdo - anchoDerecha - 2;
+  const anchoIzquierda =
+    margenDerecho - margenIzquierdo - anchoDerecha - 2;
 
   let textoIzquierda = String(izquierda ?? "");
 
@@ -1542,22 +1548,25 @@ function textoInventarioIzquierdaDerecha(
   }
 
   doc.text(textoIzquierda, margenIzquierdo, y);
-
   doc.text(textoDerecha, margenDerecho, y, {
     align: "right",
   });
 
-  return y + 4;
+  return y + 4.5;
 }
 
 function textoInventarioMultilinea(
   doc,
   texto,
   y,
-  { margen = 3, tamano = 7.3, negrita = false, centrado = false } = {},
+  {
+    margen = 3,
+    tamano = 8.5,
+    negrita = true,
+    centrado = false,
+  } = {},
 ) {
-  doc.setFont("courier", negrita ? "bold" : "normal");
-
+  doc.setFont("helvetica", negrita ? "bold" : "normal");
   doc.setFontSize(tamano);
 
   const lineas = doc.splitTextToSize(String(texto ?? ""), 52);
@@ -1569,7 +1578,7 @@ function textoInventarioMultilinea(
       doc.text(linea, margen, y);
     }
 
-    y += 3.8;
+    y += 4.3;
   });
 
   return y;
@@ -1714,8 +1723,8 @@ async function construirTicketInventario58mm() {
   |--------------------------------------------------------------------------
   */
 
-  doc.setFont("courier", "bold");
-  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
 
   const lineasNombreGym = doc.splitTextToSize(nombreGym, 50);
 
@@ -1727,7 +1736,7 @@ async function construirTicketInventario58mm() {
 
   y += 1;
 
-  doc.setFont("courier", "bold");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
 
   centrarInventarioTicket(doc, "INVENTARIO DE PRODUCTOS", y);
@@ -1753,8 +1762,8 @@ async function construirTicketInventario58mm() {
     minute: "2-digit",
   });
 
-  doc.setFont("courier", "normal");
-  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
 
   centrarInventarioTicket(doc, `GENERADO: ${fecha} ${hora}`, y);
 
@@ -1803,7 +1812,7 @@ const cantidadTotalStock =
         dineroInventarioTicket(precio),
         y,
         {
-          tamano: 7,
+          tamano: 8,
         },
       );
 
@@ -1817,7 +1826,7 @@ const cantidadTotalStock =
         y,
         {
           negrita: true,
-          tamano: 7.5,
+          tamano: 9,
         },
       );
 
@@ -1826,7 +1835,7 @@ const cantidadTotalStock =
        * stock disponible.
        */
       y = textoInventarioIzquierdaDerecha(doc, "STOCK", stock, y, {
-        tamano: 7,
+        tamano: 8,
       });
 
       /*

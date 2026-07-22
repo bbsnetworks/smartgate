@@ -233,33 +233,66 @@ function editarCliente(cliente) {
           };
         },
       })
-      .then((result) => {
-        if (result.isConfirmed) {
-          fetch("../php/update_user.php", {
+      .then(async (result) => {
+        if (!result.isConfirmed) return;
+
+        Swal.fire({
+          title: "Actualizando usuario",
+          html: "Espera un momento mientras guardamos los cambios.",
+          background: "#1e293b",
+          color: "#f8fafc",
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+          didOpen: () => {
+            Swal.showLoading();
+          },
+        });
+
+        try {
+          const response = await fetch("../php/update_user.php", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify(result.value),
-          })
-            .then((res) => res.json())
-            .then((data) => {
-              if (data.success) {
-                swalSuccess
-                  .fire("Actualizado", data.msg, "success")
-                  .then(() => location.reload());
-              } else {
-                swalError.fire(
-                  "Error",
-                  data.error || "No se pudo actualizar",
-                  "error",
-                );
-              }
-            });
+          });
+
+          if (!response.ok) {
+            throw new Error(`Error HTTP ${response.status}`);
+          }
+
+          const data = await response.json();
+
+          if (data.success) {
+            await swalSuccess.fire(
+              "Actualizado",
+              data.msg || "El usuario se actualizó correctamente.",
+              "success",
+            );
+
+            location.reload();
+          } else {
+            await swalError.fire(
+              "Error",
+              data.error || "No se pudo actualizar el usuario.",
+              "error",
+            );
+          }
+        } catch (error) {
+          console.error("Error al actualizar usuario:", error);
+
+          await swalError.fire(
+            "Error de conexión",
+            "No fue posible actualizar el usuario. Inténtalo nuevamente.",
+            "error",
+          );
         }
       });
   });
 }
 async function mostrarInfoCliente(cliente) {
-    clienteInfoActual = cliente;
+  clienteInfoActual = cliente;
   const nombreGrupo = await nombreGrupoPorId(cliente.grupo);
 
   swalcard.fire({
@@ -437,48 +470,82 @@ function renderizarFilas(clientes) {
     });
   });
   // ✅ Reasignar botones de foto
-document.querySelectorAll(".foto-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const personCode = btn.dataset.personcode;
-    abrirModalFoto(personCode);
+  document.querySelectorAll(".foto-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const personCode = btn.dataset.personcode;
+      abrirModalFoto(personCode);
+    });
   });
-});
 }
 
 // 🔥 Eliminar cliente
-function confirmarEliminacion(id) {
-  swalInfo
-    .fire({
-      title: "¿Eliminar usuario?",
-      text: "Esta acción no se puede deshacer.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
-    })
-    .then((result) => {
-      if (result.isConfirmed) {
-        fetch("../php/delete_user.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ personId: id }),
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.code === 0) {
-              swalSuccess
-                .fire("Eliminado", data.msg, "success")
-                .then(() => actualizarClientes());
-            } else {
-              swalError.fire(
-                "Error",
-                data.error || "No se pudo eliminar",
-                "error",
-              );
-            }
-          });
-      }
+async function confirmarEliminacion(id) {
+  const result = await swalInfo.fire({
+    title: "¿Eliminar usuario?",
+    text: "Esta acción no se puede deshacer.",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Sí, eliminar",
+    cancelButtonText: "Cancelar",
+    reverseButtons: true,
+  });
+
+  if (!result.isConfirmed) return;
+
+  Swal.fire({
+    title: "Eliminando usuario",
+    html: "Espera un momento mientras eliminamos la información.",
+    background: "#1e293b",
+    color: "#f8fafc",
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: false,
+    didOpen: () => {
+      Swal.showLoading();
+    },
+  });
+
+  try {
+    const response = await fetch("../php/delete_user.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        personId: id,
+      }),
     });
+
+    if (!response.ok) {
+      throw new Error(`Error HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.code === 0) {
+      await swalSuccess.fire(
+        "Eliminado",
+        data.msg || "El usuario fue eliminado correctamente.",
+        "success",
+      );
+
+      await actualizarClientes();
+    } else {
+      await swalError.fire(
+        "Error",
+        data.error || "No se pudo eliminar el usuario.",
+        "error",
+      );
+    }
+  } catch (error) {
+    console.error("Error al eliminar usuario:", error);
+
+    await swalError.fire(
+      "Error de conexión",
+      "No fue posible eliminar el usuario. Inténtalo nuevamente.",
+      "error",
+    );
+  }
 }
 
 // 🕓 Formato fecha para campos datetime-local

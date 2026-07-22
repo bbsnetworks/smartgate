@@ -288,7 +288,10 @@ async function procesarVenta() {
     }
 
     if (data.success) {
-      generarTicketVenta(data, productosParaTicket, { pagado, cambio });
+      await generarTicketVenta(data, productosParaTicket, {
+        pagado,
+        cambio,
+      });
 
       const cambioColor = cambio > 0 ? "#22c55e" : "#e5e7eb";
       await swalSuccess.fire({
@@ -342,76 +345,443 @@ async function procesarVenta() {
     setBotonCobrarBloqueado(false, null);
   }
 }
+async function obtenerBrandingTicketProductos() {
+  const datos = {
+    logo: null,
+    horario: "",
+    redes_sociales: "",
+    mensaje_ticket: "",
+  };
 
+  /*
+   * Información del ticket
+   */
+  try {
+    const response = await fetch("../php/obtener_branding.php", {
+      cache: "no-store",
+    });
+
+    const texto = await response.text();
+
+    let branding;
+
+    try {
+      branding = JSON.parse(texto);
+    } catch (error) {
+      console.error("Respuesta inválida de obtener_branding.php:", texto);
+
+      return datos;
+    }
+
+    if (response.ok && branding.ok !== false) {
+      datos.horario = branding.horario || "";
+
+      datos.redes_sociales = branding.redes_sociales || "";
+
+      datos.mensaje_ticket = branding.mensaje_ticket || "";
+    }
+  } catch (error) {
+    console.error("No se pudo cargar la configuración del ticket:", error);
+  }
+
+  /*
+   * Logo configurado
+   */
+  try {
+    const response = await fetch("../php/obtener_logo.php", {
+      cache: "no-store",
+    });
+
+    const logo = await response.json();
+
+    if (response.ok && logo.success && logo.base64) {
+      datos.logo = logo.base64;
+    }
+  } catch (error) {
+    console.error("No se pudo cargar el logo del ticket:", error);
+  }
+
+  return datos;
+}
 async function generarTicketVenta(
   data,
   productos,
   pagoInfo = { pagado: 0, cambio: 0 },
 ) {
   const { jsPDF } = window.jspdf;
+
+  const configuracion = await obtenerBrandingTicketProductos();
+
+  /*
+   * Altura suficiente para productos, horario,
+   * redes sociales y mensaje final.
+   */
+  const alturaTicket = Math.max(220 + productos.length * 16, 250);
+
   const doc = new jsPDF({
     unit: "mm",
-    format: [58, 130 + productos.length * 10],
+    format: [58, alturaTicket],
+    orientation: "portrait",
   });
 
-  const logo = await cargarImagenBase64("../img/logo-black.webp");
+  const fechaCompleta = data.fecha_pago
+    ? new Date(data.fecha_pago)
+    : new Date();
 
-  const fechaCompleta = new Date(data.fecha_pago);
-  const fecha = fechaCompleta.toLocaleDateString("es-MX");
+  const fecha = fechaCompleta.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
   const hora = fechaCompleta.toLocaleTimeString("es-MX", {
     hour: "2-digit",
     minute: "2-digit",
   });
 
-  doc.addImage(logo, "PNG", 19, 5, 20, 20);
-  doc.setFont("courier", "bold");
-  doc.setFontSize(10);
-  doc.text("Venta de Productos", 29, 30, { align: "center" });
-  doc.setFont("courier", "normal");
-  doc.text(`${fecha}, ${hora}`, 29, 36, { align: "center" });
-  doc.line(5, 38, 53, 38);
+  let y = 5;
 
-  let y = 44;
-  doc.setFont("courier", "bold");
-  doc.text(`Folio: ${data.venta_id}`, 29, y, { align: "center" });
-  y += 5;
-  doc.setFont("courier", "normal");
-  doc.text(`Vendedor: ${data.usuario}`, 29, y, { align: "center" });
-  y += 6;
+  /*
+   * Logo configurado
+   */
+  if (configuracion.logo) {
+    try {
+      const propiedadesLogo = doc.getImageProperties(
+  configuracion.logo,
+);
 
-  let total = 0;
-  productos.forEach((p) => {
-    const precio = parseFloat(p.precio);
-    const cantidad = parseInt(p.cantidad);
-    const subtotal = precio * cantidad;
-    total += subtotal;
+// Ancho del logo dentro del papel de 58 mm
+const anchoLogo = 38;
 
-    doc.text(p.nombre, 5, y);
-    doc.text(`x${cantidad} $${precio.toFixed(2)}`, 5, y + 5);
-    doc.text(`$${subtotal.toFixed(2)}`, 53, y + 5, { align: "right" });
-    y += 10;
+// Calcula la altura proporcionalmente
+const altoLogo =
+  (propiedadesLogo.height * anchoLogo) /
+  propiedadesLogo.width;
+
+// Centra el logo
+const posicionX = (58 - anchoLogo) / 2;
+
+doc.addImage(
+  configuracion.logo,
+  undefined,
+  posicionX,
+  y,
+  anchoLogo,
+  altoLogo,
+);
+
+y += altoLogo + 10;
+    } catch (error) {
+      console.error("No se pudo colocar el logo:", error);
+    }
+  }
+
+  /*
+   * Título
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+
+  doc.text("VENTA DE PRODUCTOS", 29, y, {
+    align: "center",
   });
 
-  doc.line(5, y, 53, y);
   y += 6;
-  doc.setFont("courier", "bold");
-  doc.text(`Total: ${formateaMoneda(total)}`, 29, y, { align: "center" });
+
+  /*
+   * Fecha
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+
+  doc.text(`${fecha}, ${hora}`, 29, y, {
+    align: "center",
+  });
+
+  y += 4;
+
+  doc.setDrawColor(20);
+  doc.setLineWidth(0.4);
+  doc.line(4, y, 54, y);
+
+  y += 6;
+
+  /*
+   * Folio
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+
+  const lineasFolio = doc.splitTextToSize(
+    `FOLIO: ${data.venta_id || "SIN FOLIO"}`,
+    50,
+  );
+
+  lineasFolio.forEach((linea) => {
+    doc.text(linea, 29, y, {
+      align: "center",
+    });
+
+    y += 4;
+  });
+
+  y += 1;
+
+  /*
+   * Vendedor
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+
+  const lineasVendedor = doc.splitTextToSize(
+    `VENDEDOR: ${data.usuario || "NO ESPECIFICADO"}`,
+    50,
+  );
+
+  lineasVendedor.forEach((linea) => {
+    doc.text(linea, 29, y, {
+      align: "center",
+    });
+
+    y += 4;
+  });
+
+  y += 2;
+
+  doc.setLineWidth(0.3);
+  doc.line(4, y, 54, y);
+
   y += 5;
 
-  // (Opcional) mostrar pagó/cambio también en ticket
+  /*
+   * Productos
+   */
+  let total = 0;
+
+  productos.forEach((producto, index) => {
+    const precio = Number.parseFloat(producto.precio || 0);
+
+    const cantidad = Number.parseInt(producto.cantidad || 0, 10);
+
+    const subtotal = precio * cantidad;
+
+    total += subtotal;
+
+    /*
+     * Nombre
+     */
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    const nombreProducto = String(
+      producto.nombre || "PRODUCTO SIN NOMBRE",
+    ).toUpperCase();
+
+    const lineasNombre = doc.splitTextToSize(nombreProducto, 50);
+
+    lineasNombre.forEach((linea) => {
+      doc.text(linea, 4, y);
+      y += 4;
+    });
+
+    /*
+     * Cantidad, precio y subtotal
+     */
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+
+    doc.text(`${cantidad} x ${formateaMoneda(precio)}`, 4, y);
+
+    doc.text(formateaMoneda(subtotal), 54, y, {
+      align: "right",
+    });
+
+    y += 4;
+
+    /*
+     * Separador entre productos
+     */
+    if (index < productos.length - 1) {
+      doc.setDrawColor(90);
+      doc.setLineWidth(0.25);
+      doc.setLineDashPattern([0.8, 0.8], 0);
+      doc.line(4, y, 54, y);
+      doc.setLineDashPattern([], 0);
+
+      y += 4;
+    }
+  });
+
+  /*
+   * Total
+   */
+  y += 1;
+
+  doc.setDrawColor(20);
+  doc.setLineWidth(0.5);
+  doc.line(4, y, 54, y);
+
+  y += 6;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+
+  doc.text("TOTAL", 4, y);
+
+  doc.text(formateaMoneda(total), 54, y, {
+    align: "right",
+  });
+
+  y += 6;
+
+  /*
+   * Pagó y cambio
+   */
   if (pagoInfo) {
-    doc.setFont("courier", "normal");
-    doc.text(`Pagó: ${formateaMoneda(pagoInfo.pagado)}`, 5, y);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    doc.text("PAGÓ", 4, y);
+
+    doc.text(formateaMoneda(pagoInfo.pagado), 54, y, {
+      align: "right",
+    });
+
     y += 5;
-    doc.text(`Cambio: ${formateaMoneda(pagoInfo.cambio)}`, 5, y);
+
+    doc.text("CAMBIO", 4, y);
+
+    doc.text(formateaMoneda(pagoInfo.cambio), 54, y, {
+      align: "right",
+    });
+
     y += 7;
   }
 
-  doc.setFont("courier", "italic");
-  doc.text("¡Gracias por tu compra!", 29, y, { align: "center" });
+  /*
+   * Horario configurado
+   */
+  if (configuracion.horario) {
+    doc.setDrawColor(20);
+    doc.setLineWidth(0.4);
+    doc.line(4, y, 54, y);
 
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+
+    doc.text("HORARIOS DE ATENCIÓN", 29, y, {
+      align: "center",
+    });
+
+    y += 5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+
+    const lineasHorario = configuracion.horario
+      .split(/\r?\n/)
+      .map((linea) => linea.trim())
+      .filter(Boolean);
+
+    lineasHorario.forEach((linea) => {
+      const lineasAjustadas = doc.splitTextToSize(linea, 50);
+
+      lineasAjustadas.forEach((lineaAjustada) => {
+        doc.text(lineaAjustada, 29, y, {
+          align: "center",
+        });
+
+        y += 4;
+      });
+
+      y += 0.5;
+    });
+  }
+
+  /*
+   * Redes sociales configuradas
+   */
+  if (configuracion.redes_sociales) {
+    y += 2;
+
+    doc.setDrawColor(20);
+    doc.setLineWidth(0.4);
+    doc.line(4, y, 54, y);
+
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    doc.text("SÍGUENOS EN REDES", 29, y, {
+      align: "center",
+    });
+
+    y += 4.5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+
+    const lineasRedes = doc.splitTextToSize(configuracion.redes_sociales, 50);
+
+    lineasRedes.forEach((linea) => {
+      doc.text(linea, 29, y, {
+        align: "center",
+      });
+
+      y += 4;
+    });
+  }
+
+  /*
+   * Mensaje final configurado
+   */
+  if (configuracion.mensaje_ticket) {
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    const lineasMensaje = doc.splitTextToSize(configuracion.mensaje_ticket, 50);
+
+    lineasMensaje.forEach((linea) => {
+      doc.text(linea, 29, y, {
+        align: "center",
+      });
+
+      y += 4;
+    });
+  }
+
+  /*
+   * Impresión
+   */
   doc.autoPrint();
-  window.open(doc.output("bloburl"), "_blank");
+
+  const pdfBlob = doc.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const printWindow = window.open(pdfUrl, "_blank");
+
+  if (printWindow) {
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+  } else {
+    URL.revokeObjectURL(pdfUrl);
+
+    await Swal.fire({
+      icon: "warning",
+      title: "Ventana bloqueada",
+      text: "Permite las ventanas emergentes para imprimir el ticket.",
+      background: "#1e293b",
+      color: "#f8fafc",
+      confirmButtonColor: "#f59e0b",
+    });
+  }
 }
 
 function cargarImagenBase64(ruta) {

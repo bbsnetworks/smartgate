@@ -1257,7 +1257,7 @@ async function abrirModalPagoConCliente(cliente) {
         }
         if (inicio >= fin) {
           Swal.showValidationMessage(
-          "La fecha de fin debe ser posterior a la fecha de inicio.",
+            "La fecha de fin debe ser posterior a la fecha de inicio.",
           );
           return false;
         }
@@ -1453,77 +1453,77 @@ function eliminarPago(idPago, clienteId, nombreCompleto) {
   const tipoUsuario = window.usuarioActual?.tipo;
 
   const confirmarYBorrar = async () => {
-  // Evita ejecutar dos eliminaciones simultáneamente.
-  if (eliminacionEnProceso) return;
+    // Evita ejecutar dos eliminaciones simultáneamente.
+    if (eliminacionEnProceso) return;
 
-  eliminacionEnProceso = true;
+    eliminacionEnProceso = true;
 
-  // Mostrar spinner y bloquear completamente la pantalla.
-  swalcard.fire({
-    title: "Eliminando pago...",
-    html: `
+    // Mostrar spinner y bloquear completamente la pantalla.
+    swalcard.fire({
+      title: "Eliminando pago...",
+      html: `
       <p class="text-slate-300">
         Actualizando el historial y la vigencia del cliente.
       </p>
     `,
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    allowEnterKey: false,
-    showConfirmButton: false,
-    showCancelButton: false,
-    backdrop: true,
-    didOpen: () => {
-      Swal.showLoading();
-    },
-  });
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      allowEnterKey: false,
+      showConfirmButton: false,
+      showCancelButton: false,
+      backdrop: true,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
 
-  try {
-    const respuesta = await fetch(
-      `../php/eliminar_pago.php?id=${encodeURIComponent(
-        idPago,
-      )}&cliente=${encodeURIComponent(clienteId)}`,
-    );
+    try {
+      const respuesta = await fetch(
+        `../php/eliminar_pago.php?id=${encodeURIComponent(
+          idPago,
+        )}&cliente=${encodeURIComponent(clienteId)}`,
+      );
 
-    const data = await respuesta.json();
+      const data = await respuesta.json();
 
-    // Cerrar el spinner.
-    Swal.close();
+      // Cerrar el spinner.
+      Swal.close();
 
-    if (!respuesta.ok || !data.success) {
+      if (!respuesta.ok || !data.success) {
+        await swalError.fire(
+          "Error",
+          data.error || "No se pudo eliminar el pago.",
+          "error",
+        );
+        return;
+      }
+
+      await swalSuccess.fire(
+        "Eliminado",
+        data.msg || "El pago fue eliminado correctamente.",
+        "success",
+      );
+
+      // Actualizar la tabla principal.
+      buscarClientes(ultimaBusqueda, paginaActualClientes);
+
+      // Mostrar nuevamente el historial con los datos actualizados.
+      verPagos(clienteId, nombreCompleto);
+    } catch (error) {
+      Swal.close();
+
+      console.error("Error eliminando pago:", error);
+
       await swalError.fire(
         "Error",
-        data.error || "No se pudo eliminar el pago.",
+        "No se pudo conectar con el servidor.",
         "error",
       );
-      return;
+    } finally {
+      // Siempre permitir una nueva eliminación al terminar.
+      eliminacionEnProceso = false;
     }
-
-    await swalSuccess.fire(
-      "Eliminado",
-      data.msg || "El pago fue eliminado correctamente.",
-      "success",
-    );
-
-    // Actualizar la tabla principal.
-    buscarClientes(ultimaBusqueda, paginaActualClientes);
-
-    // Mostrar nuevamente el historial con los datos actualizados.
-    verPagos(clienteId, nombreCompleto);
-  } catch (error) {
-    Swal.close();
-
-    console.error("Error eliminando pago:", error);
-
-    await swalError.fire(
-      "Error",
-      "No se pudo conectar con el servidor.",
-      "error",
-    );
-  } finally {
-    // Siempre permitir una nueva eliminación al terminar.
-    eliminacionEnProceso = false;
-  }
-};
+  };
 
   if (tipoUsuario === "admin" || tipoUsuario === "root") {
     swalInfo
@@ -1735,27 +1735,70 @@ function nombreMes(num) {
   ];
   return nombres[num - 1];
 }
+async function obtenerBrandingTicketPago() {
+  const datos = {
+    horario: "",
+    redes_sociales: "",
+    mensaje_ticket: "",
+  };
 
+  try {
+    const response = await fetch("../php/obtener_branding.php", {
+      cache: "no-store",
+    });
+
+    const responseText = await response.text();
+
+    let branding;
+
+    try {
+      branding = JSON.parse(responseText);
+    } catch (error) {
+      console.error(
+        "Respuesta inválida de obtener_branding.php:",
+        responseText,
+      );
+
+      return datos;
+    }
+
+    if (response.ok && branding.ok !== false) {
+      datos.horario = branding.horario || "";
+      datos.redes_sociales = branding.redes_sociales || "";
+      datos.mensaje_ticket = branding.mensaje_ticket || "";
+    }
+  } catch (error) {
+    console.error("No se pudo cargar la configuración del ticket:", error);
+  }
+
+  return datos;
+}
 async function generarTicketPago(data) {
   if (!window.jspdf) {
     await import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
   }
+
   const { jsPDF } = window.jspdf;
+
+  const configuracion = await obtenerBrandingTicketPago();
+
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
-    format: [58, 170],
+    format: [58, 220],
   });
 
   const logoSrc = await obtenerLogoMarca();
   const logo = await cargarImagenBase64(logoSrc);
 
   const fechaPago = new Date(data.fecha_pago);
+
   const fecha = fechaPago.toLocaleDateString("es-MX", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
+
   const hora = fechaPago.toLocaleTimeString("es-MX", {
     hour: "2-digit",
     minute: "2-digit",
@@ -1764,91 +1807,294 @@ async function generarTicketPago(data) {
 
   const usuario = data.usuario || "Usuario desconocido";
 
-  doc.addImage(logo, "PNG", 19, 5, 20, 20);
-  doc.setFont("courier", "bold");
-  doc.setFontSize(10);
-  doc.text("Pago Registrado", 29, 30, { align: "center" });
+  const nombreCompleto = `${data.nombre || ""} ${data.apellido || ""}`.trim();
 
-  doc.setFont("courier", "normal");
-  doc.text(`${fecha} ${hora}`, 29, 35, { align: "center" });
-  doc.text(`Usuario: ${usuario}`, 29, 40, { align: "center" });
+  const descuento = Number.parseFloat(data.descuento || 0);
+  const montoOriginal = Number.parseFloat(data.monto || 0);
+  const totalPagado = montoOriginal - descuento;
 
-  doc.setLineWidth(0.2);
-  doc.line(5, 42, 53, 42);
+  let y = 5;
 
-  let y = 49;
-  const salto = 6;
-  const nombreCompleto = `${data.nombre} ${data.apellido}`;
-  const descuento = parseFloat(data.descuento || 0);
-  const montoOriginal = parseFloat(data.monto);
-  const totalPagado = (montoOriginal - descuento).toFixed(2);
+  /*
+   * Logo
+   */
+  if (logo) {
+  try {
+    const propiedadesLogo = doc.getImageProperties(logo);
 
-  doc.setFont("courier", "bold");
-  doc.text("Nombre:", 5, y);
-  doc.setFont("courier", "normal");
-  doc.text(nombreCompleto, 5, (y += salto));
+    // Misma medida intermedia usada en el ticket anterior
+    const anchoLogo = 44;
 
-  doc.setFont("courier", "bold");
-  doc.text("Inicio:", 5, (y += salto));
-  doc.setFont("courier", "normal");
-  doc.text(data.fecha_inicio, 5, (y += salto));
+    // Conserva la proporción original
+    const altoLogo =
+      (propiedadesLogo.height * anchoLogo) /
+      propiedadesLogo.width;
 
-  doc.setFont("courier", "bold");
-  doc.text("Fin:", 5, (y += salto));
-  doc.setFont("courier", "normal");
-  doc.text(data.fecha_fin, 5, (y += salto));
+    // Centra el logo en el papel de 58 mm
+    const posicionX = (58 - anchoLogo) / 2;
 
-  doc.setFont("courier", "bold");
-  doc.text("Método:", 5, (y += salto));
-  doc.setFont("courier", "normal");
-  doc.text(data.metodo, 5, (y += salto));
+    doc.addImage(
+      logo,
+      undefined,
+      posicionX,
+      y,
+      anchoLogo,
+      altoLogo,
+    );
+
+    y += altoLogo + 10;
+  } catch (error) {
+    console.error(
+      "No se pudo colocar el logo en el ticket:",
+      error,
+    );
+  }
+}
+
+  /*
+   * Título
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+
+  doc.text("PAGO REGISTRADO", 29, y, {
+    align: "center",
+  });
+
+  y += 5;
+
+  /*
+   * Fecha y usuario
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+
+  doc.text(`${fecha} ${hora}`, 29, y, {
+    align: "center",
+  });
+
+  y += 4.5;
+
+  const lineasUsuario = doc.splitTextToSize(`USUARIO: ${usuario}`, 50);
+
+  lineasUsuario.forEach((linea) => {
+    doc.text(linea, 29, y, {
+      align: "center",
+    });
+
+    y += 4;
+  });
+
+  y += 1;
+
+  doc.setDrawColor(20);
+  doc.setLineWidth(0.4);
+  doc.line(4, y, 54, y);
+
+  y += 6;
+
+  /*
+   * Función para imprimir cada dato.
+   */
+  function imprimirCampo(etiqueta, valor, opciones = {}) {
+    const { tamano = 8.5, valorGrande = false } = opciones;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(tamano);
+
+    doc.text(String(etiqueta).toUpperCase(), 4, y);
+
+    y += 4.5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(valorGrande ? 10 : tamano);
+
+    const lineasValor = doc.splitTextToSize(String(valor ?? "—"), 50);
+
+    lineasValor.forEach((linea) => {
+      doc.text(linea, 4, y);
+      y += valorGrande ? 5 : 4.3;
+    });
+
+    y += 1.5;
+  }
+
+  /*
+   * Información del pago
+   */
+  imprimirCampo("Nombre:", nombreCompleto);
+
+  imprimirCampo("Inicio:", data.fecha_inicio || "No especificado");
+
+  imprimirCampo("Fin:", data.fecha_fin || "No especificado");
+
+  imprimirCampo("Método:", data.metodo || "No especificado");
 
   if (data.tarifa_nombre) {
-  doc.setFont("courier", "bold");
-  doc.text("Tarifa:", 5, (y += salto));
-  doc.setFont("courier", "normal");
-  doc.text(String(data.tarifa_nombre), 5, (y += salto));
+    imprimirCampo("Tarifa:", String(data.tarifa_nombre));
   }
 
-  doc.setFont("courier", "bold");
-  doc.text("Monto original:", 5, (y += salto));
-  doc.setFont("courier", "normal");
-  doc.text(`$${montoOriginal.toFixed(2)}`, 5, (y += salto));
+  imprimirCampo("Monto original:", `$${montoOriginal.toFixed(2)}`);
 
   if (descuento > 0) {
-    doc.setFont("courier", "bold");
-    doc.text("Descuento:", 5, (y += salto));
-    doc.setFont("courier", "normal");
-    doc.text(`-$${descuento.toFixed(2)}`, 5, (y += salto));
+    imprimirCampo("Descuento:", `-$${descuento.toFixed(2)}`);
   }
 
-  doc.setFont("courier", "bold");
-  doc.text("Total pagado:", 5, (y += salto));
-  doc.setFont("courier", "normal");
-  doc.text(`$${totalPagado}`, 5, (y += salto));
+  /*
+   * Total pagado destacado
+   */
+  doc.setDrawColor(20);
+  doc.setLineWidth(0.5);
+  doc.line(4, y, 54, y);
 
-  doc.line(5, y + 4, 53, y + 4);
-  y += 10;
+  y += 6;
 
-  doc.setFont("courier", "bold");
-  doc.text("Horarios de Atención:", 29, y, { align: "center" });
-  doc.setFont("courier", "normal");
-  doc.text("Lunes a Viernes:", 29, (y += 5), { align: "center" });
-  doc.text("6:00 a.m. - 10:00 p.m.", 29, (y += 4), { align: "center" });
-  doc.text("Sábados:", 29, (y += 4), { align: "center" });
-  doc.text("7:00 a.m. - 2:00 p.m.", 29, (y += 4), { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
 
-  doc.setFont("courier", "bold");
-  doc.text("Síguenos en redes:", 29, (y += 8), { align: "center" });
-  doc.setFont("courier", "normal");
-  doc.text("@BBSNetworks", 29, (y += 4), { align: "center" });
+  doc.text("TOTAL PAGADO", 4, y);
 
-  doc.setFont("courier", "italic");
-  doc.text("¡Gracias por tu pago!", 29, (y += 8), { align: "center" });
+  doc.text(`$${totalPagado.toFixed(2)}`, 54, y, {
+    align: "right",
+  });
+
+  y += 6;
+
+  /*
+   * Dinero recibido y cambio.
+   * Solo aparecen cuando el pago fue en efectivo.
+   */
+  if (
+    data.recibido !== null &&
+    data.recibido !== undefined &&
+    data.recibido !== ""
+  ) {
+    const recibido = Number(data.recibido || 0);
+    const cambio = Number(data.cambio || 0);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    doc.text("RECIBIDO", 4, y);
+
+    doc.text(`$${recibido.toFixed(2)}`, 54, y, {
+      align: "right",
+    });
+
+    y += 5;
+
+    doc.text("CAMBIO", 4, y);
+
+    doc.text(`$${cambio.toFixed(2)}`, 54, y, {
+      align: "right",
+    });
+
+    y += 6;
+  }
+
+  /*
+   * Horarios configurados
+   */
+  if (configuracion.horario) {
+    doc.setDrawColor(20);
+    doc.setLineWidth(0.4);
+    doc.line(4, y, 54, y);
+
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+
+    doc.text("HORARIOS DE ATENCIÓN", 29, y, {
+      align: "center",
+    });
+
+    y += 5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+
+    const lineasHorario = configuracion.horario
+      .split(/\r?\n/)
+      .map((linea) => linea.trim())
+      .filter(Boolean);
+
+    lineasHorario.forEach((linea) => {
+      const lineasAjustadas = doc.splitTextToSize(linea, 50);
+
+      lineasAjustadas.forEach((lineaAjustada) => {
+        doc.text(lineaAjustada, 29, y, {
+          align: "center",
+        });
+
+        y += 4;
+      });
+
+      y += 0.5;
+    });
+  }
+
+  /*
+   * Redes sociales configuradas
+   */
+  if (configuracion.redes_sociales) {
+    y += 2;
+
+    doc.setDrawColor(20);
+    doc.setLineWidth(0.4);
+    doc.line(4, y, 54, y);
+
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    doc.text("SÍGUENOS EN REDES", 29, y, {
+      align: "center",
+    });
+
+    y += 4.5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+
+    const lineasRedes = doc.splitTextToSize(configuracion.redes_sociales, 50);
+
+    lineasRedes.forEach((linea) => {
+      doc.text(linea, 29, y, {
+        align: "center",
+      });
+
+      y += 4;
+    });
+  }
+
+  /*
+   * Mensaje general configurado
+   */
+  if (configuracion.mensaje_ticket) {
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    const lineasMensaje = doc.splitTextToSize(configuracion.mensaje_ticket, 50);
+
+    lineasMensaje.forEach((linea) => {
+      doc.text(linea, 29, y, {
+        align: "center",
+      });
+
+      y += 4;
+    });
+  }
+  /*
+   * autoPrint debe ejecutarse antes de crear el enlace.
+   */
+  doc.autoPrint();
 
   const blobUrl = doc.output("bloburl");
   window.open(blobUrl, "_blank");
-  doc.autoPrint();
 }
 
 // Cargar imagen como base64

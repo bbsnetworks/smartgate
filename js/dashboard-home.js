@@ -488,7 +488,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 2) KPIs + gráficas con el filtro actual
   await cargarTodo();
 
-    initPagosFinanciadosDashboard();
+  initPagosFinanciadosDashboard();
 
   // ✅ Botón: ver clientes inactivos (modal)
   const btnInactivos = document.getElementById("btn-ver-inactivos");
@@ -713,117 +713,895 @@ async function cargarBranding() {
     console.warn("No se pudo cargar branding:", e);
   }
 }
+function convertirHora12(hora24) {
+  if (!hora24) {
+    return "";
+  }
 
+  const [horaTexto, minutos] = hora24.split(":");
+  let hora = Number(horaTexto);
+
+  const periodo = hora >= 12 ? "P.M." : "A.M.";
+
+  hora %= 12;
+
+  if (hora === 0) {
+    hora = 12;
+  }
+
+  return `${hora}:${minutos} ${periodo}`;
+}
+
+function configurarDiaCerrado(checkboxId, aperturaId, cierreId) {
+  const checkbox = document.getElementById(checkboxId);
+  const apertura = document.getElementById(aperturaId);
+  const cierre = document.getElementById(cierreId);
+
+  // Evita errores si algún elemento no existe en el modal.
+  if (!checkbox || !apertura || !cierre) {
+    console.error("No se encontraron los campos del horario:", {
+      checkboxId,
+      aperturaId,
+      cierreId,
+    });
+
+    return;
+  }
+
+  function actualizarEstado() {
+    const cerrado = checkbox.checked;
+
+    apertura.disabled = cerrado;
+    cierre.disabled = cerrado;
+  }
+
+  checkbox.addEventListener("change", actualizarEstado);
+
+  actualizarEstado();
+}
+
+function generarTextoHorario() {
+  const semanaApertura = document.getElementById("horarioSemanaApertura").value;
+
+  const semanaCierre = document.getElementById("horarioSemanaCierre").value;
+
+  const sabadoCerrado = document.getElementById("sabadoCerrado").checked;
+
+  const sabadoApertura = document.getElementById("horarioSabadoApertura").value;
+
+  const sabadoCierre = document.getElementById("horarioSabadoCierre").value;
+
+  const domingoCerrado = document.getElementById("domingoCerrado").checked;
+
+  const domingoApertura = document.getElementById(
+    "horarioDomingoApertura",
+  ).value;
+
+  const domingoCierre = document.getElementById("horarioDomingoCierre").value;
+
+  const lineas = [
+    "LUNES A VIERNES",
+    `${convertirHora12(semanaApertura)} - ${convertirHora12(semanaCierre)}`,
+    "SÁBADOS",
+    sabadoCerrado
+      ? "CERRADO"
+      : `${convertirHora12(sabadoApertura)} - ${convertirHora12(sabadoCierre)}`,
+    "DOMINGOS",
+    domingoCerrado
+      ? "CERRADO"
+      : `${convertirHora12(domingoApertura)} - ${convertirHora12(
+          domingoCierre,
+        )}`,
+  ];
+
+  return lineas.join("\n");
+}
+function convertirHora24(hora, minutos, periodo) {
+  let horaNumero = Number(hora);
+
+  if (periodo === "P.M." && horaNumero !== 12) {
+    horaNumero += 12;
+  }
+
+  if (periodo === "A.M." && horaNumero === 12) {
+    horaNumero = 0;
+  }
+
+  return `${String(horaNumero).padStart(2, "0")}:${minutos}`;
+}
+
+function extraerRangoHorario(texto) {
+  if (!texto || texto.trim().toUpperCase() === "CERRADO") {
+    return null;
+  }
+
+  const patron =
+    /(\d{1,2}):(\d{2})\s*(A\.M\.|P\.M\.)\s*-\s*(\d{1,2}):(\d{2})\s*(A\.M\.|P\.M\.)/i;
+
+  const coincidencia = texto.match(patron);
+
+  if (!coincidencia) {
+    return null;
+  }
+
+  return {
+    apertura: convertirHora24(
+      coincidencia[1],
+      coincidencia[2],
+      coincidencia[3].toUpperCase(),
+    ),
+    cierre: convertirHora24(
+      coincidencia[4],
+      coincidencia[5],
+      coincidencia[6].toUpperCase(),
+    ),
+  };
+}
+
+function precargarHorario(textoHorario) {
+  if (!textoHorario) {
+    return;
+  }
+
+  const lineas = textoHorario
+    .split(/\r?\n/)
+    .map((linea) => linea.trim())
+    .filter(Boolean);
+
+  function contenidoDespuesDe(titulo) {
+    const indice = lineas.findIndex((linea) => linea.toUpperCase() === titulo);
+
+    return indice >= 0 ? lineas[indice + 1] || "" : "";
+  }
+
+  const semanaTexto = contenidoDespuesDe("LUNES A VIERNES");
+  const sabadoTexto = contenidoDespuesDe("SÁBADOS");
+  const domingoTexto = contenidoDespuesDe("DOMINGOS");
+
+  const semana = extraerRangoHorario(semanaTexto);
+  const sabado = extraerRangoHorario(sabadoTexto);
+  const domingo = extraerRangoHorario(domingoTexto);
+
+  if (semana) {
+    document.getElementById("horarioSemanaApertura").value = semana.apertura;
+
+    document.getElementById("horarioSemanaCierre").value = semana.cierre;
+  }
+
+  const sabadoCerrado = !sabadoTexto || sabadoTexto.toUpperCase() === "CERRADO";
+
+  document.getElementById("sabadoCerrado").checked = sabadoCerrado;
+
+  if (sabado) {
+    document.getElementById("horarioSabadoApertura").value = sabado.apertura;
+
+    document.getElementById("horarioSabadoCierre").value = sabado.cierre;
+  }
+
+  const domingoCerrado =
+    !domingoTexto || domingoTexto.toUpperCase() === "CERRADO";
+
+  document.getElementById("domingoCerrado").checked = domingoCerrado;
+
+  if (domingo) {
+    document.getElementById("horarioDomingoApertura").value = domingo.apertura;
+
+    document.getElementById("horarioDomingoCierre").value = domingo.cierre;
+  }
+
+  document.getElementById("sabadoCerrado").dispatchEvent(new Event("change"));
+
+  document.getElementById("domingoCerrado").dispatchEvent(new Event("change"));
+}
 // Abre el modal para editar branding
 function modalBranding() {
+  const inputClass = `
+    w-full rounded-xl border border-slate-600
+    bg-slate-900/60 px-4 py-3 text-sm text-slate-100
+    placeholder:text-slate-500 outline-none
+    transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20
+  `;
+
+  const labelClass = "mb-2 block text-sm font-medium text-slate-200";
+
   swalcard
     .fire({
-      title: "Configuración de Marca",
+      title: `
+        <div class="flex items-center justify-center gap-3">
+          <span class="flex h-10 w-10 items-center justify-center rounded-xl
+                       bg-violet-500/15 text-violet-400">
+            <i class="bi bi-palette-fill"></i>
+          </span>
+
+          <span>Configuración de marca</span>
+        </div>
+      `,
+
+      width: "760px",
+
       html: `
-      <div class="space-y-4 text-left">
-        <label class="block text-sm">Nombre de la app</label>
-        <input id="brandAppName" type="text" class="swal2-input !w-full" placeholder="Gym Admin">
+        <div class="max-h-[65vh] overflow-y-auto overflow-x-hidden
+                    px-1 pr-3 text-left">
 
-        <label class="block text-sm">Título del dashboard</label>
-        <input id="brandTitle" type="text" class="swal2-input !w-full" placeholder="Panel de Control">
+          <!-- Información general -->
+          <section class="mb-5 rounded-2xl border border-slate-700
+                          bg-slate-900/30 p-5">
 
-        <label class="block text-sm">Subtítulo</label>
-        <input id="brandSub" type="text" class="swal2-input !w-full" placeholder="SmartGate by BBSNetworks">
+            <div class="mb-4 flex items-center gap-2 text-violet-400">
+              <i class="bi bi-window"></i>
+              <h3 class="font-semibold">Información general</h3>
+            </div>
 
-        <label class="block text-sm">Logo (máx ${(BRANDING.MAX_BYTES / 1024 / 1024).toFixed(0)}MB)</label>
-        <input id="brandLogo" type="file" accept="image/*" class="swal2-file !w-full">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label for="brandAppName" class="${labelClass}">
+                  Nombre de la aplicación
+                </label>
 
-        <div id="brandPreview" class="mt-2 hidden">
-          <img id="brandPreviewImg" class="h-12 rounded" alt="preview">
+                <input
+                  id="brandAppName"
+                  type="text"
+                  maxlength="120"
+                  class="${inputClass}"
+                  placeholder="Gym Admin"
+                >
+              </div>
+
+              <div>
+                <label for="brandTitle" class="${labelClass}">
+                  Título del dashboard
+                </label>
+
+                <input
+                  id="brandTitle"
+                  type="text"
+                  maxlength="160"
+                  class="${inputClass}"
+                  placeholder="Panel de Control"
+                >
+              </div>
+
+              <div class="md:col-span-2">
+                <label for="brandSub" class="${labelClass}">
+                  Subtítulo
+                </label>
+
+                <input
+                  id="brandSub"
+                  type="text"
+                  maxlength="200"
+                  class="${inputClass}"
+                  placeholder="SmartGate by BBSNetworks"
+                >
+              </div>
+            </div>
+          </section>
+
+          <!-- Información para tickets -->
+          <section class="mb-5 rounded-2xl border border-slate-700
+                          bg-slate-900/30 p-5">
+
+            <div class="mb-1 flex items-center gap-2 text-emerald-400">
+              <i class="bi bi-receipt"></i>
+              <h3 class="font-semibold">
+                Información para tickets
+              </h3>
+            </div>
+
+            <p class="mb-4 text-xs text-slate-400">
+              Estos textos se mostrarán en los comprobantes impresos.
+            </p>
+
+            <div class="space-y-4">
+              <div>
+  <label class="${labelClass}">
+    Horario de atención
+  </label>
+
+  <div class="space-y-3 rounded-xl border border-slate-700 bg-slate-950/30 p-4">
+
+    <!-- Lunes a viernes -->
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+      <div>
+        <p class="text-sm font-medium text-slate-200">
+          Lunes a viernes
+        </p>
+      </div>
+
+      <div>
+        <label for="horarioSemanaApertura"
+               class="mb-1 block text-xs text-slate-400">
+          Apertura
+        </label>
+
+        <input
+          id="horarioSemanaApertura"
+          type="time"
+          value="06:00"
+          class="${inputClass}"
+        >
+      </div>
+
+      <div>
+        <label for="horarioSemanaCierre"
+               class="mb-1 block text-xs text-slate-400">
+          Cierre
+        </label>
+
+        <input
+          id="horarioSemanaCierre"
+          type="time"
+          value="22:00"
+          class="${inputClass}"
+        >
+      </div>
+    </div>
+
+    <div class="border-t border-slate-700"></div>
+
+    <!-- Sábado -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-sm font-medium text-slate-200">
+          Sábado
+        </p>
+
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+          <input
+            id="sabadoCerrado"
+            type="checkbox"
+            class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-violet-600"
+          >
+          Cerrado
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label for="horarioSabadoApertura"
+                 class="mb-1 block text-xs text-slate-400">
+            Apertura
+          </label>
+
+          <input
+            id="horarioSabadoApertura"
+            type="time"
+            value="07:00"
+            class="${inputClass}"
+          >
+        </div>
+
+        <div>
+          <label for="horarioSabadoCierre"
+                 class="mb-1 block text-xs text-slate-400">
+            Cierre
+          </label>
+
+          <input
+            id="horarioSabadoCierre"
+            type="time"
+            value="14:00"
+            class="${inputClass}"
+          >
         </div>
       </div>
-    `,
+    </div>
+
+    <div class="border-t border-slate-700"></div>
+
+    <!-- Domingo -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-sm font-medium text-slate-200">
+          Domingo
+        </p>
+
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+          <input
+            id="domingoCerrado"
+            type="checkbox"
+            checked
+            class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-violet-600"
+          >
+          Cerrado
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label for="horarioDomingoApertura"
+                 class="mb-1 block text-xs text-slate-400">
+            Apertura
+          </label>
+
+          <input
+            id="horarioDomingoApertura"
+            type="time"
+            value="08:00"
+            disabled
+            class="${inputClass} disabled:cursor-not-allowed disabled:opacity-40"
+          >
+        </div>
+
+        <div>
+          <label for="horarioDomingoCierre"
+                 class="mb-1 block text-xs text-slate-400">
+            Cierre
+          </label>
+
+          <input
+            id="horarioDomingoCierre"
+            type="time"
+            value="13:00"
+            disabled
+            class="${inputClass} disabled:cursor-not-allowed disabled:opacity-40"
+          >
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="mt-2 text-xs text-slate-500">
+    El texto del horario se generará automáticamente para los tickets.
+  </p>
+</div>
+
+              <div>
+                <label for="brandRedes" class="${labelClass}">
+                  Redes sociales
+                </label>
+
+                <input
+                  id="brandRedes"
+                  type="text"
+                  maxlength="255"
+                  class="${inputClass}"
+                  placeholder="@BBSNetworks"
+                >
+              </div>
+
+              <div>
+                <label for="brandMensaje" class="${labelClass}">
+                  Mensaje para tickets
+                </label>
+
+                <textarea
+                  id="brandMensaje"
+                  rows="3"
+                  maxlength="255"
+                  class="${inputClass} resize-y"
+                  placeholder="¡GRACIAS POR TU PREFERENCIA!"
+                ></textarea>
+
+                <p class="mt-1 text-xs text-slate-500">
+                  Este mismo mensaje se utilizará en todos los tickets.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Logotipo -->
+          <section class="rounded-2xl border border-slate-700
+                          bg-slate-900/30 p-5">
+
+            <div class="mb-4 flex items-center gap-2 text-amber-400">
+              <i class="bi bi-image"></i>
+              <h3 class="font-semibold">Logotipo</h3>
+            </div>
+
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div
+                id="brandPreview"
+                class="flex h-24 w-32 shrink-0 items-center justify-center
+                       overflow-hidden rounded-xl border border-dashed
+                       border-slate-600 bg-slate-950/50"
+              >
+                <div
+                  id="brandPreviewPlaceholder"
+                  class="text-center text-slate-500"
+                >
+                  <i class="bi bi-image block text-2xl"></i>
+                  <span class="text-xs">Sin imagen</span>
+                </div>
+
+                <img
+                  id="brandPreviewImg"
+                  class="hidden h-full w-full object-contain p-2"
+                  alt="Vista previa del logotipo"
+                >
+              </div>
+
+              <div class="min-w-0 flex-1">
+                <label for="brandLogo" class="${labelClass}">
+                  Seleccionar imagen
+                </label>
+
+                <input
+                  id="brandLogo"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  class="block w-full cursor-pointer rounded-xl border
+                         border-slate-600 bg-slate-900/60 text-sm
+                         text-slate-300 file:mr-4 file:border-0
+                         file:bg-violet-600 file:px-4 file:py-3
+                         file:text-sm file:font-medium file:text-white
+                         hover:file:bg-violet-500"
+                >
+
+                <p class="mt-2 text-xs text-slate-500">
+                  PNG, JPG, WEBP o GIF. Tamaño máximo:
+                  ${(BRANDING.MAX_BYTES / 1024 / 1024).toFixed(0)} MB.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      `,
+
       showCancelButton: true,
-      confirmButtonText: "Guardar",
+      confirmButtonText: '<i class="bi bi-floppy mr-2"></i>Guardar cambios',
       cancelButtonText: "Cancelar",
       focusConfirm: false,
-      didOpen: async () => {
-        // Precargar valores actuales
-        try {
-          const r = await fetch(BRANDING.GET_URL, { cache: "no-store" });
-          const b = await r.json();
-          document.getElementById("brandAppName").value = b.app_name || "";
-          document.getElementById("brandTitle").value = b.dashboard_title || "";
-          document.getElementById("brandSub").value = b.dashboard_sub || "";
+      buttonsStyling: true,
 
-          if (b.logo_etag) {
-            const prev = document.getElementById("brandPreview");
-            const img = document.getElementById("brandPreviewImg");
-            img.src = `${BRANDING.LOGO_URL}?v=${encodeURIComponent(b.logo_etag)}`;
-            prev.classList.remove("hidden");
+      didOpen: async () => {
+        const popup = Swal.getPopup();
+
+        popup.style.maxWidth = "calc(100vw - 24px)";
+        configurarDiaCerrado(
+          "sabadoCerrado",
+          "horarioSabadoApertura",
+          "horarioSabadoCierre",
+        );
+
+        configurarDiaCerrado(
+          "domingoCerrado",
+          "horarioDomingoApertura",
+          "horarioDomingoCierre",
+        );
+        try {
+          const response = await fetch(BRANDING.GET_URL, {
+            cache: "no-store",
+          });
+
+          /*
+           * Primero se obtiene como texto para poder detectar respuestas
+           * PHP inválidas antes de intentar convertirlas a JSON.
+           */
+          const responseText = await response.text();
+
+          let branding;
+
+          try {
+            branding = JSON.parse(responseText);
+          } catch (error) {
+            console.error("Respuesta recibida:", responseText);
+
+            throw new Error("El servidor devolvió una respuesta inválida.");
           }
-        } catch (e) {
-          /* no-op */
+
+          if (!response.ok || branding.ok === false) {
+            throw new Error(
+              branding.msg || "No se pudo cargar la configuración actual.",
+            );
+          }
+
+          document.getElementById("brandAppName").value =
+            branding.app_name || "";
+
+          document.getElementById("brandTitle").value =
+            branding.dashboard_title || "";
+
+          document.getElementById("brandSub").value =
+            branding.dashboard_sub || "";
+
+          precargarHorario(branding.horario);
+
+          document.getElementById("brandRedes").value =
+            branding.redes_sociales || "";
+
+          document.getElementById("brandMensaje").value =
+            branding.mensaje_ticket || "";
+
+          if (branding.logo_etag) {
+            const img = document.getElementById("brandPreviewImg");
+
+            const placeholder = document.getElementById(
+              "brandPreviewPlaceholder",
+            );
+
+            img.src = `${BRANDING.LOGO_URL}?v=${encodeURIComponent(
+              branding.logo_etag,
+            )}`;
+
+            img.classList.remove("hidden");
+            placeholder.classList.add("hidden");
+
+            img.onerror = () => {
+              img.classList.add("hidden");
+              placeholder.classList.remove("hidden");
+            };
+          }
+        } catch (error) {
+          console.error("No se pudo cargar la configuración:", error);
+
+          Swal.showValidationMessage(
+            error.message || "No se pudo cargar la configuración actual.",
+          );
         }
 
-        // Validar tamaño y previsualizar
-        const input = document.getElementById("brandLogo");
-        input.addEventListener("change", (ev) => {
-          const f = ev.target.files[0];
-          if (!f) return;
-          if (f.size > BRANDING.MAX_BYTES) {
-            ev.target.value = "";
-            Swal.showValidationMessage(
-              `La imagen no debe superar ${(BRANDING.MAX_BYTES / 1024 / 1024).toFixed(0)} MB`,
-            );
+        const inputLogo = document.getElementById("brandLogo");
+
+        inputLogo.addEventListener("change", (event) => {
+          const file = event.target.files[0];
+
+          if (!file) {
             return;
           }
-          const url = URL.createObjectURL(f);
-          const prev = document.getElementById("brandPreview");
+
+          const allowedTypes = [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif",
+          ];
+
+          if (!allowedTypes.includes(file.type)) {
+            event.target.value = "";
+
+            Swal.showValidationMessage(
+              "Selecciona una imagen PNG, JPG, WEBP o GIF.",
+            );
+
+            return;
+          }
+
+          if (file.size > BRANDING.MAX_BYTES) {
+            event.target.value = "";
+
+            Swal.showValidationMessage(
+              `La imagen no debe superar ${
+                BRANDING.MAX_BYTES / 1024 / 1024
+              } MB.`,
+            );
+
+            return;
+          }
+
+          Swal.resetValidationMessage();
+
           const img = document.getElementById("brandPreviewImg");
-          img.src = url;
-          prev.classList.remove("hidden");
+
+          const placeholder = document.getElementById(
+            "brandPreviewPlaceholder",
+          );
+
+          img.src = URL.createObjectURL(file);
+          img.classList.remove("hidden");
+          placeholder.classList.add("hidden");
         });
       },
+
       preConfirm: () => {
         const appName = document.getElementById("brandAppName").value.trim();
+
         const title = document.getElementById("brandTitle").value.trim();
+
         const sub = document.getElementById("brandSub").value.trim();
+
+        const semanaApertura = document.getElementById(
+          "horarioSemanaApertura",
+        ).value;
+
+        const semanaCierre = document.getElementById(
+          "horarioSemanaCierre",
+        ).value;
+
+        const sabadoCerrado = document.getElementById("sabadoCerrado").checked;
+
+        const domingoCerrado =
+          document.getElementById("domingoCerrado").checked;
+
+        const redesSociales = document
+          .getElementById("brandRedes")
+          .value.trim();
+
+        const mensajeTicket = document
+          .getElementById("brandMensaje")
+          .value.trim();
+
         const file = document.getElementById("brandLogo").files[0];
+
+        if (!appName) {
+          Swal.showValidationMessage("Escribe el nombre de la aplicación.");
+
+          return false;
+        }
+
+        if (!title) {
+          Swal.showValidationMessage("Escribe el título del dashboard.");
+
+          return false;
+        }
+
+        if (!semanaApertura || !semanaCierre) {
+          Swal.showValidationMessage(
+            "Selecciona el horario de lunes a viernes.",
+          );
+
+          return false;
+        }
+
+        if (semanaApertura >= semanaCierre) {
+          Swal.showValidationMessage(
+            "La hora de cierre de lunes a viernes debe ser posterior a la apertura.",
+          );
+
+          return false;
+        }
+
+        if (!sabadoCerrado) {
+          const sabadoApertura = document.getElementById(
+            "horarioSabadoApertura",
+          ).value;
+
+          const sabadoCierre = document.getElementById(
+            "horarioSabadoCierre",
+          ).value;
+
+          if (!sabadoApertura || !sabadoCierre) {
+            Swal.showValidationMessage(
+              "Selecciona el horario del sábado o marca Cerrado.",
+            );
+
+            return false;
+          }
+
+          if (sabadoApertura >= sabadoCierre) {
+            Swal.showValidationMessage(
+              "La hora de cierre del sábado debe ser posterior a la apertura.",
+            );
+
+            return false;
+          }
+        }
+
+        if (!domingoCerrado) {
+          const domingoApertura = document.getElementById(
+            "horarioDomingoApertura",
+          ).value;
+
+          const domingoCierre = document.getElementById(
+            "horarioDomingoCierre",
+          ).value;
+
+          if (!domingoApertura || !domingoCierre) {
+            Swal.showValidationMessage(
+              "Selecciona el horario del domingo o marca Cerrado.",
+            );
+
+            return false;
+          }
+
+          if (domingoApertura >= domingoCierre) {
+            Swal.showValidationMessage(
+              "La hora de cierre del domingo debe ser posterior a la apertura.",
+            );
+
+            return false;
+          }
+        }
+
+        if (redesSociales.length > 255) {
+          Swal.showValidationMessage(
+            "El texto de redes sociales no puede superar 255 caracteres.",
+          );
+
+          return false;
+        }
+
+        if (mensajeTicket.length > 255) {
+          Swal.showValidationMessage(
+            "El mensaje para tickets no puede superar 255 caracteres.",
+          );
+
+          return false;
+        }
 
         if (file && file.size > BRANDING.MAX_BYTES) {
           Swal.showValidationMessage(
-            `La imagen no debe superar ${(BRANDING.MAX_BYTES / 1024 / 1024).toFixed(0)} MB`,
+            `La imagen no debe superar ${BRANDING.MAX_BYTES / 1024 / 1024} MB.`,
           );
+
           return false;
         }
-        return { appName, title, sub, file };
+        const horario = generarTextoHorario();
+        return {
+          appName,
+          title,
+          sub,
+          horario,
+          redesSociales,
+          mensajeTicket,
+          file,
+        };
       },
     })
-    .then(async (res) => {
-      if (!res.isConfirmed) return;
+    .then(async (result) => {
+      if (!result.isConfirmed) {
+        return;
+      }
 
-      const { appName, title, sub, file } = res.value;
+      const {
+        appName,
+        title,
+        sub,
+        horario,
+        redesSociales,
+        mensajeTicket,
+        file,
+      } = result.value;
+
       const formData = new FormData();
+
       formData.append("app_name", appName);
       formData.append("dashboard_title", title);
       formData.append("dashboard_sub", sub);
-      if (file) formData.append("logo", file);
+      formData.append("horario", horario);
+      formData.append("redes_sociales", redesSociales);
+      formData.append("mensaje_ticket", mensajeTicket);
+
+      if (file) {
+        formData.append("logo", file);
+      }
+
+      Swal.fire({
+        title: "Guardando configuración",
+        text: "Espera un momento...",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => Swal.showLoading(),
+      });
 
       try {
-        const rq = await fetch(BRANDING.SAVE_URL, {
+        const response = await fetch(BRANDING.SAVE_URL, {
           method: "POST",
           body: formData,
         });
-        const data = await rq.json();
-        if (data.ok) {
-          await swalSuccess.fire(
-            "✔️ Guardado",
-            "Configuración actualizada",
-            "success",
-          );
-          // refrescar vista sin recargar toda la página
-          await cargarBranding();
-        } else {
-          swalError.fire("Error", data.msg || "No se pudo actualizar", "error");
+
+        const responseText = await response.text();
+
+        let data;
+
+        try {
+          data = JSON.parse(responseText);
+        } catch (error) {
+          console.error("Respuesta recibida:", responseText);
+
+          throw new Error("El servidor devolvió una respuesta inválida.");
         }
-      } catch (e) {
-        swalError.fire("Error", "Fallo la petición: " + e, "error");
+
+        if (!response.ok || !data.ok) {
+          throw new Error(
+            data.msg || "No se pudo actualizar la configuración.",
+          );
+        }
+
+        await swalSuccess.fire(
+          "Configuración guardada",
+          "La información de marca se actualizó correctamente.",
+          "success",
+        );
+
+        await cargarBranding();
+      } catch (error) {
+        console.error(error);
+
+        await swalError.fire(
+          "Error",
+          error.message || "No se pudo guardar la configuración.",
+          "error",
+        );
       }
     });
 }
@@ -1648,24 +2426,26 @@ async function cargarPagosFinanciadosCard() {
     const data = await r.json();
 
     if (!data.success) {
-      throw new Error(data.detalle || data.error || "No se pudo cargar la card.");
+      throw new Error(
+        data.detalle || data.error || "No se pudo cargar la card.",
+      );
     }
 
     const pagos = Array.isArray(data.pagos) ? data.pagos : [];
     const resumen = data.resumen || {};
 
     if (count) count.textContent = resumen.total_items ?? pagos.length;
-    if (disponible) disponible.textContent = vfMoneyDash(resumen.total_disponible || 0);
+    if (disponible)
+      disponible.textContent = vfMoneyDash(resumen.total_disponible || 0);
     if (vencidos) vencidos.textContent = resumen.vencidos || 0;
 
     if (footer) {
       footer.textContent = pagos.length
-  ? `Pagos dentro de ±5 días`
-  : "Sin pagos próximos en ±5 días";
+        ? `Pagos dentro de ±5 días`
+        : "Sin pagos próximos en ±5 días";
     }
 
     renderPagosFinanciadosCard(pagos);
-
   } catch (e) {
     console.error("Pagos financiados dashboard:", e);
 
@@ -1699,21 +2479,22 @@ function renderPagosFinanciadosCard(pagos) {
     return;
   }
 
-  lista.innerHTML = pagos.map((pago) => {
-    const dias = vfDiasParaVencer(pago.fecha_vencimiento);
-    const esVencido = dias !== null && dias < 0;
+  lista.innerHTML = pagos
+    .map((pago) => {
+      const dias = vfDiasParaVencer(pago.fecha_vencimiento);
+      const esVencido = dias !== null && dias < 0;
 
-    const payload = {
-      venta_id: Number(pago.venta_id || 0),
-      cuota_id: Number(pago.cuota_id || 0),
-      folio: pago.folio || "",
-      cliente_nombre: pago.cliente_nombre || "",
-      numero_cuota: Number(pago.numero_cuota || 0),
-      fecha_vencimiento: pago.fecha_vencimiento || "",
-      saldo_cuota: Number(pago.saldo_cuota || 0),
-    };
+      const payload = {
+        venta_id: Number(pago.venta_id || 0),
+        cuota_id: Number(pago.cuota_id || 0),
+        folio: pago.folio || "",
+        cliente_nombre: pago.cliente_nombre || "",
+        numero_cuota: Number(pago.numero_cuota || 0),
+        fecha_vencimiento: pago.fecha_vencimiento || "",
+        saldo_cuota: Number(pago.saldo_cuota || 0),
+      };
 
-    return `
+      return `
       <li class="rounded-xl border ${esVencido ? "border-red-500/40 bg-red-950/20" : "border-slate-700 bg-slate-900/50"} p-3 hover:bg-slate-800/50 transition">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
@@ -1740,10 +2521,10 @@ function renderPagosFinanciadosCard(pagos) {
             class="btn-abono-financiado-dash mt-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
             data-venta-id="${Number(pago.venta_id || 0)}"
             data-cuota-id="${Number(pago.cuota_id || 0)}"
-            data-folio="${escAttrDash(pago.folio || '')}"
-            data-cliente="${escAttrDash(pago.cliente_nombre || '')}"
+            data-folio="${escAttrDash(pago.folio || "")}"
+            data-cliente="${escAttrDash(pago.cliente_nombre || "")}"
             data-numero-cuota="${Number(pago.numero_cuota || 0)}"
-            data-fecha="${escAttrDash(pago.fecha_vencimiento || '')}"
+            data-fecha="${escAttrDash(pago.fecha_vencimiento || "")}"
             data-saldo="${Number(pago.saldo_cuota || 0)}">
             Abonar
           </button>
@@ -1751,28 +2532,29 @@ function renderPagosFinanciadosCard(pagos) {
         </div>
       </li>
     `;
-  }).join("");
+    })
+    .join("");
 }
 
 function initPagosFinanciadosDashboard() {
   const lista = document.getElementById("lista-pagos-financiados");
 
   lista?.addEventListener("click", (ev) => {
-  const btn = ev.target.closest(".btn-abono-financiado-dash");
-  if (!btn) return;
+    const btn = ev.target.closest(".btn-abono-financiado-dash");
+    if (!btn) return;
 
-  const pago = {
-    venta_id: Number(btn.dataset.ventaId || 0),
-    cuota_id: Number(btn.dataset.cuotaId || 0),
-    folio: btn.dataset.folio || "",
-    cliente_nombre: btn.dataset.cliente || "",
-    numero_cuota: Number(btn.dataset.numeroCuota || 0),
-    fecha_vencimiento: btn.dataset.fecha || "",
-    saldo_cuota: Number(btn.dataset.saldo || 0),
-  };
+    const pago = {
+      venta_id: Number(btn.dataset.ventaId || 0),
+      cuota_id: Number(btn.dataset.cuotaId || 0),
+      folio: btn.dataset.folio || "",
+      cliente_nombre: btn.dataset.cliente || "",
+      numero_cuota: Number(btn.dataset.numeroCuota || 0),
+      fecha_vencimiento: btn.dataset.fecha || "",
+      saldo_cuota: Number(btn.dataset.saldo || 0),
+    };
 
-  abrirModalAbonoFinanciadoDashboard(pago);
-});
+    abrirModalAbonoFinanciadoDashboard(pago);
+  });
 
   document
     .getElementById("btn-cerrar-abono-financiado-dashboard")
@@ -1804,7 +2586,9 @@ function abrirModalAbonoFinanciadoDashboard(pago) {
   const inputMonto = document.getElementById("dash-abono-monto");
   const inputMetodo = document.getElementById("dash-abono-metodo");
   const inputReferencia = document.getElementById("dash-abono-referencia");
-  const inputObservaciones = document.getElementById("dash-abono-observaciones");
+  const inputObservaciones = document.getElementById(
+    "dash-abono-observaciones",
+  );
   const sub = document.getElementById("dash-abono-subtitulo");
   const saldoTexto = document.getElementById("dash-abono-saldo-texto");
 
@@ -1821,7 +2605,7 @@ function abrirModalAbonoFinanciadoDashboard(pago) {
     swalError.fire(
       "Modal incompleto",
       "Falta agregar el modal de abono financiado en dashboard.php o algún ID no coincide.",
-      "error"
+      "error",
     );
     return;
   }
@@ -1865,14 +2649,23 @@ function cerrarModalAbonoFinanciadoDashboard() {
 }
 
 async function guardarAbonoFinanciadoDashboard() {
-  const ventaId = Number(document.getElementById("dash-abono-venta-id")?.value || 0);
-  const cuotaId = Number(document.getElementById("dash-abono-cuota-id")?.value || 0);
-  const saldoMax = Number(document.getElementById("dash-abono-saldo-max")?.value || 0);
+  const ventaId = Number(
+    document.getElementById("dash-abono-venta-id")?.value || 0,
+  );
+  const cuotaId = Number(
+    document.getElementById("dash-abono-cuota-id")?.value || 0,
+  );
+  const saldoMax = Number(
+    document.getElementById("dash-abono-saldo-max")?.value || 0,
+  );
   const monto = Number(document.getElementById("dash-abono-monto")?.value || 0);
 
-  const metodo = document.getElementById("dash-abono-metodo")?.value || "efectivo";
-  const referencia = document.getElementById("dash-abono-referencia")?.value || "";
-  const observaciones = document.getElementById("dash-abono-observaciones")?.value || "";
+  const metodo =
+    document.getElementById("dash-abono-metodo")?.value || "efectivo";
+  const referencia =
+    document.getElementById("dash-abono-referencia")?.value || "";
+  const observaciones =
+    document.getElementById("dash-abono-observaciones")?.value || "";
 
   if (!ventaId || !cuotaId) {
     swalError.fire("Error", "No se encontró la venta o cuota.", "error");
@@ -1888,7 +2681,7 @@ async function guardarAbonoFinanciadoDashboard() {
     swalError.fire(
       "Abono mayor al saldo",
       `No puedes registrar más de ${vfMoneyDash(saldoMax)} en esta cuota.`,
-      "warning"
+      "warning",
     );
     return;
   }
@@ -1919,13 +2712,15 @@ async function guardarAbonoFinanciadoDashboard() {
     const data = await r.json();
 
     if (!data.success) {
-      throw new Error(data.detalle || data.error || "No se pudo registrar el abono.");
+      throw new Error(
+        data.detalle || data.error || "No se pudo registrar el abono.",
+      );
     }
 
     await swalSuccess.fire(
       "Abono registrado",
       "El pago se guardó correctamente.",
-      "success"
+      "success",
     );
 
     cerrarModalAbonoFinanciadoDashboard();
@@ -1936,9 +2731,12 @@ async function guardarAbonoFinanciadoDashboard() {
     if (typeof cargarKPIs === "function") {
       await cargarKPIs();
     }
-
   } catch (e) {
-    swalError.fire("Error", e.message || "No se pudo registrar el abono.", "error");
+    swalError.fire(
+      "Error",
+      e.message || "No se pudo registrar el abono.",
+      "error",
+    );
   } finally {
     if (btn) {
       btn.disabled = false;

@@ -3,10 +3,10 @@ require 'conexion.php';
 header('Content-Type: application/json');
 
 $usuario = $_GET['usuario'] ?? null;
-$tipo    = $_GET['tipo'] ?? null;
-$fecha   = $_GET['fecha'] ?? null;
-$inicio  = $_GET['inicio'] ?? null;
-$fin     = $_GET['fin'] ?? null;
+$tipo = $_GET['tipo'] ?? null;
+$fecha = $_GET['fecha'] ?? null;
+$inicio = $_GET['inicio'] ?? null;
+$fin = $_GET['fin'] ?? null;
 
 if (!$usuario || !$tipo) {
   echo json_encode(["success" => false, "error" => "Faltan parámetros"]);
@@ -16,17 +16,17 @@ if (!$usuario || !$tipo) {
 switch ($tipo) {
   case 'dia':
     $inicio = $fecha;
-    $fin    = $fecha;
+    $fin = $fecha;
     break;
 
   case 'mes':
     $inicio = date("Y-m-01", strtotime($fecha));
-    $fin    = date("Y-m-t", strtotime($fecha));
+    $fin = date("Y-m-t", strtotime($fecha));
     break;
 
   case 'anio':
     $inicio = "$fecha-01-01";
-    $fin    = "$fecha-12-31";
+    $fin = "$fecha-12-31";
     break;
 
   case 'rango':
@@ -137,17 +137,17 @@ while ($row = $res->fetch_assoc()) {
     ? $row['nombre'] . ' ' . ($row['apellido'] ?? '')
     : "Cliente eliminado (ID: {$row['cliente_id']})";
 
-  $monto = (float)($row['monto'] ?? 0);
-  $descuento = (float)($row['descuento'] ?? 0);
+  $monto = (float) ($row['monto'] ?? 0);
+  $descuento = (float) ($row['descuento'] ?? 0);
   $montoFinal = $monto - $descuento;
-      /*
-  |--------------------------------------------------------------------------
-  | Identificar la tarifa del pago
-  |--------------------------------------------------------------------------
-  */
+  /*
+|--------------------------------------------------------------------------
+| Identificar la tarifa del pago
+|--------------------------------------------------------------------------
+*/
 
   $tarifaId = $row["tarifa_id"] !== null
-    ? (int)$row["tarifa_id"]
+    ? (int) $row["tarifa_id"]
     : null;
 
   /*
@@ -167,7 +167,7 @@ while ($row = $res->fetch_assoc()) {
   }
 
   $tarifaMonto = $row["tarifa_monto"] !== null
-    ? (float)$row["tarifa_monto"]
+    ? (float) $row["tarifa_monto"]
     : null;
 
   /*
@@ -177,14 +177,16 @@ while ($row = $res->fetch_assoc()) {
   */
 
   $metodoNormalizado = strtolower(
-    trim((string)($row["metodo_pago"] ?? ""))
+    trim((string) ($row["metodo_pago"] ?? ""))
   );
 
-  if (!in_array(
-    $metodoNormalizado,
-    ["efectivo", "tarjeta", "transferencia"],
-    true
-  )) {
+  if (
+    !in_array(
+      $metodoNormalizado,
+      ["efectivo", "tarjeta", "transferencia"],
+      true
+    )
+  ) {
     $metodoNormalizado = "otro";
   }
 
@@ -245,7 +247,7 @@ while ($row = $res->fetch_assoc()) {
     "fecha" => date("Y-m-d", strtotime($row['fecha_pago']))
   ];
 
-  switch (strtolower((string)$row['metodo_pago'])) {
+  switch (strtolower((string) $row['metodo_pago'])) {
     case 'efectivo':
       $total_efectivo += $montoFinal;
       break;
@@ -285,8 +287,8 @@ usort(
     }
 
     return strcasecmp(
-      (string)$a["nombre"],
-      (string)$b["nombre"]
+      (string) $a["nombre"],
+      (string) $b["nombre"]
     );
   }
 );
@@ -338,8 +340,8 @@ $stmtF->execute();
 $resF = $stmtF->get_result();
 
 while ($row = $resF->fetch_assoc()) {
-  $montoFinanciado = (float)($row["monto"] ?? 0);
-  $metodoFinanciado = strtolower((string)($row["metodo_pago"] ?? "otro"));
+  $montoFinanciado = (float) ($row["monto"] ?? 0);
+  $metodoFinanciado = strtolower((string) ($row["metodo_pago"] ?? "otro"));
 
   if ($metodoFinanciado === "") {
     $metodoFinanciado = "otro";
@@ -353,9 +355,9 @@ while ($row = $resF->fetch_assoc()) {
   $financiados_por_metodo[$metodoFinanciado] += $montoFinanciado;
 
   $pagos_financiados[] = [
-    "id" => (int)$row["id"],
-    "venta_financiada_id" => (int)$row["venta_financiada_id"],
-    "cuota_id" => (int)$row["cuota_id"],
+    "id" => (int) $row["id"],
+    "venta_financiada_id" => (int) $row["venta_financiada_id"],
+    "cuota_id" => (int) $row["cuota_id"],
     "monto" => $montoFinanciado,
     "metodo_pago" => $row["metodo_pago"] ?? "otro",
     "metodo" => $row["metodo_pago"] ?? "otro",
@@ -363,7 +365,7 @@ while ($row = $resF->fetch_assoc()) {
     "fecha_pago" => $row["fecha_pago"],
     "referencia" => $row["referencia"] ?? "",
     "observaciones" => $row["observaciones"] ?? "",
-    "recibido_por" => (int)$row["recibido_por"],
+    "recibido_por" => (int) $row["recibido_por"],
     "usuario" => $row["usuario"] ?? "Usuario eliminado"
   ];
 }
@@ -391,7 +393,21 @@ $visitas_por_metodo = [
 ];
 
 $visitas_detalle = [];
+/* =========================
+   CLASE FUNCIONAL DE ADULTOS
+   producto codigo=2
+========================= */
+$clase_funcional_cantidad = 0;
+$clase_funcional_total = 0;
 
+$clase_funcional_por_metodo = [
+  "efectivo" => 0,
+  "tarjeta" => 0,
+  "transferencia" => 0,
+  "otro" => 0
+];
+
+$clase_funcional_detalle = [];
 /* =========================
    PAGOS DE PRODUCTOS
 ========================= */
@@ -440,10 +456,24 @@ $stmt2->execute();
 $res2 = $stmt2->get_result();
 
 while ($row = $res2->fetch_assoc()) {
-  $codigo = (string)($row["codigo"] ?? "");
-  $metodo = strtolower((string)($row["metodo_pago"] ?? ""));
-  $cantidad = intval($row["cantidad"] ?? 0);
-  $total = floatval($row["total"] ?? 0);
+  $codigo = trim((string) ($row["codigo"] ?? ""));
+
+  $metodo = strtolower(
+    trim((string) ($row["metodo_pago"] ?? ""))
+  );
+
+  if (
+    !in_array(
+      $metodo,
+      ["efectivo", "tarjeta", "transferencia"],
+      true
+    )
+  ) {
+    $metodo = "otro";
+  }
+
+  $cantidad = (int) ($row["cantidad"] ?? 0);
+  $total = (float) ($row["total"] ?? 0);
 
   /*
     Si es visita codigo=1, se separa y no entra a ventas normales.
@@ -469,7 +499,35 @@ while ($row = $res2->fetch_assoc()) {
 
     continue;
   }
+  /*
+  Si es clase funcional codigo=2, se separa y no entra
+  en las ventas normales de productos.
+*/
+  if ($codigo === "2") {
+    $clase_funcional_cantidad += $cantidad;
+    $clase_funcional_total += $total;
 
+    if (!isset($clase_funcional_por_metodo[$metodo])) {
+      $clase_funcional_por_metodo[$metodo] = 0;
+    }
+
+    $clase_funcional_por_metodo[$metodo] += $total;
+
+    $clase_funcional_detalle[] = [
+      "venta_id" => $row["venta_id"],
+      "usuario" => $row["usuario"] ?? "Usuario eliminado",
+      "fecha" => date(
+        "Y-m-d",
+        strtotime($row["fecha_pago"])
+      ),
+      "metodo_pago" =>
+        $row["metodo_pago"] ?? "Sin especificar",
+      "cantidad" => $cantidad,
+      "total" => $total
+    ];
+
+    continue;
+  }
   /*
     Producto normal.
   */
@@ -542,8 +600,8 @@ $st3->execute();
 $r3 = $st3->get_result();
 
 while ($r3 && ($m = $r3->fetch_assoc())) {
-  $tipoMov = strtoupper((string)$m['tipo']);
-  $montoMov = (float)($m['monto'] ?? 0);
+  $tipoMov = strtoupper((string) $m['tipo']);
+  $montoMov = (float) ($m['monto'] ?? 0);
 
   if ($tipoMov === 'INGRESO') {
     $caja_ingresos += $montoMov;
@@ -554,13 +612,13 @@ while ($r3 && ($m = $r3->fetch_assoc())) {
   }
 
   $movimientos_caja[] = [
-    "id" => (int)$m["id"],
+    "id" => (int) $m["id"],
     "tipo" => $tipoMov,
     "monto" => $montoMov,
     "fecha" => $m["fecha"],
     "concepto" => $m["concepto"],
     "observaciones" => $m["observaciones"],
-    "usuario_id" => (int)$m["usuario_id"],
+    "usuario_id" => (int) $m["usuario_id"],
     "usuario" => $m["usuario"] ?? "Usuario eliminado"
   ];
 }
@@ -585,6 +643,18 @@ echo json_encode([
   "visitas_total" => $visitas_total,
   "visitas_por_metodo" => $visitas_por_metodo,
   "visitas_detalle" => $visitas_detalle,
+
+  "clase_funcional_cantidad" =>
+    $clase_funcional_cantidad,
+
+  "clase_funcional_total" =>
+    $clase_funcional_total,
+
+  "clase_funcional_por_metodo" =>
+    $clase_funcional_por_metodo,
+
+  "clase_funcional_detalle" =>
+    $clase_funcional_detalle,
 
   "total_efectivo" => $total_efectivo,
   "total_tarjeta" => $total_tarjeta,

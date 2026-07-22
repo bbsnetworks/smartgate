@@ -452,7 +452,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | 3. Pagos de productos, excluyendo visitas con código 1
+    | 3. Pagos de productos, excluyendo visitas y clase funcional
     |--------------------------------------------------------------------------
     */
 
@@ -468,7 +468,7 @@ try {
 
             WHERE pp.usuario_id = ?
               AND DATE(pp.fecha_pago) BETWEEN ? AND ?
-              AND pr.codigo <> '1'
+              AND pr.codigo NOT IN ('1', '2')
         ");
 
         $stmt2->bind_param("iss", $usuario, $inicio, $fin);
@@ -483,7 +483,7 @@ try {
                 ON pr.id = pp.producto_id
 
             WHERE DATE(pp.fecha_pago) BETWEEN ? AND ?
-              AND pr.codigo <> '1'
+              AND pr.codigo NOT IN ('1', '2')
         ");
 
         $stmt2->bind_param("ss", $inicio, $fin);
@@ -539,8 +539,66 @@ try {
     $stmtV->close();
 
     /*
+|--------------------------------------------------------------------------
+| 5. Clase funcional de adultos, producto con código 2
+|--------------------------------------------------------------------------
+*/
+
+if ($usuario !== "todos") {
+    $stmtCF = $conexion->prepare("
+        SELECT
+            COALESCE(SUM(pp.cantidad), 0) AS clase_funcional_cantidad,
+            COALESCE(SUM(pp.total), 0) AS clase_funcional_total
+        FROM pagos_productos pp
+
+        INNER JOIN productos pr
+            ON pr.id = pp.producto_id
+
+        WHERE pp.usuario_id = ?
+          AND DATE(pp.fecha_pago) BETWEEN ? AND ?
+          AND pr.codigo = '2'
+    ");
+
+    $stmtCF->bind_param(
+        "iss",
+        $usuario,
+        $inicio,
+        $fin
+    );
+} else {
+    $stmtCF = $conexion->prepare("
+        SELECT
+            COALESCE(SUM(pp.cantidad), 0) AS clase_funcional_cantidad,
+            COALESCE(SUM(pp.total), 0) AS clase_funcional_total
+        FROM pagos_productos pp
+
+        INNER JOIN productos pr
+            ON pr.id = pp.producto_id
+
+        WHERE DATE(pp.fecha_pago) BETWEEN ? AND ?
+          AND pr.codigo = '2'
+    ");
+
+    $stmtCF->bind_param(
+        "ss",
+        $inicio,
+        $fin
+    );
+}
+
+$stmtCF->execute();
+
+$stmtCF->bind_result(
+    $clase_funcional_cantidad,
+    $clase_funcional_total
+);
+
+$stmtCF->fetch();
+$stmtCF->close();    
+
+    /*
     |--------------------------------------------------------------------------
-    | 5. Pagos financiados
+    | 6. Pagos financiados
     |--------------------------------------------------------------------------
     */
 
@@ -576,7 +634,7 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | 6. Movimientos de caja
+    | 7. Movimientos de caja
     |--------------------------------------------------------------------------
     */
 
@@ -656,20 +714,22 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | 7. Respuesta final
+    | 8. Respuesta final
     |--------------------------------------------------------------------------
     */
 
-    $total_pagos       = (float)($total_pagos ?? 0);
-    $total_productos   = (float)($total_productos ?? 0);
-    $visitas_total     = (float)($visitas_total ?? 0);
-    $total_financiados = (float)($total_financiados ?? 0);
+    $total_pagos           = (float)($total_pagos ?? 0);
+$total_productos       = (float)($total_productos ?? 0);
+$visitas_total         = (float)($visitas_total ?? 0);
+$clase_funcional_total = (float)($clase_funcional_total ?? 0);
+$total_financiados     = (float)($total_financiados ?? 0);
 
     $total_general =
-        $total_pagos +
-        $total_productos +
-        $visitas_total +
-        $total_financiados;
+    $total_pagos +
+    $total_productos +
+    $visitas_total +
+    $clase_funcional_total +
+    $total_financiados;
 
     echo json_encode([
         "success" => true,
@@ -680,9 +740,6 @@ try {
         "total_pagos"    => $total_pagos,
         "cantidad_pagos" => (int)($cantidad_pagos ?? 0),
 
-        /*
-        | Nueva información para la card.
-        */
         "resumen_tarifas" => $resumen_tarifas,
 
         "total_productos"    => $total_productos,
@@ -693,6 +750,9 @@ try {
 
         "visitas_cantidad" => (int)($visitas_cantidad ?? 0),
         "visitas_total"    => $visitas_total,
+
+        "clase_funcional_cantidad" => (int)($clase_funcional_cantidad ?? 0),
+        "clase_funcional_total"    => $clase_funcional_total,
 
         "caja_ingresos" => (float)($caja_ingresos ?? 0),
         "caja_egresos"  => (float)($caja_egresos ?? 0),

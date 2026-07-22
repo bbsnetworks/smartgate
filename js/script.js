@@ -106,95 +106,251 @@ function fetchGroups() {
         });
 }
 
-function addUser() {
-    const submitButton = document.querySelector("#addUserForm button[type='submit']");
+async function addUser() {
+    const submitButton = document.querySelector(
+        "#addUserForm button[type='submit']"
+    );
+
+    // Evitar doble clic
+    if (submitButton.disabled) return;
+
     submitButton.disabled = true;
 
-    const orgParentName = document.getElementById("orgParent").selectedOptions[0]?.text || "";
-    const orgSubName = document.getElementById("orgIndexCode").selectedOptions[0]?.text || "";
+    // Guardamos el contenido original del botón
+    const contenidoOriginal = submitButton.innerHTML;
 
-    const department = `All Departments/${orgParentName}/${orgSubName}`;
+    submitButton.innerHTML = `
+        <span class="inline-flex items-center gap-2">
+            <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                    fill="none">
+                </circle>
+                <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z">
+                </path>
+            </svg>
+            Procesando...
+        </span>
+    `;
 
-    const formData = {
-        personCode: document.getElementById("personCode").value.trim(),
-        personFamilyName: document.getElementById("personFamilyName").value.trim(),
-        personGivenName: document.getElementById("personGivenName").value.trim(),
-        gender: parseInt(document.getElementById("gender").value),
-        orgIndexCode: document.getElementById("orgIndexCode").value,
-        orgName: orgSubName,
-        orgParentName: orgParentName,
-        department: department, // ✨ nuevo campo
-        phoneNo: document.getElementById("phoneNo").value.trim(),
-        email: document.getElementById("email").value.trim(),
-        groupIndexCode: document.getElementById("groupIndexCode").value,
-        emergencia: document.getElementById("emergencia")?.value.trim() || null,
-        sangre: document.getElementById("sangre")?.value.trim() || null,
-        comentarios: document.getElementById("comentarios")?.value.trim() || null,
-        faces: [{
-            faceData: document.getElementById("faceData").value,
-            faceIconData: document.getElementById("faceIconData").value
-        }]
-    };
+    Swal.fire({
+        title: "Registrando usuario",
+        html: "Espera un momento mientras procesamos la información.",
+        background: "#1e293b",
+        color: "#f8fafc",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            Swal.showLoading();
+        },
+    });
 
-    fetch("../php/add_user.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
-    })
-    .then(res => res.json())
-    .then(data => {
+    try {
+        const orgParentName =
+            document.getElementById("orgParent")
+                .selectedOptions[0]?.text || "";
+
+        const orgSubName =
+            document.getElementById("orgIndexCode")
+                .selectedOptions[0]?.text || "";
+
+        const department =
+            `All Departments/${orgParentName}/${orgSubName}`;
+
+        const formData = {
+            personCode: document
+                .getElementById("personCode").value.trim(),
+
+            personFamilyName: document
+                .getElementById("personFamilyName").value.trim(),
+
+            personGivenName: document
+                .getElementById("personGivenName").value.trim(),
+
+            gender: parseInt(
+                document.getElementById("gender").value
+            ),
+
+            orgIndexCode:
+                document.getElementById("orgIndexCode").value,
+
+            orgName: orgSubName,
+            orgParentName: orgParentName,
+            department: department,
+
+            phoneNo: document
+                .getElementById("phoneNo").value.trim(),
+
+            email: document
+                .getElementById("email").value.trim(),
+
+            groupIndexCode:
+                document.getElementById("groupIndexCode").value,
+
+            emergencia:
+                document.getElementById("emergencia")
+                    ?.value.trim() || null,
+
+            sangre:
+                document.getElementById("sangre")
+                    ?.value.trim() || null,
+
+            comentarios:
+                document.getElementById("comentarios")
+                    ?.value.trim() || null,
+
+            faces: [{
+                faceData:
+                    document.getElementById("faceData").value,
+
+                faceIconData:
+                    document.getElementById("faceIconData").value,
+            }],
+        };
+
+        const response = await fetch("../php/add_user.php", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(formData),
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                `Error HTTP ${response.status}`
+            );
+        }
+
+        const data = await response.json();
+
         if (data.code === 0) {
-    Swal.fire("Éxito", "Usuario registrado correctamente.", "success").then(() => {
-        generarTicketInscripcion({
-            nombre: document.getElementById("personGivenName").value,
-            apellido: document.getElementById("personFamilyName").value,
-            telefono: document.getElementById("phoneNo").value,
-            email: document.getElementById("email").value,
-            organizacion: orgSubName,
-            grupo: document.getElementById("groupIndexCode").value
-        });
+            await Swal.fire({
+                icon: "success",
+                title: "Usuario registrado",
+                text: "El usuario se registró correctamente.",
+                background: "#1e293b",
+                color: "#f8fafc",
+                confirmButtonColor: "#22c55e",
+            });
 
-        document.getElementById("addUserForm").reset();
-        document.getElementById("capturedImage").classList.add("hidden");
-        document.getElementById("video").classList.remove("hidden");
-        document.getElementById("retakeButton").classList.add("hidden");
-        fetchNextPersonCode();
-        startCamera(document.getElementById("cameraSelect").value);
+            await generarTicketInscripcion({
+                nombre:
+                    document.getElementById("personGivenName").value,
+
+                apellido:
+                    document.getElementById("personFamilyName").value,
+
+                telefono:
+                    document.getElementById("phoneNo").value,
+
+                email:
+                    document.getElementById("email").value,
+
+                organizacion: orgSubName,
+
+                grupo:
+                    document.getElementById("groupIndexCode").value,
+            });
+
+            document.getElementById("addUserForm").reset();
+
+            document
+                .getElementById("capturedImage")
+                .classList.add("hidden");
+
+            document
+                .getElementById("video")
+                .classList.remove("hidden");
+
+            document
+                .getElementById("retakeButton")
+                .classList.add("hidden");
+
+            fetchNextPersonCode();
+
+            startCamera(
+                document.getElementById("cameraSelect").value
+            );
+
+            return;
+        }
+
+        const mensajeError =
+            data.error || "No se pudo agregar el usuario";
+
+        if (
+            mensajeError
+                .toLowerCase()
+                .includes("person code already exists")
+        ) {
+            const input =
+                document.getElementById("personCode");
+
+            const errorDiv =
+                document.getElementById("personCodeError");
+
+            errorDiv.textContent =
+                "⚠️ El código ya está registrado. Puedes escribir uno diferente.";
+
+            errorDiv.classList.remove("hidden");
+
+            input.removeAttribute("readonly");
+
+            input.classList.remove(
+                "bg-gray-100",
+                "cursor-not-allowed"
+            );
+
+            input.classList.add(
+                "border-red-500",
+                "ring",
+                "ring-red-300"
+            );
+
+            await Swal.fire({
+                icon: "warning",
+                title: "Código en uso",
+                text: "Este código ya fue utilizado. Ingresa uno diferente.",
+                background: "#1e293b",
+                color: "#f8fafc",
+                confirmButtonColor: "#f59e0b",
+            });
+        } else {
+            await Swal.fire({
+                icon: "error",
+                title: "No se pudo registrar",
+                text: mensajeError,
+                background: "#1e293b",
+                color: "#f8fafc",
+                confirmButtonColor: "#ef4444",
+            });
+        }
+    } catch (error) {
+        console.error("Error al registrar usuario:", error);
+
+        await Swal.fire({
+            icon: "error",
+            title: "Error de conexión",
+            text: "No fue posible registrar al usuario. Inténtalo nuevamente.",
+            background: "#1e293b",
+            color: "#f8fafc",
+            confirmButtonColor: "#ef4444",
+        });
+    } finally {
+        // Siempre restaurar el botón, haya éxito o error
         submitButton.disabled = false;
-    });
-} else {
-    const mensajeError = data.error || "No se pudo agregar el usuario";
-
-    // Detectar si es un error por código duplicado
-    if (mensajeError.includes("person code already exists")) {
-        const input = document.getElementById("personCode");
-        const errorDiv = document.getElementById("personCodeError");
-
-        // Mostrar mensaje en español
-        errorDiv.textContent = "⚠️ El código ya está registrado en el sistema. Puedes escribir uno diferente.";
-        errorDiv.classList.remove("hidden");
-
-        // Habilitar el campo para que el usuario pueda cambiarlo
-        input.removeAttribute("readonly");
-        input.classList.remove("bg-gray-100", "cursor-not-allowed");
-        input.classList.add("border-red-500", "ring", "ring-red-300");
-
-        Swal.fire("Código en uso", "Este código ya fue utilizado. Ingresa uno diferente.", "warning");
-    } else {
-        // Otro tipo de error
-        Swal.fire("Error", mensajeError, "error");
+        submitButton.innerHTML = contenidoOriginal;
     }
-
-    submitButton.disabled = false;
-}
-
-    })
-    .catch(error => {
-        console.error("API Error:", error);
-        Swal.fire("Error", "Error en la API. Revisa la consola.", "error").then(() => {
-            submitButton.disabled = false;
-        });
-    });
 }
 
 function markInvalid(el) {
@@ -430,92 +586,383 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
     };
     reader.readAsDataURL(file);
   });
+  async function obtenerDatosTicket() {
+  const datos = {
+    logo: null,
+    horario: "",
+    redes_sociales: "",
+    mensaje_ticket: "",
+  };
+
+  try {
+    const brandingResponse = await fetch(
+      "../php/obtener_branding.php",
+      {
+        cache: "no-store",
+      },
+    );
+
+    const branding = await brandingResponse.json();
+
+    if (brandingResponse.ok && branding.ok !== false) {
+      datos.horario = branding.horario || "";
+      datos.redes_sociales =
+        branding.redes_sociales || "";
+      datos.mensaje_ticket =
+        branding.mensaje_ticket || "";
+    }
+  } catch (error) {
+    console.error(
+      "No se pudo cargar la información del ticket:",
+      error,
+    );
+  }
+
+  try {
+    const logoResponse = await fetch(
+      "../php/obtener_logo.php",
+      {
+        cache: "no-store",
+      },
+    );
+
+    const logo = await logoResponse.json();
+
+    if (
+      logoResponse.ok &&
+      logo.success &&
+      logo.base64
+    ) {
+      datos.logo = logo.base64;
+    }
+  } catch (error) {
+    console.error(
+      "No se pudo cargar el logo del ticket:",
+      error,
+    );
+  }
+
+  return datos;
+}
   async function generarTicketInscripcion(data) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({
-        unit: "mm",
-        format: [48, 150], // aumenta a 150mm de alto
-      });
-  
-    const fecha = new Date().toLocaleString("es-MX", {
-      dateStyle: "short",
-      timeStyle: "short"
+  const { jsPDF } = window.jspdf;
+
+  const configuracion = await obtenerDatosTicket();
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: [48, 205],
+  });
+
+  const fecha = new Date().toLocaleString("es-MX", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+
+  let y = 5;
+
+  /*
+   * Logo configurado
+   */
+  if (configuracion.logo) {
+  try {
+    const propiedadesLogo = doc.getImageProperties(
+      configuracion.logo,
+    );
+
+    // Medida proporcional para el papel de 48 mm
+    const anchoLogo = 36;
+
+    const altoLogo =
+      (propiedadesLogo.height * anchoLogo) /
+      propiedadesLogo.width;
+
+    // Centra el logo en el papel de 48 mm
+    const posicionX = (48 - anchoLogo) / 2;
+
+    doc.addImage(
+      configuracion.logo,
+      undefined,
+      posicionX,
+      y,
+      anchoLogo,
+      altoLogo,
+    );
+
+    y += altoLogo + 10;
+  } catch (error) {
+    console.error(
+      "No se pudo colocar el logo:",
+      error,
+    );
+  }
+}
+
+  /*
+   * Título
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+
+  doc.text(
+    "INSCRIPCIÓN EXITOSA",
+    24,
+    y,
+    {
+      align: "center",
+    },
+  );
+
+  y += 5;
+
+  /*
+   * Fecha
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+
+  doc.text(
+    fecha,
+    24,
+    y,
+    {
+      align: "center",
+    },
+  );
+
+  y += 4;
+
+  /*
+   * Separador
+   */
+  doc.setDrawColor(20);
+  doc.setLineWidth(0.4);
+  doc.line(2, y, 46, y);
+
+  y += 6;
+
+  /*
+   * Datos de la inscripción
+   */
+  const campos = [
+    {
+      label: "Nombre",
+      value: `${data.nombre || ""} ${
+        data.apellido || ""
+      }`.trim(),
+    },
+    {
+      label: "Teléfono",
+      value: data.telefono,
+    },
+    {
+      label: "Email",
+      value: data.email,
+    },
+    {
+      label: "Organización",
+      value: data.organizacion,
+    },
+    {
+      label: "Grupo",
+      value: data.grupo,
+    },
+  ];
+
+  campos.forEach((campo) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    doc.text(
+      `${campo.label.toUpperCase()}:`,
+      3,
+      y,
+    );
+
+    y += 4.5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+
+    const valor = String(
+      campo.value || "NO ESPECIFICADO",
+    );
+
+    const lineasValor = doc.splitTextToSize(
+      valor,
+      42,
+    );
+
+    lineasValor.forEach((linea) => {
+      doc.text(linea, 3, y);
+      y += 4.3;
     });
-  
-    const imgBase64 = await cargarImagenComoBase64('../img/logo-black.webp');
-    doc.addImage(imgBase64, 'PNG', 12, 5, 24, 24); // centrado
-  
-    doc.setFont("courier", "bold");
-    doc.setFontSize(10);
-    doc.text("Inscripción Exitosa", 24, 34, { align: "center" });
-    doc.setFontSize(8);
-    doc.text(fecha, 24, 39, { align: "center" });
-  
-    doc.setLineWidth(0.3);
-    doc.line(2, 42, 46, 42); // línea divisoria
-  
-    doc.setFont("courier", "normal");
-    let y = 47;
-    const espacio = 5;
-  
-    const campos = [
-        { label: "Nombre", value: `${data.nombre} ${data.apellido}` },
-        { label: "Teléfono", value: data.telefono },
-        { label: "Email", value: data.email },
-        { label: "Organización", value: data.organizacion },
-        { label: "Grupo", value: data.grupo }
-      ];
-  
-      campos.forEach(campo => {
-        doc.setFont("courier", "bold");
-        doc.text(`${campo.label}:`, 4, y);
-        y += 4;
-        doc.setFont("courier", "normal");
-        doc.text(campo.value || "-", 4, y);
-        y += espacio + 1;
-      });
-  
-      doc.line(2, y, 46, y);
-      y += 5;
-      doc.setFont("courier", "bold");
-      doc.setFontSize(7.5);
-      doc.text("Horarios de Atención:", 4, y);
-      y += 4;
-      doc.setFont("courier", "normal");
-      doc.setFontSize(7);
-      doc.text("Lunes a Viernes:", 4, y);
-      y += 4;
-      doc.text("6:00 a.m. - 10:00 p.m.", 4, y);
-      y += 4;
-      doc.text("Sábados:", 4, y);
-      y += 4;
-      doc.text("7:00 a.m. - 2:00 p.m.", 4, y);
-      y += 4;
-      doc.line(2, y, 46, y);
-      y += 6;
-  
-    doc.setFont("courier", "bold");
-    doc.setFontSize(7);
-    doc.text("Síguenos en redes:", 24, y, { align: "center" });
+
+    y += 2;
+  });
+
+  /*
+   * Horario configurado
+   */
+  if (configuracion.horario) {
+    doc.setDrawColor(20);
+    doc.setLineWidth(0.4);
+    doc.line(2, y, 46, y);
+
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+
+    doc.text(
+      "HORARIOS DE ATENCIÓN",
+      24,
+      y,
+      {
+        align: "center",
+      },
+    );
+
     y += 5;
-    doc.setFont("courier", "normal");
-    doc.text("@BBSNetworks", 24, y, { align: "center" });
-  
-    y += 8;
-    doc.setFont("courier", "italic");
+
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text("¡Gracias por formar parte!", 24, y, { align: "center" });
-  
-    // Imprimir automáticamente pero también abrir la pestaña
-    const pdfBlob = doc.output('blob');
-    const pdfUrl = URL.createObjectURL(pdfBlob);
-  
-    const printWindow = window.open(pdfUrl);
+
+    const lineasHorario = configuracion.horario
+      .split(/\r?\n/)
+      .map((linea) => linea.trim())
+      .filter(Boolean);
+
+    lineasHorario.forEach((linea) => {
+      const lineasAjustadas =
+        doc.splitTextToSize(linea, 42);
+
+      lineasAjustadas.forEach(
+        (lineaAjustada) => {
+          doc.text(
+            lineaAjustada,
+            24,
+            y,
+            {
+              align: "center",
+            },
+          );
+
+          y += 4;
+        },
+      );
+
+      y += 0.5;
+    });
+  }
+
+  /*
+   * Redes sociales configuradas
+   */
+  if (configuracion.redes_sociales) {
+    y += 1;
+
+    doc.setDrawColor(20);
+    doc.setLineWidth(0.4);
+    doc.line(2, y, 46, y);
+
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+
+    doc.text(
+      "SÍGUENOS EN REDES",
+      24,
+      y,
+      {
+        align: "center",
+      },
+    );
+
+    y += 4.5;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+
+    const lineasRedes = doc.splitTextToSize(
+      configuracion.redes_sociales,
+      42,
+    );
+
+    lineasRedes.forEach((linea) => {
+      doc.text(
+        linea,
+        24,
+        y,
+        {
+          align: "center",
+        },
+      );
+
+      y += 4;
+    });
+  }
+
+  /*
+   * Mensaje general configurado
+   */
+  if (configuracion.mensaje_ticket) {
+    y += 4;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+
+    const lineasMensaje = doc.splitTextToSize(
+      configuracion.mensaje_ticket,
+      42,
+    );
+
+    lineasMensaje.forEach((linea) => {
+      doc.text(
+        linea,
+        24,
+        y,
+        {
+          align: "center",
+        },
+      );
+
+      y += 4;
+    });
+  }
+
+  /*
+   * Abrir e imprimir
+   */
+  doc.autoPrint();
+
+  const pdfBlob = doc.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  const printWindow = window.open(
+    pdfUrl,
+    "_blank",
+  );
+
+  if (printWindow) {
     printWindow.onload = () => {
       printWindow.focus();
       printWindow.print();
     };
+  } else {
+    URL.revokeObjectURL(pdfUrl);
+
+    await Swal.fire({
+      icon: "warning",
+      title: "Ventana bloqueada",
+      text: "Permite las ventanas emergentes para imprimir el ticket.",
+      background: "#1e293b",
+      color: "#f8fafc",
+      confirmButtonColor: "#f59e0b",
+    });
   }
+}
   
   function cargarImagenComoBase64(url) {
     return new Promise((resolve, reject) => {

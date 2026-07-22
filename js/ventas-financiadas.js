@@ -1708,9 +1708,9 @@ function generarTicketPagoFinanciado(data) {
    * Se calcula una altura aproximada para evitar que el
    * contenido se corte cuando existan varias cuotas aplicadas.
    */
-  const altoBase = 142;
-  const altoAplicaciones = aplicaciones.length * 8;
-  const altoTicket = Math.max(150, altoBase + altoAplicaciones);
+  const altoBase = 160;
+  const altoAplicaciones = aplicaciones.length * 9;
+  const altoTicket = Math.max(170, altoBase + altoAplicaciones);
 
   const doc = new jsPDF({
     orientation: "portrait",
@@ -1724,64 +1724,132 @@ function generarTicketPagoFinanciado(data) {
 
   let y = 5;
 
-  function textoCentro(texto, size = 8, negrita = false) {
-    doc.setFont("helvetica", negrita ? "bold" : "normal");
-    doc.setFontSize(size);
+  function textoCentro(
+  texto,
+  size = 8.5,
+  negrita = true,
+) {
+  /*
+   * No permite textos menores de 8 puntos.
+   */
+  const tamanoFinal = Math.max(Number(size), 8);
 
-    const lineas = doc.splitTextToSize(
-      String(texto ?? ""),
-      anchoContenido,
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(tamanoFinal);
+
+  const lineas = doc.splitTextToSize(
+    String(texto ?? ""),
+    anchoContenido,
+  );
+
+  lineas.forEach((linea) => {
+    doc.text(
+      linea,
+      anchoPagina / 2,
+      y,
+      {
+        align: "center",
+      },
     );
 
-    doc.text(lineas, anchoPagina / 2, y, {
-      align: "center",
-    });
+    y += tamanoFinal * 0.42;
+  });
 
-    y += lineas.length * (size * 0.38) + 1;
-  }
+  y += 1;
+}
 
-  function textoIzquierda(texto, size = 7, negrita = false) {
-    doc.setFont("helvetica", negrita ? "bold" : "normal");
-    doc.setFontSize(size);
+function textoIzquierda(
+  texto,
+  size = 8,
+  negrita = true,
+) {
+  /*
+   * Todo el texto se imprime en negritas para evitar
+   * que se pierda en la impresora térmica.
+   */
+  const tamanoFinal = Math.max(Number(size), 8);
 
-    const lineas = doc.splitTextToSize(
-      String(texto ?? ""),
-      anchoContenido,
-    );
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(tamanoFinal);
 
-    doc.text(lineas, margen, y);
+  const lineas = doc.splitTextToSize(
+    String(texto ?? ""),
+    anchoContenido,
+  );
 
-    y += lineas.length * (size * 0.38) + 1;
-  }
+  lineas.forEach((linea) => {
+    doc.text(linea, margen, y);
+    y += tamanoFinal * 0.42;
+  });
 
-  function fila(etiqueta, valor, negrita = false) {
-    doc.setFontSize(7);
-    doc.setFont("helvetica", negrita ? "bold" : "normal");
+  y += 1;
+}
 
-    doc.text(String(etiqueta ?? ""), margen, y);
+function fila(
+  etiqueta,
+  valor,
+  negrita = true,
+) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
 
-    doc.text(String(valor ?? ""), anchoPagina - margen, y, {
-      align: "right",
-    });
-
-    y += 4;
-  }
-
-  function linea() {
-    doc.setDrawColor(0);
-    doc.setLineWidth(0.2);
-    doc.setLineDashPattern([1, 1], 0);
-
-    doc.line(margen, y, anchoPagina - margen, y);
-
-    doc.setLineDashPattern([], 0);
-    y += 3;
-  }
+  const etiquetaTxt = String(etiqueta ?? "");
+  const valorTxt = String(valor ?? "");
 
   /*
-   * El backend enviará logo_data_url con un formato parecido a:
-   * data:image/png;base64,.....
+   * Calcula el espacio disponible para la etiqueta.
    */
+  const anchoValor = doc.getTextWidth(valorTxt);
+
+  const anchoEtiqueta =
+    anchoContenido - anchoValor - 2;
+
+  let etiquetaAjustada = etiquetaTxt;
+
+  while (
+    etiquetaAjustada.length > 1 &&
+    doc.getTextWidth(etiquetaAjustada) >
+      anchoEtiqueta
+  ) {
+    etiquetaAjustada =
+      etiquetaAjustada.slice(0, -1);
+  }
+
+  doc.text(
+    etiquetaAjustada,
+    margen,
+    y,
+  );
+
+  doc.text(
+    valorTxt,
+    anchoPagina - margen,
+    y,
+    {
+      align: "right",
+    },
+  );
+
+  y += 4.5;
+}
+
+  function linea() {
+  doc.setDrawColor(20);
+  doc.setLineWidth(0.35);
+  doc.setLineDashPattern([0.8, 0.8], 0);
+
+  doc.line(
+    margen,
+    y,
+    anchoPagina - margen,
+    y,
+  );
+
+  doc.setLineDashPattern([], 0);
+
+  y += 3.5;
+}
+
   if (logoDataUrl) {
     try {
       const formatoLogo = obtenerFormatoImagenBase64(logoDataUrl);
@@ -1818,7 +1886,11 @@ function generarTicketPagoFinanciado(data) {
   linea();
 
   textoIzquierda("CLIENTE", 8, true);
-  textoIzquierda(venta.cliente_nombre || "-", 8, false);
+  textoIzquierda(
+  venta.cliente_nombre || "-",
+  9,
+  true,
+);
 
   if (venta.cliente_telefono) {
     textoIzquierda(`Teléfono: ${venta.cliente_telefono}`, 7);
@@ -1985,7 +2057,10 @@ async function cancelarVentaFinanciada(ventaId) {
   }
 }
 function imprimirTicketCancelacion() {
-  if (!ultimaVentaDetalle || !ultimaVentaDetalle.venta) {
+  if (
+    !ultimaVentaDetalle ||
+    !ultimaVentaDetalle.venta
+  ) {
     Swal.fire({
       icon: "warning",
       title: "Sin información",
@@ -1993,236 +2068,421 @@ function imprimirTicketCancelacion() {
       background: "#1e293b",
       color: "#f8fafc",
     });
+
     return;
   }
+
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    Swal.fire({
+      icon: "error",
+      title: "No se puede imprimir",
+      text: "No se encontró la librería jsPDF.",
+      background: "#1e293b",
+      color: "#f8fafc",
+    });
+
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
 
   const venta = ultimaVentaDetalle.venta || {};
   const detalle = ultimaVentaDetalle.detalle || [];
   const pagos = ultimaVentaDetalle.pagos || [];
 
-  const productosHTML = detalle.length
-    ? detalle
-        .map(
-          (p) => `
-        <tr>
-          <td colspan="2">${escapeHTML(p.producto_nombre || "-")}</td>
-        </tr>
-        <tr>
-          <td>${Number(p.cantidad || 0)} x ${money(p.precio_unitario)}</td>
-          <td class="right">${money(p.subtotal)}</td>
-        </tr>
-      `,
-        )
-        .join("")
-    : `
-        <tr>
-          <td colspan="2">Sin productos</td>
-        </tr>
-      `;
+  /*
+   * Altura dinámica según productos y pagos.
+   */
+  const altoBase = 145;
+  const altoProductos = detalle.length * 13;
+  const altoPagos = pagos.length * 9;
 
-  const pagosHTML = pagos.length
-    ? pagos
-        .map(
-          (p) => `
-        <tr>
-          <td>${formatDateTime(p.fecha_pago)}</td>
-          <td class="right">${money(p.monto)}</td>
-        </tr>
-      `,
-        )
-        .join("")
-    : `
-        <tr>
-          <td colspan="2">Sin pagos registrados</td>
-        </tr>
-      `;
+  const altoTicket = Math.max(
+    170,
+    altoBase + altoProductos + altoPagos,
+  );
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: [58, altoTicket],
+  });
+
+  const anchoPagina = 58;
+  const margen = 4;
+  const margenDerecho = 54;
+  const anchoContenido = 50;
+
+  let y = 6;
+
+  /*
+   * Funciones auxiliares
+   */
+  function textoCentro(texto, tamano = 8.5) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(Math.max(tamano, 8));
+
+    const lineas = doc.splitTextToSize(
+      String(texto ?? ""),
+      anchoContenido,
+    );
+
+    lineas.forEach((linea) => {
+      doc.text(
+        linea,
+        anchoPagina / 2,
+        y,
+        {
+          align: "center",
+        },
+      );
+
+      y += 4.3;
+    });
+
+    y += 1;
+  }
+
+  function textoIzquierda(texto, tamano = 8) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(Math.max(tamano, 8));
+
+    const lineas = doc.splitTextToSize(
+      String(texto ?? ""),
+      anchoContenido,
+    );
+
+    lineas.forEach((linea) => {
+      doc.text(linea, margen, y);
+      y += 4.3;
+    });
+
+    y += 1;
+  }
+
+  function fila(etiqueta, valor, tamano = 8) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(Math.max(tamano, 8));
+
+    const etiquetaTexto = String(etiqueta ?? "");
+    const valorTexto = String(valor ?? "-");
+
+    const anchoValor = doc.getTextWidth(valorTexto);
+
+    /*
+     * Si ambos textos caben, se imprimen en una línea.
+     */
+    if (
+      doc.getTextWidth(etiquetaTexto) +
+        anchoValor +
+        3 <=
+      anchoContenido
+    ) {
+      doc.text(etiquetaTexto, margen, y);
+
+      doc.text(
+        valorTexto,
+        margenDerecho,
+        y,
+        {
+          align: "right",
+        },
+      );
+
+      y += 4.5;
+
+      return;
+    }
+
+    /*
+     * Si no caben, el valor baja a otra línea.
+     */
+    doc.text(etiquetaTexto, margen, y);
+    y += 4.3;
+
+    const lineasValor = doc.splitTextToSize(
+      valorTexto,
+      anchoContenido,
+    );
+
+    lineasValor.forEach((linea) => {
+      doc.text(linea, margen, y);
+      y += 4.3;
+    });
+
+    y += 1;
+  }
+
+  function linea(tipo = "punteada") {
+    doc.setDrawColor(20);
+
+    if (tipo === "continua") {
+      doc.setLineWidth(0.5);
+      doc.setLineDashPattern([], 0);
+    } else {
+      doc.setLineWidth(0.35);
+      doc.setLineDashPattern([0.8, 0.8], 0);
+    }
+
+    doc.line(
+      margen,
+      y,
+      margenDerecho,
+      y,
+    );
+
+    doc.setLineDashPattern([], 0);
+
+    y += 4;
+  }
+
+  /*
+   * Fechas
+   */
+  const fechaVenta = venta.fecha_venta
+    ? formatDate(venta.fecha_venta)
+    : "-";
 
   const fechaCancelacion = venta.fecha_cancelacion
     ? formatDateTime(venta.fecha_cancelacion)
     : formatDateTime(new Date().toISOString());
 
-  const html = `
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-      <meta charset="UTF-8">
-      <title>Ticket de cancelación</title>
-      <style>
-        @page {
-          size: 58mm auto;
-          margin: 0;
-        }
+  /*
+   * Encabezado
+   */
+  textoCentro(
+    "TICKET DE CANCELACIÓN",
+    11,
+  );
 
-        * {
-          box-sizing: border-box;
-        }
+  textoCentro(
+    "VENTA FINANCIADA",
+    9,
+  );
 
-        body {
-          width: 58mm;
-          margin: 0;
-          padding: 4mm 3mm;
-          font-family: Arial, Helvetica, sans-serif;
-          font-size: 10px;
-          color: #000;
-        }
+  /*
+   * Recuadro de cancelación
+   */
+  y += 1;
 
-        .center {
-          text-align: center;
-        }
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.7);
 
-        .right {
-          text-align: right;
-        }
+  doc.rect(
+    margen,
+    y,
+    anchoContenido,
+    11,
+  );
 
-        .bold {
-          font-weight: bold;
-        }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
 
-        .title {
-          font-size: 13px;
-          font-weight: bold;
-          text-align: center;
-          margin-bottom: 2mm;
-        }
+  doc.text(
+    "CANCELADA",
+    anchoPagina / 2,
+    y + 7,
+    {
+      align: "center",
+    },
+  );
 
-        .subtitle {
-          font-size: 11px;
-          font-weight: bold;
-          text-align: center;
-          margin-bottom: 2mm;
-        }
+  y += 15;
 
-        .line {
-          border-top: 1px dashed #000;
-          margin: 2mm 0;
-        }
+  linea("continua");
 
-        table {
-          width: 100%;
-          border-collapse: collapse;
-        }
+  /*
+   * Información de la venta
+   */
+  fila(
+    "FOLIO:",
+    venta.folio || "-",
+  );
 
-        td {
-          vertical-align: top;
-          padding: 1px 0;
-        }
+  fila(
+    "FECHA VENTA:",
+    fechaVenta,
+  );
 
-        .cancelado {
-          border: 1px solid #000;
-          padding: 2mm;
-          text-align: center;
-          font-weight: bold;
-          font-size: 12px;
-          margin: 2mm 0;
-        }
+  fila(
+    "FECHA CANCELACIÓN:",
+    fechaCancelacion,
+  );
 
-        .small {
-          font-size: 9px;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="title">TICKET DE CANCELACIÓN</div>
-      <div class="subtitle">VENTA FINANCIADA</div>
-
-      <div class="cancelado">CANCELADA</div>
-
-      <div class="line"></div>
-
-      <table>
-        <tr>
-          <td class="bold">Folio:</td>
-          <td class="right">${escapeHTML(venta.folio || "-")}</td>
-        </tr>
-        <tr>
-          <td class="bold">Fecha venta:</td>
-          <td class="right">${formatDate(venta.fecha_venta)}</td>
-        </tr>
-        <tr>
-          <td class="bold">Fecha cancelación:</td>
-          <td class="right">${fechaCancelacion}</td>
-        </tr>
-        <tr>
-          <td class="bold">Cliente:</td>
-          <td class="right">${escapeHTML(venta.cliente_nombre || "-")}</td>
-        </tr>
-        <tr>
-          <td class="bold">Teléfono:</td>
-          <td class="right">${escapeHTML(venta.cliente_telefono || "-")}</td>
-        </tr>
-      </table>
-
-      <div class="line"></div>
-
-      <div class="bold center">PRODUCTOS</div>
-
-      <table>
-        ${productosHTML}
-      </table>
-
-      <div class="line"></div>
-
-      <table>
-        <tr>
-          <td class="bold">Total financiado:</td>
-          <td class="right bold">${money(venta.total_financiado)}</td>
-        </tr>
-        <tr>
-          <td class="bold">Saldo al cancelar:</td>
-          <td class="right bold">${money(venta.saldo_actual)}</td>
-        </tr>
-        <tr>
-          <td class="bold">Mensualidad:</td>
-          <td class="right">${money(venta.monto_mensual)}</td>
-        </tr>
-      </table>
-
-      <div class="line"></div>
-
-      <div class="bold center">PAGOS REGISTRADOS</div>
-
-      <table>
-        ${pagosHTML}
-      </table>
-
-      <div class="line"></div>
-
-      <p class="center small">
-        Este comprobante confirma la cancelación de la venta financiada.
-      </p>
-
-      <p class="center small">
-        No válido como comprobante de pago.
-      </p>
-
-      <script>
-        window.onload = function() {
-          window.print();
-          setTimeout(function() {
-            window.close();
-          }, 500);
-        };
-      </script>
-    </body>
-    </html>
-  `;
-
-  const ventana = window.open("", "_blank", "width=350,height=600");
-
-  if (!ventana) {
-    Swal.fire({
-      icon: "warning",
-      title: "Ventana bloqueada",
-      text: "Permite ventanas emergentes para imprimir el ticket.",
-      background: "#1e293b",
-      color: "#f8fafc",
-    });
-    return;
+  if (venta.cliente_nombre) {
+    fila(
+      "CLIENTE:",
+      venta.cliente_nombre,
+    );
   }
 
-  ventana.document.open();
-  ventana.document.write(html);
-  ventana.document.close();
+  if (venta.cliente_telefono) {
+    fila(
+      "TELÉFONO:",
+      venta.cliente_telefono,
+    );
+  }
+
+  if (venta.cancelada_por_nombre) {
+    fila(
+      "CANCELÓ:",
+      venta.cancelada_por_nombre,
+    );
+  }
+
+  linea();
+
+  /*
+   * Productos
+   */
+  textoCentro(
+    "PRODUCTOS CANCELADOS",
+    9,
+  );
+
+  if (!detalle.length) {
+    textoCentro(
+      "SIN PRODUCTOS REGISTRADOS",
+      8,
+    );
+  } else {
+    detalle.forEach((producto, index) => {
+      const nombreProducto =
+        producto.producto_nombre ||
+        "PRODUCTO SIN NOMBRE";
+
+      textoIzquierda(
+        String(nombreProducto).toUpperCase(),
+        8.5,
+      );
+
+      fila(
+        `${Number(producto.cantidad || 0)} x ${money(
+          producto.precio_unitario,
+        )}`,
+        money(producto.subtotal),
+      );
+
+      if (index < detalle.length - 1) {
+        linea();
+      }
+    });
+  }
+
+  linea("continua");
+
+  /*
+   * Totales de la venta
+   */
+  fila(
+    "TOTAL VENTA:",
+    money(
+      venta.total_venta ??
+      venta.monto_total ??
+      venta.total,
+    ),
+    9,
+  );
+
+  /*
+   * Pagos registrados
+   */
+  y += 2;
+
+  textoCentro(
+    "PAGOS REGISTRADOS",
+    9,
+  );
+
+  if (!pagos.length) {
+    textoCentro(
+      "SIN PAGOS REGISTRADOS",
+      8,
+    );
+  } else {
+    pagos.forEach((pago) => {
+      fila(
+        formatDateTime(pago.fecha_pago),
+        money(pago.monto),
+      );
+    });
+  }
+
+  /*
+   * Total abonado
+   */
+  const totalPagado = pagos.reduce(
+    (total, pago) =>
+      total + Number(pago.monto || 0),
+    0,
+  );
+
+  linea();
+
+  fila(
+    "TOTAL ABONADO:",
+    money(totalPagado),
+    9,
+  );
+
+  /*
+   * Motivo de cancelación
+   */
+  const motivoCancelacion =
+    venta.motivo_cancelacion ||
+    venta.observaciones_cancelacion ||
+    venta.nota_cancelacion ||
+    "";
+
+  if (motivoCancelacion) {
+    linea();
+
+    textoIzquierda(
+      "MOTIVO DE CANCELACIÓN:",
+      8.5,
+    );
+
+    textoIzquierda(
+      motivoCancelacion,
+      8,
+    );
+  }
+
+  /*
+   * Mensaje final
+   */
+  linea("continua");
+
+  textoCentro(
+    "ESTE DOCUMENTO CONFIRMA",
+    8,
+  );
+
+  textoCentro(
+    "LA CANCELACIÓN DE LA VENTA",
+    8,
+  );
+
+  y += 2;
+
+  textoCentro(
+    `IMPRESO: ${new Date().toLocaleString("es-MX")}`,
+    8,
+  );
+
+  /*
+   * Imprimir
+   */
+  doc.autoPrint();
+
+  const pdfUrl = doc.output("bloburl");
+  const ventana = window.open(pdfUrl, "_blank");
+
+  if (!ventana) {
+    doc.save(
+      `ticket-cancelacion-${venta.folio || Date.now()}.pdf`,
+    );
+  }
 }
 async function eliminarPagoFinanciado(pagoId) {
   if (!pagoId) {
