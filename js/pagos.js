@@ -1740,6 +1740,7 @@ async function obtenerBrandingTicketPago() {
     horario: "",
     redes_sociales: "",
     mensaje_ticket: "",
+    tipo_impresora: "48 mm",
   };
 
   try {
@@ -1771,26 +1772,96 @@ async function obtenerBrandingTicketPago() {
     console.error("No se pudo cargar la configuración del ticket:", error);
   }
 
+  // Obtener tamaño configurado de impresora
+  try {
+    const response = await fetch(
+      "../php/obtener_tipo_impresora.php",
+      {
+        cache: "no-store",
+      },
+    );
+
+    const impresora = await response.json();
+
+    if (response.ok && impresora.ok !== false) {
+      datos.tipo_impresora =
+        impresora.tipo_impresora || "48 mm";
+    }
+  } catch (error) {
+    console.error(
+      "No se pudo obtener el tamaño de impresora:",
+      error,
+    );
+  }
+
   return datos;
 }
+
+const configuracionesTicketPago = {
+  "48 mm": {
+    ancho: 48,
+    alto: 220,
+    margen: 3,
+    anchoLogo: 36,
+    fuenteTitulo: 10.5,
+    fuenteEtiqueta: 8.5,
+    fuenteTexto: 8,
+    fuenteTotal: 9.5,
+    fuenteMensaje: 7.5,
+  },
+
+  "58 mm": {
+    ancho: 58,
+    alto: 220,
+    margen: 4,
+    anchoLogo: 44,
+    fuenteTitulo: 11,
+    fuenteEtiqueta: 8.5,
+    fuenteTexto: 8,
+    fuenteTotal: 10,
+    fuenteMensaje: 8.5,
+  },
+};
+
+
 async function generarTicketPago(data) {
   if (!window.jspdf) {
-    await import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    await import(
+      "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+    );
   }
 
   const { jsPDF } = window.jspdf;
 
+  // Obtener branding + tipo de impresora
   const configuracion = await obtenerBrandingTicketPago();
+
+  // Seleccionar medidas según la configuración guardada
+  const medidas =
+    configuracionesTicketPago[configuracion.tipo_impresora] ||
+    configuracionesTicketPago["48 mm"];
+
+  const ancho = medidas.ancho;
+  const centro = ancho / 2;
+  const margen = medidas.margen;
+  const derecha = ancho - margen;
+  const anchoContenido = ancho - margen * 2;
 
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
-    format: [58, 220],
+    format: [ancho, medidas.alto],
   });
 
+  /*
+   * Logo
+   */
   const logoSrc = await obtenerLogoMarca();
   const logo = await cargarImagenBase64(logoSrc);
 
+  /*
+   * Fecha del pago
+   */
   const fechaPago = new Date(data.fecha_pago);
 
   const fecha = fechaPago.toLocaleDateString("es-MX", {
@@ -1805,9 +1876,13 @@ async function generarTicketPago(data) {
     hour12: true,
   });
 
+  /*
+   * Datos generales
+   */
   const usuario = data.usuario || "Usuario desconocido";
 
-  const nombreCompleto = `${data.nombre || ""} ${data.apellido || ""}`.trim();
+  const nombreCompleto =
+    `${data.nombre || ""} ${data.apellido || ""}`.trim();
 
   const descuento = Number.parseFloat(data.descuento || 0);
   const montoOriginal = Number.parseFloat(data.monto || 0);
@@ -1816,103 +1891,166 @@ async function generarTicketPago(data) {
   let y = 5;
 
   /*
-   * Logo
+   * =========================
+   * LOGO
+   * =========================
    */
   if (logo) {
-  try {
-    const propiedadesLogo = doc.getImageProperties(logo);
+    try {
+      const propiedadesLogo = doc.getImageProperties(logo);
 
-    // Misma medida intermedia usada en el ticket anterior
-    const anchoLogo = 44;
+      const anchoLogo = medidas.anchoLogo;
 
-    // Conserva la proporción original
-    const altoLogo =
-      (propiedadesLogo.height * anchoLogo) /
-      propiedadesLogo.width;
+      const altoLogo =
+        (propiedadesLogo.height * anchoLogo) /
+        propiedadesLogo.width;
 
-    // Centra el logo en el papel de 58 mm
-    const posicionX = (58 - anchoLogo) / 2;
+      const posicionX = (ancho - anchoLogo) / 2;
 
-    doc.addImage(
-      logo,
-      undefined,
-      posicionX,
-      y,
-      anchoLogo,
-      altoLogo,
-    );
+      doc.addImage(
+        logo,
+        undefined,
+        posicionX,
+        y,
+        anchoLogo,
+        altoLogo,
+      );
 
-    y += altoLogo + 10;
-  } catch (error) {
-    console.error(
-      "No se pudo colocar el logo en el ticket:",
-      error,
-    );
+      y += altoLogo + 10;
+    } catch (error) {
+      console.error(
+        "No se pudo colocar el logo en el ticket:",
+        error,
+      );
+    }
   }
-}
 
   /*
-   * Título
+   * =========================
+   * TÍTULO
+   * =========================
    */
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(medidas.fuenteTitulo);
 
-  doc.text("PAGO REGISTRADO", 29, y, {
-    align: "center",
-  });
+  doc.text(
+    "PAGO REGISTRADO",
+    centro,
+    y,
+    {
+      align: "center",
+    },
+  );
 
   y += 5;
 
   /*
-   * Fecha y usuario
+   * =========================
+   * FECHA Y USUARIO
+   * =========================
    */
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(medidas.fuenteTexto);
 
-  doc.text(`${fecha} ${hora}`, 29, y, {
-    align: "center",
-  });
+  doc.text(
+    `${fecha} ${hora}`,
+    centro,
+    y,
+    {
+      align: "center",
+    },
+  );
 
   y += 4.5;
 
-  const lineasUsuario = doc.splitTextToSize(`USUARIO: ${usuario}`, 50);
+  const lineasUsuario = doc.splitTextToSize(
+    `USUARIO: ${usuario}`,
+    anchoContenido,
+  );
 
   lineasUsuario.forEach((linea) => {
-    doc.text(linea, 29, y, {
-      align: "center",
-    });
+    doc.text(
+      linea,
+      centro,
+      y,
+      {
+        align: "center",
+      },
+    );
 
     y += 4;
   });
 
   y += 1;
 
+  /*
+   * Separador
+   */
   doc.setDrawColor(20);
   doc.setLineWidth(0.4);
-  doc.line(4, y, 54, y);
+
+  doc.line(
+    margen,
+    y,
+    derecha,
+    y,
+  );
 
   y += 6;
 
   /*
-   * Función para imprimir cada dato.
+   * =========================
+   * FUNCIÓN CAMPOS
+   * =========================
    */
-  function imprimirCampo(etiqueta, valor, opciones = {}) {
-    const { tamano = 8.5, valorGrande = false } = opciones;
+  function imprimirCampo(
+    etiqueta,
+    valor,
+    opciones = {},
+  ) {
+    const {
+      tamanoEtiqueta = medidas.fuenteEtiqueta,
+      tamanoValor = medidas.fuenteTexto,
+      valorGrande = false,
+    } = opciones;
 
+    /*
+     * Etiqueta
+     */
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(tamano);
+    doc.setFontSize(tamanoEtiqueta);
 
-    doc.text(String(etiqueta).toUpperCase(), 4, y);
+    doc.text(
+      String(etiqueta).toUpperCase(),
+      margen,
+      y,
+    );
 
     y += 4.5;
 
+    /*
+     * Valor
+     */
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(valorGrande ? 10 : tamano);
 
-    const lineasValor = doc.splitTextToSize(String(valor ?? "—"), 50);
+    doc.setFontSize(
+      valorGrande
+        ? medidas.fuenteTotal
+        : tamanoValor,
+    );
+
+    const lineasValor = doc.splitTextToSize(
+      String(valor ?? "—"),
+      anchoContenido,
+    );
 
     lineasValor.forEach((linea) => {
-      doc.text(linea, 4, y);
+      doc.text(
+        linea,
+        margen,
+        y,
+      );
+
       y += valorGrande ? 5 : 4.3;
     });
 
@@ -1920,49 +2058,93 @@ async function generarTicketPago(data) {
   }
 
   /*
-   * Información del pago
+   * =========================
+   * INFORMACIÓN DEL PAGO
+   * =========================
    */
-  imprimirCampo("Nombre:", nombreCompleto);
+  imprimirCampo(
+    "Nombre:",
+    nombreCompleto,
+  );
 
-  imprimirCampo("Inicio:", data.fecha_inicio || "No especificado");
+  imprimirCampo(
+    "Inicio:",
+    data.fecha_inicio || "No especificado",
+  );
 
-  imprimirCampo("Fin:", data.fecha_fin || "No especificado");
+  imprimirCampo(
+    "Fin:",
+    data.fecha_fin || "No especificado",
+  );
 
-  imprimirCampo("Método:", data.metodo || "No especificado");
+  imprimirCampo(
+    "Método:",
+    data.metodo || "No especificado",
+  );
 
   if (data.tarifa_nombre) {
-    imprimirCampo("Tarifa:", String(data.tarifa_nombre));
+    imprimirCampo(
+      "Tarifa:",
+      String(data.tarifa_nombre),
+    );
   }
 
-  imprimirCampo("Monto original:", `$${montoOriginal.toFixed(2)}`);
+  imprimirCampo(
+    "Monto original:",
+    `$${montoOriginal.toFixed(2)}`,
+  );
 
   if (descuento > 0) {
-    imprimirCampo("Descuento:", `-$${descuento.toFixed(2)}`);
+    imprimirCampo(
+      "Descuento:",
+      `-$${descuento.toFixed(2)}`,
+    );
   }
 
   /*
-   * Total pagado destacado
+   * =========================
+   * TOTAL PAGADO
+   * =========================
    */
   doc.setDrawColor(20);
   doc.setLineWidth(0.5);
-  doc.line(4, y, 54, y);
+
+  doc.line(
+    margen,
+    y,
+    derecha,
+    y,
+  );
 
   y += 6;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(medidas.fuenteTotal);
 
-  doc.text("TOTAL PAGADO", 4, y);
+  doc.text(
+    "TOTAL PAGADO",
+    margen,
+    y,
+  );
 
-  doc.text(`$${totalPagado.toFixed(2)}`, 54, y, {
-    align: "right",
-  });
+  doc.text(
+    `$${totalPagado.toFixed(2)}`,
+    derecha,
+    y,
+    {
+      align: "right",
+    },
+  );
 
   y += 6;
 
   /*
-   * Dinero recibido y cambio.
-   * Solo aparecen cuando el pago fue en efectivo.
+   * =========================
+   * RECIBIDO Y CAMBIO
+   * =========================
+   *
+   * Solo aparece cuando estos
+   * datos fueron enviados.
    */
   if (
     data.recibido !== null &&
@@ -1973,46 +2155,77 @@ async function generarTicketPago(data) {
     const cambio = Number(data.cambio || 0);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(medidas.fuenteEtiqueta);
 
-    doc.text("RECIBIDO", 4, y);
+    doc.text(
+      "RECIBIDO",
+      margen,
+      y,
+    );
 
-    doc.text(`$${recibido.toFixed(2)}`, 54, y, {
-      align: "right",
-    });
+    doc.text(
+      `$${recibido.toFixed(2)}`,
+      derecha,
+      y,
+      {
+        align: "right",
+      },
+    );
 
     y += 5;
 
-    doc.text("CAMBIO", 4, y);
+    doc.text(
+      "CAMBIO",
+      margen,
+      y,
+    );
 
-    doc.text(`$${cambio.toFixed(2)}`, 54, y, {
-      align: "right",
-    });
+    doc.text(
+      `$${cambio.toFixed(2)}`,
+      derecha,
+      y,
+      {
+        align: "right",
+      },
+    );
 
     y += 6;
   }
 
   /*
-   * Horarios configurados
+   * =========================
+   * HORARIOS
+   * =========================
    */
   if (configuracion.horario) {
     doc.setDrawColor(20);
     doc.setLineWidth(0.4);
-    doc.line(4, y, 54, y);
+
+    doc.line(
+      margen,
+      y,
+      derecha,
+      y,
+    );
 
     y += 6;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
+    doc.setFontSize(medidas.fuenteEtiqueta);
 
-    doc.text("HORARIOS DE ATENCIÓN", 29, y, {
-      align: "center",
-    });
+    doc.text(
+      "HORARIOS DE ATENCIÓN",
+      centro,
+      y,
+      {
+        align: "center",
+      },
+    );
 
     y += 5;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(medidas.fuenteTexto);
 
     const lineasHorario = configuracion.horario
       .split(/\r?\n/)
@@ -2020,81 +2233,132 @@ async function generarTicketPago(data) {
       .filter(Boolean);
 
     lineasHorario.forEach((linea) => {
-      const lineasAjustadas = doc.splitTextToSize(linea, 50);
+      const lineasAjustadas =
+        doc.splitTextToSize(
+          linea,
+          anchoContenido,
+        );
 
-      lineasAjustadas.forEach((lineaAjustada) => {
-        doc.text(lineaAjustada, 29, y, {
-          align: "center",
-        });
+      lineasAjustadas.forEach(
+        (lineaAjustada) => {
+          doc.text(
+            lineaAjustada,
+            centro,
+            y,
+            {
+              align: "center",
+            },
+          );
 
-        y += 4;
-      });
+          y += 4;
+        },
+      );
 
       y += 0.5;
     });
   }
 
   /*
-   * Redes sociales configuradas
+   * =========================
+   * REDES SOCIALES
+   * =========================
    */
   if (configuracion.redes_sociales) {
     y += 2;
 
     doc.setDrawColor(20);
     doc.setLineWidth(0.4);
-    doc.line(4, y, 54, y);
+
+    doc.line(
+      margen,
+      y,
+      derecha,
+      y,
+    );
 
     y += 6;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(medidas.fuenteEtiqueta);
 
-    doc.text("SÍGUENOS EN REDES", 29, y, {
-      align: "center",
-    });
+    doc.text(
+      "SÍGUENOS EN REDES",
+      centro,
+      y,
+      {
+        align: "center",
+      },
+    );
 
     y += 4.5;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(medidas.fuenteTexto);
 
-    const lineasRedes = doc.splitTextToSize(configuracion.redes_sociales, 50);
+    const lineasRedes =
+      doc.splitTextToSize(
+        configuracion.redes_sociales,
+        anchoContenido,
+      );
 
     lineasRedes.forEach((linea) => {
-      doc.text(linea, 29, y, {
-        align: "center",
-      });
+      doc.text(
+        linea,
+        centro,
+        y,
+        {
+          align: "center",
+        },
+      );
 
       y += 4;
     });
   }
 
   /*
-   * Mensaje general configurado
+   * =========================
+   * MENSAJE FINAL
+   * =========================
    */
   if (configuracion.mensaje_ticket) {
     y += 6;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(medidas.fuenteMensaje);
 
-    const lineasMensaje = doc.splitTextToSize(configuracion.mensaje_ticket, 50);
+    const lineasMensaje =
+      doc.splitTextToSize(
+        configuracion.mensaje_ticket,
+        anchoContenido,
+      );
 
     lineasMensaje.forEach((linea) => {
-      doc.text(linea, 29, y, {
-        align: "center",
-      });
+      doc.text(
+        linea,
+        centro,
+        y,
+        {
+          align: "center",
+        },
+      );
 
       y += 4;
     });
   }
+
   /*
-   * autoPrint debe ejecutarse antes de crear el enlace.
+   * =========================
+   * IMPRIMIR
+   * =========================
    */
   doc.autoPrint();
 
   const blobUrl = doc.output("bloburl");
-  window.open(blobUrl, "_blank");
+
+  window.open(
+    blobUrl,
+    "_blank",
+  );
 }
 
 // Cargar imagen como base64

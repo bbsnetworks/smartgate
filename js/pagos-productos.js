@@ -351,11 +351,10 @@ async function obtenerBrandingTicketProductos() {
     horario: "",
     redes_sociales: "",
     mensaje_ticket: "",
+    tipo_impresora: "48 mm",
   };
 
-  /*
-   * Información del ticket
-   */
+  // Branding
   try {
     const response = await fetch("../php/obtener_branding.php", {
       cache: "no-store",
@@ -363,30 +362,50 @@ async function obtenerBrandingTicketProductos() {
 
     const texto = await response.text();
 
-    let branding;
-
     try {
-      branding = JSON.parse(texto);
+      const branding = JSON.parse(texto);
+
+      if (response.ok && branding.ok !== false) {
+        datos.horario = branding.horario || "";
+        datos.redes_sociales = branding.redes_sociales || "";
+        datos.mensaje_ticket = branding.mensaje_ticket || "";
+      }
     } catch (error) {
-      console.error("Respuesta inválida de obtener_branding.php:", texto);
-
-      return datos;
-    }
-
-    if (response.ok && branding.ok !== false) {
-      datos.horario = branding.horario || "";
-
-      datos.redes_sociales = branding.redes_sociales || "";
-
-      datos.mensaje_ticket = branding.mensaje_ticket || "";
+      console.error(
+        "Respuesta inválida de obtener_branding.php:",
+        texto,
+      );
     }
   } catch (error) {
-    console.error("No se pudo cargar la configuración del ticket:", error);
+    console.error(
+      "No se pudo cargar la configuración del ticket:",
+      error,
+    );
   }
 
-  /*
-   * Logo configurado
-   */
+  // Tipo de impresora
+  try {
+    const response = await fetch(
+      "../php/obtener_tipo_impresora.php",
+      {
+        cache: "no-store",
+      },
+    );
+
+    const impresora = await response.json();
+
+    if (response.ok && impresora.ok !== false) {
+      datos.tipo_impresora =
+        impresora.tipo_impresora || "48 mm";
+    }
+  } catch (error) {
+    console.error(
+      "No se pudo obtener el tamaño de impresora:",
+      error,
+    );
+  }
+
+  // Logo
   try {
     const response = await fetch("../php/obtener_logo.php", {
       cache: "no-store",
@@ -398,11 +417,54 @@ async function obtenerBrandingTicketProductos() {
       datos.logo = logo.base64;
     }
   } catch (error) {
-    console.error("No se pudo cargar el logo del ticket:", error);
+    console.error(
+      "No se pudo cargar el logo del ticket:",
+      error,
+    );
   }
 
   return datos;
 }
+
+const configuracionesTicketVenta = {
+  "48 mm": {
+    ancho: 48,
+    margen: 3,
+    anchoLogo: 34,
+
+    fuenteTitulo: 10,
+    fuenteFolio: 8,
+    fuenteProducto: 8,
+    fuenteTexto: 7.5,
+    fuenteTotal: 9.5,
+    fuenteSeccion: 8.5,
+    fuenteMensaje: 7.5,
+
+    altoBase: 240,
+    altoProducto: 18,
+    altoMinimo: 260,
+  },
+
+  "58 mm": {
+    ancho: 58,
+    margen: 4,
+    anchoLogo: 38,
+
+    fuenteTitulo: 11,
+    fuenteFolio: 8.5,
+    fuenteProducto: 8.5,
+    fuenteTexto: 8,
+    fuenteTotal: 10,
+    fuenteSeccion: 9,
+    fuenteMensaje: 8.5,
+
+    altoBase: 220,
+    altoProducto: 16,
+    altoMinimo: 250,
+  },
+};
+
+
 async function generarTicketVenta(
   data,
   productos,
@@ -413,17 +475,38 @@ async function generarTicketVenta(
   const configuracion = await obtenerBrandingTicketProductos();
 
   /*
-   * Altura suficiente para productos, horario,
-   * redes sociales y mensaje final.
+   * Seleccionar configuración según impresora
    */
-  const alturaTicket = Math.max(220 + productos.length * 16, 250);
+  const medidas =
+    configuracionesTicketVenta[configuracion.tipo_impresora] ||
+    configuracionesTicketVenta["48 mm"];
+
+  const ancho = medidas.ancho;
+  const centro = ancho / 2;
+  const margen = medidas.margen;
+  const derecha = ancho - margen;
+  const anchoContenido = ancho - margen * 2;
+
+  /*
+   * Altura dinámica según cantidad de productos.
+   * En 48 mm dejamos un poco más de espacio
+   * porque los nombres pueden ocupar más líneas.
+   */
+  const alturaTicket = Math.max(
+    medidas.altoBase +
+      productos.length * medidas.altoProducto,
+    medidas.altoMinimo,
+  );
 
   const doc = new jsPDF({
     unit: "mm",
-    format: [58, alturaTicket],
+    format: [ancho, alturaTicket],
     orientation: "portrait",
   });
 
+  /*
+   * Fecha
+   */
   const fechaCompleta = data.fecha_pago
     ? new Date(data.fecha_pago)
     : new Date();
@@ -442,85 +525,114 @@ async function generarTicketVenta(
   let y = 5;
 
   /*
-   * Logo configurado
+   * ==============================
+   * LOGO
+   * ==============================
    */
   if (configuracion.logo) {
     try {
-      const propiedadesLogo = doc.getImageProperties(
-  configuracion.logo,
-);
+      const propiedadesLogo =
+        doc.getImageProperties(configuracion.logo);
 
-// Ancho del logo dentro del papel de 58 mm
-const anchoLogo = 38;
+      const anchoLogo = medidas.anchoLogo;
 
-// Calcula la altura proporcionalmente
-const altoLogo =
-  (propiedadesLogo.height * anchoLogo) /
-  propiedadesLogo.width;
+      const altoLogo =
+        (propiedadesLogo.height * anchoLogo) /
+        propiedadesLogo.width;
 
-// Centra el logo
-const posicionX = (58 - anchoLogo) / 2;
+      const posicionX = (ancho - anchoLogo) / 2;
 
-doc.addImage(
-  configuracion.logo,
-  undefined,
-  posicionX,
-  y,
-  anchoLogo,
-  altoLogo,
-);
+      doc.addImage(
+        configuracion.logo,
+        undefined,
+        posicionX,
+        y,
+        anchoLogo,
+        altoLogo,
+      );
 
-y += altoLogo + 10;
+      y += altoLogo + 10;
     } catch (error) {
-      console.error("No se pudo colocar el logo:", error);
+      console.error(
+        "No se pudo colocar el logo:",
+        error,
+      );
     }
   }
 
   /*
-   * Título
+   * ==============================
+   * TÍTULO
+   * ==============================
    */
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(medidas.fuenteTitulo);
 
-  doc.text("VENTA DE PRODUCTOS", 29, y, {
-    align: "center",
-  });
+  doc.text(
+    "VENTA DE PRODUCTOS",
+    centro,
+    y,
+    {
+      align: "center",
+    },
+  );
 
   y += 6;
 
   /*
-   * Fecha
+   * ==============================
+   * FECHA
+   * ==============================
    */
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(medidas.fuenteTexto);
 
-  doc.text(`${fecha}, ${hora}`, 29, y, {
-    align: "center",
-  });
+  doc.text(
+    `${fecha}, ${hora}`,
+    centro,
+    y,
+    {
+      align: "center",
+    },
+  );
 
   y += 4;
 
   doc.setDrawColor(20);
   doc.setLineWidth(0.4);
-  doc.line(4, y, 54, y);
+
+  doc.line(
+    margen,
+    y,
+    derecha,
+    y,
+  );
 
   y += 6;
 
   /*
-   * Folio
+   * ==============================
+   * FOLIO
+   * ==============================
    */
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
+  doc.setFontSize(medidas.fuenteFolio);
 
-  const lineasFolio = doc.splitTextToSize(
-    `FOLIO: ${data.venta_id || "SIN FOLIO"}`,
-    50,
-  );
+  const lineasFolio =
+    doc.splitTextToSize(
+      `FOLIO: ${data.venta_id || "SIN FOLIO"}`,
+      anchoContenido,
+    );
 
   lineasFolio.forEach((linea) => {
-    doc.text(linea, 29, y, {
-      align: "center",
-    });
+    doc.text(
+      linea,
+      centro,
+      y,
+      {
+        align: "center",
+      },
+    );
 
     y += 4;
   });
@@ -528,20 +640,30 @@ y += altoLogo + 10;
   y += 1;
 
   /*
-   * Vendedor
+   * ==============================
+   * VENDEDOR
+   * ==============================
    */
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(medidas.fuenteTexto);
 
-  const lineasVendedor = doc.splitTextToSize(
-    `VENDEDOR: ${data.usuario || "NO ESPECIFICADO"}`,
-    50,
-  );
+  const lineasVendedor =
+    doc.splitTextToSize(
+      `VENDEDOR: ${
+        data.usuario || "NO ESPECIFICADO"
+      }`,
+      anchoContenido,
+    );
 
   lineasVendedor.forEach((linea) => {
-    doc.text(linea, 29, y, {
-      align: "center",
-    });
+    doc.text(
+      linea,
+      centro,
+      y,
+      {
+        align: "center",
+      },
+    );
 
     y += 4;
   });
@@ -549,63 +671,110 @@ y += altoLogo + 10;
   y += 2;
 
   doc.setLineWidth(0.3);
-  doc.line(4, y, 54, y);
+
+  doc.line(
+    margen,
+    y,
+    derecha,
+    y,
+  );
 
   y += 5;
 
   /*
-   * Productos
+   * ==============================
+   * PRODUCTOS
+   * ==============================
    */
   let total = 0;
 
   productos.forEach((producto, index) => {
-    const precio = Number.parseFloat(producto.precio || 0);
+    const precio = Number.parseFloat(
+      producto.precio || 0,
+    );
 
-    const cantidad = Number.parseInt(producto.cantidad || 0, 10);
+    const cantidad = Number.parseInt(
+      producto.cantidad || 0,
+      10,
+    );
 
     const subtotal = precio * cantidad;
 
     total += subtotal;
 
     /*
-     * Nombre
+     * Nombre del producto
      */
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(
+      medidas.fuenteProducto,
+    );
 
     const nombreProducto = String(
-      producto.nombre || "PRODUCTO SIN NOMBRE",
+      producto.nombre ||
+        "PRODUCTO SIN NOMBRE",
     ).toUpperCase();
 
-    const lineasNombre = doc.splitTextToSize(nombreProducto, 50);
+    const lineasNombre =
+      doc.splitTextToSize(
+        nombreProducto,
+        anchoContenido,
+      );
 
     lineasNombre.forEach((linea) => {
-      doc.text(linea, 4, y);
+      doc.text(
+        linea,
+        margen,
+        y,
+      );
+
       y += 4;
     });
 
     /*
-     * Cantidad, precio y subtotal
+     * Cantidad x precio / subtotal
      */
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(
+      medidas.fuenteTexto,
+    );
 
-    doc.text(`${cantidad} x ${formateaMoneda(precio)}`, 4, y);
+    doc.text(
+      `${cantidad} x ${formateaMoneda(precio)}`,
+      margen,
+      y,
+    );
 
-    doc.text(formateaMoneda(subtotal), 54, y, {
-      align: "right",
-    });
+    doc.text(
+      formateaMoneda(subtotal),
+      derecha,
+      y,
+      {
+        align: "right",
+      },
+    );
 
     y += 4;
 
     /*
-     * Separador entre productos
+     * Separador punteado
      */
     if (index < productos.length - 1) {
       doc.setDrawColor(90);
       doc.setLineWidth(0.25);
-      doc.setLineDashPattern([0.8, 0.8], 0);
-      doc.line(4, y, 54, y);
+
+      doc.setLineDashPattern(
+        [0.8, 0.8],
+        0,
+      );
+
+      doc.line(
+        margen,
+        y,
+        derecha,
+        y,
+      );
+
       doc.setLineDashPattern([], 0);
 
       y += 4;
@@ -613,157 +782,278 @@ y += altoLogo + 10;
   });
 
   /*
-   * Total
+   * ==============================
+   * TOTAL
+   * ==============================
    */
   y += 1;
 
   doc.setDrawColor(20);
   doc.setLineWidth(0.5);
-  doc.line(4, y, 54, y);
+
+  doc.line(
+    margen,
+    y,
+    derecha,
+    y,
+  );
 
   y += 6;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(
+    medidas.fuenteTotal,
+  );
 
-  doc.text("TOTAL", 4, y);
+  doc.text(
+    "TOTAL",
+    margen,
+    y,
+  );
 
-  doc.text(formateaMoneda(total), 54, y, {
-    align: "right",
-  });
+  doc.text(
+    formateaMoneda(total),
+    derecha,
+    y,
+    {
+      align: "right",
+    },
+  );
 
   y += 6;
 
   /*
-   * Pagó y cambio
+   * ==============================
+   * PAGÓ Y CAMBIO
+   * ==============================
    */
   if (pagoInfo) {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(
+      medidas.fuenteProducto,
+    );
 
-    doc.text("PAGÓ", 4, y);
+    doc.text(
+      "PAGÓ",
+      margen,
+      y,
+    );
 
-    doc.text(formateaMoneda(pagoInfo.pagado), 54, y, {
-      align: "right",
-    });
+    doc.text(
+      formateaMoneda(
+        pagoInfo.pagado,
+      ),
+      derecha,
+      y,
+      {
+        align: "right",
+      },
+    );
 
     y += 5;
 
-    doc.text("CAMBIO", 4, y);
+    doc.text(
+      "CAMBIO",
+      margen,
+      y,
+    );
 
-    doc.text(formateaMoneda(pagoInfo.cambio), 54, y, {
-      align: "right",
-    });
+    doc.text(
+      formateaMoneda(
+        pagoInfo.cambio,
+      ),
+      derecha,
+      y,
+      {
+        align: "right",
+      },
+    );
 
     y += 7;
   }
 
   /*
-   * Horario configurado
+   * ==============================
+   * HORARIOS
+   * ==============================
    */
   if (configuracion.horario) {
     doc.setDrawColor(20);
     doc.setLineWidth(0.4);
-    doc.line(4, y, 54, y);
+
+    doc.line(
+      margen,
+      y,
+      derecha,
+      y,
+    );
 
     y += 6;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
+    doc.setFontSize(
+      medidas.fuenteSeccion,
+    );
 
-    doc.text("HORARIOS DE ATENCIÓN", 29, y, {
-      align: "center",
-    });
+    doc.text(
+      "HORARIOS DE ATENCIÓN",
+      centro,
+      y,
+      {
+        align: "center",
+      },
+    );
 
     y += 5;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(
+      medidas.fuenteTexto,
+    );
 
-    const lineasHorario = configuracion.horario
-      .split(/\r?\n/)
-      .map((linea) => linea.trim())
-      .filter(Boolean);
+    const lineasHorario =
+      configuracion.horario
+        .split(/\r?\n/)
+        .map((linea) =>
+          linea.trim(),
+        )
+        .filter(Boolean);
 
     lineasHorario.forEach((linea) => {
-      const lineasAjustadas = doc.splitTextToSize(linea, 50);
+      const lineasAjustadas =
+        doc.splitTextToSize(
+          linea,
+          anchoContenido,
+        );
 
-      lineasAjustadas.forEach((lineaAjustada) => {
-        doc.text(lineaAjustada, 29, y, {
-          align: "center",
-        });
+      lineasAjustadas.forEach(
+        (lineaAjustada) => {
+          doc.text(
+            lineaAjustada,
+            centro,
+            y,
+            {
+              align: "center",
+            },
+          );
 
-        y += 4;
-      });
+          y += 4;
+        },
+      );
 
       y += 0.5;
     });
   }
 
   /*
-   * Redes sociales configuradas
+   * ==============================
+   * REDES SOCIALES
+   * ==============================
    */
   if (configuracion.redes_sociales) {
     y += 2;
 
     doc.setDrawColor(20);
     doc.setLineWidth(0.4);
-    doc.line(4, y, 54, y);
+
+    doc.line(
+      margen,
+      y,
+      derecha,
+      y,
+    );
 
     y += 6;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(
+      medidas.fuenteSeccion,
+    );
 
-    doc.text("SÍGUENOS EN REDES", 29, y, {
-      align: "center",
-    });
+    doc.text(
+      "SÍGUENOS EN REDES",
+      centro,
+      y,
+      {
+        align: "center",
+      },
+    );
 
     y += 4.5;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(
+      medidas.fuenteTexto,
+    );
 
-    const lineasRedes = doc.splitTextToSize(configuracion.redes_sociales, 50);
+    const lineasRedes =
+      doc.splitTextToSize(
+        configuracion.redes_sociales,
+        anchoContenido,
+      );
 
     lineasRedes.forEach((linea) => {
-      doc.text(linea, 29, y, {
-        align: "center",
-      });
+      doc.text(
+        linea,
+        centro,
+        y,
+        {
+          align: "center",
+        },
+      );
 
       y += 4;
     });
   }
 
   /*
-   * Mensaje final configurado
+   * ==============================
+   * MENSAJE FINAL
+   * ==============================
    */
   if (configuracion.mensaje_ticket) {
     y += 6;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(
+      medidas.fuenteMensaje,
+    );
 
-    const lineasMensaje = doc.splitTextToSize(configuracion.mensaje_ticket, 50);
+    const lineasMensaje =
+      doc.splitTextToSize(
+        configuracion.mensaje_ticket,
+        anchoContenido,
+      );
 
     lineasMensaje.forEach((linea) => {
-      doc.text(linea, 29, y, {
-        align: "center",
-      });
+      doc.text(
+        linea,
+        centro,
+        y,
+        {
+          align: "center",
+        },
+      );
 
       y += 4;
     });
   }
 
   /*
-   * Impresión
+   * ==============================
+   * IMPRESIÓN
+   * ==============================
    */
   doc.autoPrint();
 
-  const pdfBlob = doc.output("blob");
-  const pdfUrl = URL.createObjectURL(pdfBlob);
+  const pdfBlob =
+    doc.output("blob");
 
-  const printWindow = window.open(pdfUrl, "_blank");
+  const pdfUrl =
+    URL.createObjectURL(pdfBlob);
+
+  const printWindow =
+    window.open(pdfUrl, "_blank");
 
   if (printWindow) {
     printWindow.onload = () => {

@@ -592,6 +592,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
     horario: "",
     redes_sociales: "",
     mensaje_ticket: "",
+    tipo_impresora: "48 mm",
   };
 
   try {
@@ -617,7 +618,29 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
       error,
     );
   }
+  try {
+  const impresoraResponse = await fetch(
+    "../php/obtener_tipo_impresora.php",
+    {
+      cache: "no-store",
+    }
+  );
 
+  const impresora = await impresoraResponse.json();
+
+  if (
+    impresoraResponse.ok &&
+    impresora.ok !== false
+  ) {
+    datos.tipo_impresora =
+      impresora.tipo_impresora || "48 mm";
+  }
+} catch (error) {
+  console.error(
+    "No se pudo obtener el tamaño de impresora:",
+    error
+  );
+}
   try {
     const logoResponse = await fetch(
       "../php/obtener_logo.php",
@@ -644,16 +667,51 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
 
   return datos;
 }
-  async function generarTicketInscripcion(data) {
+  const configuracionesTicket = {
+  "48 mm": {
+    ancho: 48,
+    alto: 205,
+    margen: 3,
+    anchoLogo: 36,
+    fuenteTitulo: 10.5,
+    fuenteEtiqueta: 8.5,
+    fuenteTexto: 8,
+    fuenteMensaje: 7.5,
+  },
+
+  "58 mm": {
+    ancho: 58,
+    alto: 205,
+    margen: 3,
+    anchoLogo: 42,
+    fuenteTitulo: 12,
+    fuenteEtiqueta: 9.5,
+    fuenteTexto: 9,
+    fuenteMensaje: 8.5,
+  },
+};
+
+ async function generarTicketInscripcion(data) {
   const { jsPDF } = window.jspdf;
 
   const configuracion = await obtenerDatosTicket();
 
+  const medidas =
+    configuracionesTicket[
+      configuracion.tipo_impresora
+    ] || configuracionesTicket["48 mm"];
+
+  const ancho = medidas.ancho;
+  const centro = ancho / 2;
+  const margen = medidas.margen;
+  const anchoContenido = ancho - (margen * 2);
+
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
-    format: [48, 205],
+    format: [ancho, medidas.alto],
   });
+
 
   const fecha = new Date().toLocaleString("es-MX", {
     dateStyle: "short",
@@ -671,15 +729,13 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
       configuracion.logo,
     );
 
-    // Medida proporcional para el papel de 48 mm
-    const anchoLogo = 36;
+    const anchoLogo = medidas.anchoLogo;
 
     const altoLogo =
       (propiedadesLogo.height * anchoLogo) /
       propiedadesLogo.width;
 
-    // Centra el logo en el papel de 48 mm
-    const posicionX = (48 - anchoLogo) / 2;
+    const posicionX = (ancho - anchoLogo) / 2;
 
     doc.addImage(
       configuracion.logo,
@@ -703,11 +759,11 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
    * Título
    */
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
+  doc.setFontSize(medidas.fuenteTitulo);
 
   doc.text(
     "INSCRIPCIÓN EXITOSA",
-    24,
+    centro,
     y,
     {
       align: "center",
@@ -724,7 +780,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
 
   doc.text(
     fecha,
-    24,
+    centro,
     y,
     {
       align: "center",
@@ -738,7 +794,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
    */
   doc.setDrawColor(20);
   doc.setLineWidth(0.4);
-  doc.line(2, y, 46, y);
+  doc.line(2, y, ancho - 2, y);
 
   y += 6;
 
@@ -772,7 +828,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
 
   campos.forEach((campo) => {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(medidas.fuenteEtiqueta);
 
     doc.text(
       `${campo.label.toUpperCase()}:`,
@@ -783,7 +839,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
     y += 4.5;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(medidas.fuenteTexto);
 
     const valor = String(
       campo.value || "NO ESPECIFICADO",
@@ -791,7 +847,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
 
     const lineasValor = doc.splitTextToSize(
       valor,
-      42,
+      anchoContenido,
     );
 
     lineasValor.forEach((linea) => {
@@ -808,16 +864,16 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
   if (configuracion.horario) {
     doc.setDrawColor(20);
     doc.setLineWidth(0.4);
-    doc.line(2, y, 46, y);
+    doc.line(2, y, ancho - 2, y);
 
     y += 6;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
+    doc.setFontSize(medidas.fuenteEtiqueta);
 
     doc.text(
       "HORARIOS DE ATENCIÓN",
-      24,
+      centro,
       y,
       {
         align: "center",
@@ -827,7 +883,7 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
     y += 5;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(medidas.fuenteTexto);
 
     const lineasHorario = configuracion.horario
       .split(/\r?\n/)
@@ -836,13 +892,13 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
 
     lineasHorario.forEach((linea) => {
       const lineasAjustadas =
-        doc.splitTextToSize(linea, 42);
+        doc.splitTextToSize(linea, anchoContenido);
 
       lineasAjustadas.forEach(
         (lineaAjustada) => {
           doc.text(
             lineaAjustada,
-            24,
+            centro,
             y,
             {
               align: "center",
@@ -865,16 +921,16 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
 
     doc.setDrawColor(20);
     doc.setLineWidth(0.4);
-    doc.line(2, y, 46, y);
+    doc.line(2, y, ancho - 2, y);
 
     y += 6;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(medidas.fuenteEtiqueta);
 
     doc.text(
       "SÍGUENOS EN REDES",
-      24,
+      centro,
       y,
       {
         align: "center",
@@ -884,17 +940,17 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
     y += 4.5;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(medidas.fuenteTexto);
 
     const lineasRedes = doc.splitTextToSize(
       configuracion.redes_sociales,
-      42,
+      anchoContenido,
     );
 
     lineasRedes.forEach((linea) => {
       doc.text(
         linea,
-        24,
+        centro,
         y,
         {
           align: "center",
@@ -912,17 +968,17 @@ document.getElementById("fileInput").addEventListener("change", function(event) 
     y += 4;
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
+    doc.setFontSize(medidas.fuenteMensaje);
 
     const lineasMensaje = doc.splitTextToSize(
       configuracion.mensaje_ticket,
-      42,
+      anchoContenido,
     );
 
     lineasMensaje.forEach((linea) => {
       doc.text(
         linea,
-        24,
+        centro,
         y,
         {
           align: "center",

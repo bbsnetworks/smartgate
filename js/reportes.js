@@ -10,6 +10,7 @@ async function obtenerBrandingTicket() {
   const brandingPorDefecto = {
     app_name: "Gym Admin",
     logo: "../php/logo_branding.php",
+    impresora_tipo: "48 mm",
   };
 
   try {
@@ -23,14 +24,42 @@ async function obtenerBrandingTicket() {
 
     const data = await res.json();
 
+    /*
+     * Acepta ambos nombres para mantener
+     * compatibilidad con el backend.
+     */
+    const valorImpresora = String(
+      data.tipo_impresora ??
+      data.impresora_tipo ??
+      "48 mm",
+    )
+      .trim()
+      .toLowerCase();
+
+    const tipoImpresora =
+      valorImpresora.startsWith("58")
+        ? "58 mm"
+        : "48 mm";
+
     return {
-      app_name: data.app_name || "Gym Admin",
+      app_name:
+        data.app_name ||
+        "Gym Admin",
+
       logo: data.logo_etag
-        ? `../php/logo_branding.php?v=${encodeURIComponent(data.logo_etag)}`
+        ? `../php/logo_branding.php?v=${encodeURIComponent(
+            data.logo_etag,
+          )}`
         : "../php/logo_branding.php",
+
+      impresora_tipo: tipoImpresora,
     };
   } catch (error) {
-    console.warn("No se pudo cargar el branding:", error);
+    console.warn(
+      "No se pudo cargar el branding:",
+      error,
+    );
+
     return brandingPorDefecto;
   }
 }
@@ -2139,11 +2168,58 @@ function metodoNormalizadoTicket(valor) {
 
   return "otro";
 }
+
+const configuracionesTicketCorte = {
+  "48 mm": {
+    ancho: 48,
+    margen: 3,
+    anchoLogo: 36,
+
+    fuenteNombreGym: 10,
+    fuenteTitulo: 8.5,
+    fuenteFecha: 7,
+    fuenteSeccion: 8,
+    fuenteTexto: 7,
+    fuenteDetalle: 6.5,
+    fuenteTotales: 8,
+    fuenteFinal: 7,
+    fuenteMarca: 6.5,
+
+    espacioLinea: 3.5,
+
+    /*
+     * Espacio adicional antes y
+     * después de cada título.
+     */
+    espacioAntesTitulo: 3,
+    espacioDespuesTitulo: 3,
+  },
+
+  "58 mm": {
+    ancho: 58,
+    margen: 4,
+    anchoLogo: 42,
+
+    fuenteNombreGym: 11,
+    fuenteTitulo: 9,
+    fuenteFecha: 8,
+    fuenteSeccion: 9,
+    fuenteTexto: 8,
+    fuenteDetalle: 7,
+    fuenteTotales: 8.5,
+    fuenteFinal: 7.5,
+    fuenteMarca: 6.5,
+
+    espacioLinea: 4,
+
+    espacioAntesTitulo: 4,
+    espacioDespuesTitulo: 4,
+  },
+};
 async function construirTicketCorte58mm() {
   const { jsPDF } = window.jspdf;
 
   const usuarioId = document.getElementById("usuario").value;
-
   const tipo = document.getElementById("tipoPeriodo").value;
 
   let fecha = "";
@@ -2158,7 +2234,6 @@ async function construirTicketCorte58mm() {
     fecha = document.getElementById("fecha_anio").value;
   } else if (tipo === "rango") {
     inicio = document.getElementById("rango_inicio").value;
-
     fin = document.getElementById("rango_fin").value;
   }
 
@@ -2172,6 +2247,7 @@ async function construirTicketCorte58mm() {
 
   const response = await fetch(
     `../php/obtener_reportes_detalle.php?${params.toString()}`,
+    { cache: "no-store" },
   );
 
   const data = await response.json();
@@ -2179,248 +2255,56 @@ async function construirTicketCorte58mm() {
   if (!data.success) {
     throw new Error(data.error || "No se pudo obtener el detalle del corte.");
   }
-  const branding = await obtenerBrandingTicket();
 
+  const branding = await obtenerBrandingTicket();
   const nombreGym = branding.app_name || "Gym Admin";
 
+  const tipoImpresora = branding.impresora_tipo === "58 mm" ? "58 mm" : "48 mm";
+
+  const medidas =
+    configuracionesTicketCorte[tipoImpresora] ||
+    configuracionesTicketCorte["48 mm"];
+
+  const anchoContenido = medidas.ancho - medidas.margen * 2;
+
+  const centroTicket = medidas.ancho / 2;
+
   const logoBranding = await cargarImagenBase64(branding.logo);
+
   const usuarioSelect = document.getElementById("usuario");
 
   const nombreUsuario =
     usuarioSelect.options[usuarioSelect.selectedIndex]?.text || "Usuario";
 
-  /*
-  |--------------------------------------------------------------------------
-  | Calcular altura aproximada
-  |--------------------------------------------------------------------------
-  */
+  const pagos = Array.isArray(data.pagos) ? data.pagos : [];
 
-  const cantidadPagos = Array.isArray(data.pagos) ? data.pagos.length : 0;
+  const tarifas = Array.isArray(data.resumen_tarifas)
+    ? data.resumen_tarifas
+    : [];
 
-  const cantidadTarifas = Array.isArray(data.resumen_tarifas)
-    ? data.resumen_tarifas.length
-    : 0;
+  const pagosFinanciados = Array.isArray(data.pagos_financiados)
+    ? data.pagos_financiados
+    : [];
 
-  const cantidadMetodosTarifas = (data.resumen_tarifas || []).reduce(
-    (total, tarifa) => {
-      let metodosConDatos = 0;
+  const ventas = Array.isArray(data.ventas) ? data.ventas : [];
 
-      if (
-        Number(tarifa.efectivo?.cantidad || 0) > 0 ||
-        Number(tarifa.efectivo?.total || 0) > 0
-      ) {
-        metodosConDatos++;
-      }
-
-      if (
-        Number(tarifa.tarjeta?.cantidad || 0) > 0 ||
-        Number(tarifa.tarjeta?.total || 0) > 0
-      ) {
-        metodosConDatos++;
-      }
-
-      if (
-        Number(tarifa.transferencia?.cantidad || 0) > 0 ||
-        Number(tarifa.transferencia?.total || 0) > 0
-      ) {
-        metodosConDatos++;
-      }
-
-      return total + metodosConDatos;
-    },
-    0,
-  );
-
-  const cantidadFinanciados = Array.isArray(data.pagos_financiados)
-    ? data.pagos_financiados.length
-    : 0;
-
-  const cantidadVentas = Array.isArray(data.ventas) ? data.ventas.length : 0;
-
-  const cantidadProductos = (data.ventas || []).reduce((total, venta) => {
-    return (
-      total + (Array.isArray(venta.productos) ? venta.productos.length : 0)
-    );
-  }, 0);
-
-  const cantidadMovimientos = Array.isArray(data.movimientos_caja)
-    ? data.movimientos_caja.length
-    : 0;
+  const movimientosCaja = Array.isArray(data.movimientos_caja)
+    ? data.movimientos_caja
+    : [];
 
   /*
-   * Altura base:
-   * branding, encabezado, resumen, caja, títulos, visitas,
-   * total general y pie del ticket.
+   * ==============================
+   * TOTALES GENERALES
+   * ==============================
    */
-  let altoTicket = 230;
 
-  /* Registros variables */
-  altoTicket += cantidadPagos * 5;
-  altoTicket += cantidadTarifas * 6;
-  altoTicket += cantidadMetodosTarifas * 4;
-  altoTicket += cantidadFinanciados * 5;
-  altoTicket += cantidadVentas * 3;
-  altoTicket += cantidadProductos * 5;
-  altoTicket += cantidadMovimientos * 5;
-
-  /*
-   * Margen de seguridad para nombres largos que puedan ocupar más de una línea.
-   */
-  altoTicket += 40;
-
-  /*
-   * Solo dejamos una altura mínima. No usamos Math.min(), porque eso era
-   * lo que cortaba el final del ticket cuando era muy largo.
-   */
-  altoTicket = Math.max(altoTicket, 260);
-
-  const doc = new jsPDF({
-    unit: "mm",
-    format: [58, altoTicket],
-    orientation: "portrait",
-  });
-
-  let y = 4;
-
-  /*
-|--------------------------------------------------------------------------
-| Logo del gimnasio
-|--------------------------------------------------------------------------
-*/
-
-  if (logoBranding) {
-  try {
-    const propiedadesLogo = doc.getImageProperties(
-      logoBranding,
-    );
-
-    // Misma medida usada en los demás tickets de 58 mm
-    const anchoLogo = 38;
-
-    // Conserva la proporción original
-    const altoLogo =
-      (propiedadesLogo.height * anchoLogo) /
-      propiedadesLogo.width;
-
-    // Centra el logo en el papel de 58 mm
-    const posicionX = (58 - anchoLogo) / 2;
-
-    doc.addImage(
-      logoBranding,
-      undefined,
-      posicionX,
-      y,
-      anchoLogo,
-      altoLogo,
-    );
-
-    // Coloca el encabezado debajo del logo
-    y += altoLogo + 10;
-  } catch (error) {
-    console.warn(
-      "No se pudo agregar el logo del branding al ticket:",
-      error,
-    );
-  }
-}
-
-  /*
-  |--------------------------------------------------------------------------
-  | Encabezado
-  |--------------------------------------------------------------------------
-  |
-  | Puedes cambiar estos datos por los reales del gimnasio.
-  |--------------------------------------------------------------------------
-  */
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-
-  /*
-   * Divide el nombre en varias líneas si es demasiado largo
-   * para el ancho de 58 mm.
-   */
-  const lineasNombreGym = doc.splitTextToSize(String(nombreGym), 50);
-
-  lineasNombreGym.forEach((linea) => {
-    centrarTextoTicket(doc, linea, y);
-
-    y += 4.5;
-  });
-
-  y += 1;
-
-  y = textoTicketMultilinea(doc, "CORTE DE TURNO", y, {
-    centrado: true,
-    negrita: true,
-    tamano: 10,
-  });
-
-  y = lineaTicket(doc, y, "=");
-
-  /*
-  |--------------------------------------------------------------------------
-  | Datos del reporte
-  |--------------------------------------------------------------------------
-  */
-
-  const fechaGeneracion = new Date().toLocaleDateString("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-
-  const horaGeneracion = new Date().toLocaleTimeString("es-MX", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "REALIZADO:",
-    `${fechaGeneracion} ${horaGeneracion}`,
-    y,
-    {
-      tamano: 8,
-    },
-  );
-
-  y = textoTicketMultilinea(doc, `CAJERO: ${nombreUsuario}`, y, {
-    negrita: true,
-    tamano: 8,
-  });
-
-  let periodoTexto = "";
-
-  if (tipo === "dia") {
-    periodoTexto = formatearFecha(fecha);
-  } else if (tipo === "mes") {
-    periodoTexto = fecha;
-  } else if (tipo === "anio") {
-    periodoTexto = fecha;
-  } else {
-    periodoTexto = `${formatearFecha(inicio)} A ` + formatearFecha(fin);
-  }
-
-  y = textoTicketMultilinea(doc, `PERIODO: ${periodoTexto}`, y, {
-    tamano: 8,
-  });
-
-  y = lineaTicket(doc, y);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Totales principales
-  |--------------------------------------------------------------------------
-  */
-
-  const totalSuscripciones = (data.pagos || []).reduce(
+  const totalSuscripciones = pagos.reduce(
     (suma, pago) =>
       suma + Number(pago.monto || 0) - Number(pago.descuento || 0),
     0,
   );
 
-  const totalProductos = (data.ventas || []).reduce(
+  const totalProductos = ventas.reduce(
     (suma, venta) =>
       suma +
       (venta.productos || []).reduce(
@@ -2433,7 +2317,9 @@ async function construirTicketCorte58mm() {
   const totalFinanciados = Number(data.total_financiados || 0);
 
   const totalVisitas = Number(data.visitas_total || 0);
+
   const totalClaseFuncional = Number(data.clase_funcional_total || 0);
+
   const totalVentas =
     totalSuscripciones +
     totalProductos +
@@ -2442,37 +2328,19 @@ async function construirTicketCorte58mm() {
     totalClaseFuncional;
 
   const cantidadOperaciones =
-    cantidadPagos +
-    cantidadVentas +
-    cantidadFinanciados +
+    pagos.length +
+    ventas.length +
+    pagosFinanciados.length +
     Number(data.visitas_cantidad || 0) +
     Number(data.clase_funcional_cantidad || 0);
 
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "VENTAS TOTALES",
-    dineroTicket(totalVentas),
-    y,
-    {
-      negrita: true,
-      tamano: 8,
-    },
-  );
-
-  y = textoTicketIzquierdaDerecha(doc, "OPERACIONES", cantidadOperaciones, y, {
-    negrita: true,
-    tamano: 8,
-  });
-
   /*
-  |--------------------------------------------------------------------------
-  | Dinero en caja
-  |--------------------------------------------------------------------------
-  */
+   * ==============================
+   * EFECTIVO DE VENTAS
+   * ==============================
+   */
 
-  y = tituloTicket(doc, "DINERO EN CAJA", y + 2);
-
-  const suscripcionesEfectivo = (data.pagos || [])
+  const suscripcionesEfectivo = pagos
     .filter((pago) => metodoNormalizadoTicket(pago.metodo) === "efectivo")
     .reduce(
       (suma, pago) =>
@@ -2480,7 +2348,7 @@ async function construirTicketCorte58mm() {
       0,
     );
 
-  const productosEfectivo = (data.ventas || [])
+  const productosEfectivo = ventas
     .filter(
       (venta) => metodoNormalizadoTicket(venta.metodo_pago) === "efectivo",
     )
@@ -2494,7 +2362,7 @@ async function construirTicketCorte58mm() {
       0,
     );
 
-  const financiadosEfectivo = (data.pagos_financiados || [])
+  const financiadosEfectivo = pagosFinanciados
     .filter(
       (pago) =>
         metodoNormalizadoTicket(pago.metodo_pago || pago.metodo) === "efectivo",
@@ -2514,6 +2382,12 @@ async function construirTicketCorte58mm() {
     visitasEfectivo +
     claseFuncionalEfectivo;
 
+  /*
+   * ==============================
+   * CAJA
+   * ==============================
+   */
+
   const cajaInicial = Number(document.getElementById("monto_caja")?.value || 0);
 
   const entradas = Number(data.caja_ingresos || 0);
@@ -2522,132 +2396,19 @@ async function construirTicketCorte58mm() {
 
   const efectivoCaja = cajaInicial + ventasEfectivo + entradas - salidas;
 
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "FONDO DE CAJA",
-    dineroTicket(cajaInicial),
-    y,
-  );
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "VENTAS EFECTIVO",
-    `+${dineroTicket(ventasEfectivo)}`,
-    y,
-  );
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "ENTRADAS",
-    `+${dineroTicket(entradas)}`,
-    y,
-  );
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "SALIDAS",
-    `-${dineroTicket(salidas)}`,
-    y,
-  );
-
-  y = lineaTicket(doc, y);
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "EFECTIVO EN CAJA",
-    dineroTicket(efectivoCaja),
-    y,
-    {
-      negrita: true,
-      tamano: 8,
-    },
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Entradas
-  |--------------------------------------------------------------------------
-  */
-
-  y = tituloTicket(doc, "ENTRADAS EFECTIVO", y + 2);
-
-  const movimientosEntrada = (data.movimientos_caja || []).filter(
+  const movimientosEntrada = movimientosCaja.filter(
     (movimiento) => String(movimiento.tipo).toUpperCase() === "INGRESO",
   );
 
-  if (!movimientosEntrada.length) {
-    y = textoTicketMultilinea(doc, "NO HUBO ENTRADAS", y, {
-      centrado: true,
-    });
-  } else {
-    movimientosEntrada.forEach((movimiento) => {
-      y = textoTicketIzquierdaDerecha(
-        doc,
-        movimiento.concepto || "Entrada",
-        dineroTicket(movimiento.monto),
-        y,
-      );
-    });
-  }
-
-  y = lineaTicket(doc, y);
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "TOTAL ENTRADAS",
-    dineroTicket(entradas),
-    y,
-    {
-      negrita: true,
-    },
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Salidas
-  |--------------------------------------------------------------------------
-  */
-
-  y = tituloTicket(doc, "SALIDAS EFECTIVO", y + 2);
-
-  const movimientosSalida = (data.movimientos_caja || []).filter(
+  const movimientosSalida = movimientosCaja.filter(
     (movimiento) => String(movimiento.tipo).toUpperCase() === "EGRESO",
   );
 
-  if (!movimientosSalida.length) {
-    y = textoTicketMultilinea(doc, "NO HUBO SALIDAS", y, {
-      centrado: true,
-    });
-  } else {
-    movimientosSalida.forEach((movimiento) => {
-      y = textoTicketIzquierdaDerecha(
-        doc,
-        movimiento.concepto || "Salida",
-        dineroTicket(movimiento.monto),
-        y,
-      );
-    });
-  }
-
-  y = lineaTicket(doc, y);
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "TOTAL SALIDAS",
-    dineroTicket(salidas),
-    y,
-    {
-      negrita: true,
-    },
-  );
-
   /*
-  |--------------------------------------------------------------------------
-  | Ventas por método
-  |--------------------------------------------------------------------------
-  */
-
-  y = tituloTicket(doc, "VENTAS", y + 2);
+   * ==============================
+   * VENTAS POR MÉTODO
+   * ==============================
+   */
 
   const ventasMetodo = {
     efectivo: 0,
@@ -2656,20 +2417,20 @@ async function construirTicketCorte58mm() {
     otro: 0,
   };
 
-  (data.pagos || []).forEach((pago) => {
+  pagos.forEach((pago) => {
     const metodo = metodoNormalizadoTicket(pago.metodo);
 
     ventasMetodo[metodo] +=
       Number(pago.monto || 0) - Number(pago.descuento || 0);
   });
 
-  (data.pagos_financiados || []).forEach((pago) => {
+  pagosFinanciados.forEach((pago) => {
     const metodo = metodoNormalizadoTicket(pago.metodo_pago || pago.metodo);
 
     ventasMetodo[metodo] += Number(pago.monto || 0);
   });
 
-  (data.ventas || []).forEach((venta) => {
+  ventas.forEach((venta) => {
     const metodo = metodoNormalizadoTicket(venta.metodo_pago);
 
     const totalVenta = (venta.productos || []).reduce(
@@ -2688,166 +2449,24 @@ async function construirTicketCorte58mm() {
     },
   );
 
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "EN EFECTIVO",
-    dineroTicket(ventasMetodo.efectivo),
-    y,
-  );
+  Object.entries(data.clase_funcional_por_metodo || {}).forEach(
+    ([metodoOriginal, total]) => {
+      const metodo = metodoNormalizadoTicket(metodoOriginal);
 
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "CON TARJETA",
-    dineroTicket(ventasMetodo.tarjeta),
-    y,
-  );
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "TRANSFERENCIA",
-    dineroTicket(ventasMetodo.transferencia),
-    y,
-  );
-
-  if (ventasMetodo.otro > 0) {
-    y = textoTicketIzquierdaDerecha(
-      doc,
-      "OTROS",
-      dineroTicket(ventasMetodo.otro),
-      y,
-    );
-  }
-
-  y = lineaTicket(doc, y);
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "TOTAL VENTAS",
-    dineroTicket(totalVentas),
-    y,
-    {
-      negrita: true,
-      tamano: 8,
+      ventasMetodo[metodo] += Number(total || 0);
     },
   );
 
   /*
-  |--------------------------------------------------------------------------
-  | Pagos por tarifa
-  |--------------------------------------------------------------------------
-  */
-
-  y = tituloTicket(doc, "PAGOS POR TARIFA", y + 2);
-
-  const tarifas = data.resumen_tarifas || [];
-
-  if (!tarifas.length) {
-    y = textoTicketMultilinea(doc, "NO HUBO PAGOS DE TARIFAS", y, {
-      centrado: true,
-    });
-  } else {
-    tarifas.forEach((tarifa) => {
-      y = textoTicketIzquierdaDerecha(
-        doc,
-        `${tarifa.nombre} (${tarifa.cantidad_pagos})`,
-        dineroTicket(tarifa.total),
-        y,
-        {
-          negrita: true,
-        },
-      );
-
-      const metodos = [
-        ["Efectivo", tarifa.efectivo],
-        ["Tarjeta", tarifa.tarjeta],
-        ["Transferencia", tarifa.transferencia],
-      ];
-
-      metodos.forEach(([nombreMetodo, informacion]) => {
-        const cantidad = Number(informacion?.cantidad || 0);
-
-        const total = Number(informacion?.total || 0);
-
-        if (cantidad <= 0 && total <= 0) {
-          return;
-        }
-
-        y = textoTicketIzquierdaDerecha(
-          doc,
-          `  ${nombreMetodo} x${cantidad}`,
-          dineroTicket(total),
-          y,
-          {
-            tamano: 8,
-          },
-        );
-      });
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Pagos financiados
-  |--------------------------------------------------------------------------
-  */
-
-  y = tituloTicket(doc, "PAGOS FINANCIADOS", y + 2);
-
-  if (!(data.pagos_financiados || []).length) {
-    y = textoTicketMultilinea(doc, "NO HUBO PAGOS FINANCIADOS", y, {
-      centrado: true,
-    });
-  } else {
-    (data.pagos_financiados || []).forEach((pago) => {
-      const descripcion =
-        `Venta ${pago.venta_financiada_id} ` + `Cuota ${pago.cuota_id}`;
-
-      y = textoTicketIzquierdaDerecha(
-        doc,
-        descripcion,
-        dineroTicket(pago.monto),
-        y,
-      );
-    });
-
-    y = lineaTicket(doc, y);
-
-    y = textoTicketIzquierdaDerecha(
-      doc,
-      "TOTAL FINANCIADOS",
-      dineroTicket(totalFinanciados),
-      y,
-      {
-        negrita: true,
-      },
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Productos
-  |--------------------------------------------------------------------------
-  */
-
-  y = tituloTicket(doc, "VENTAS DE PRODUCTOS", y + 2);
-
-  if (!(data.ventas || []).length) {
-    y = textoTicketMultilinea(doc, "NO HUBO VENTAS DE PRODUCTOS", y, {
-      centrado: true,
-    });
-  } else {
-  /*
-   * Agrupa el mismo producto aunque aparezca
-   * en distintas ventas.
+   * ==============================
+   * AGRUPAR PRODUCTOS
+   * ==============================
    */
+
   const productosAgrupados = new Map();
 
-  (data.ventas || []).forEach((venta) => {
+  ventas.forEach((venta) => {
     (venta.productos || []).forEach((producto) => {
-      /*
-       * Utiliza el ID o código cuando esté disponible.
-       * Si el back no lo envía, utiliza el nombre normalizado.
-       */
       const claveProducto = String(
         producto.producto_id ||
           producto.id ||
@@ -2859,17 +2478,19 @@ async function construirTicketCorte58mm() {
         .toLowerCase();
 
       const cantidad = Number(producto.cantidad || 0);
+
       const total = Number(producto.total || 0);
 
       if (productosAgrupados.has(claveProducto)) {
-        const productoExistente =
-          productosAgrupados.get(claveProducto);
+        const productoExistente = productosAgrupados.get(claveProducto);
 
         productoExistente.cantidad += cantidad;
+
         productoExistente.total += total;
       } else {
         productosAgrupados.set(claveProducto, {
           nombre: producto.nombre || "PRODUCTO",
+
           cantidad,
           total,
         });
@@ -2878,112 +2499,794 @@ async function construirTicketCorte58mm() {
   });
 
   /*
-   * Imprime una sola línea por producto.
+   * ==============================
+   * PERIODO
+   * ==============================
    */
-  productosAgrupados.forEach((producto) => {
-    y = textoTicketIzquierdaDerecha(
-      doc,
-      `${producto.nombre} x${producto.cantidad}`,
-      dineroTicket(producto.total),
-      y,
-    );
+
+  let periodoTexto = "";
+
+  if (tipo === "dia") {
+    periodoTexto = formatearFecha(fecha);
+  } else if (tipo === "mes" || tipo === "anio") {
+    periodoTexto = fecha;
+  } else {
+    periodoTexto = `${formatearFecha(inicio)} A ` + `${formatearFecha(fin)}`;
+  }
+
+  const fechaGeneracion = new Date().toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 
-  y = lineaTicket(doc, y);
+  const horaGeneracion = new Date().toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-    y = textoTicketIzquierdaDerecha(
+  /*
+   * ==============================
+   * FUNCIONES AUXILIARES INTERNAS
+   * ==============================
+   */
+
+  function centrarTextoCorte(doc, texto, y) {
+    doc.text(String(texto ?? ""), centroTicket, y, {
+      align: "center",
+    });
+  }
+
+  function lineaCorte(
+  doc,
+  y,
+  tipoLinea = "-",
+) {
+  doc.setDrawColor(0);
+
+  if (tipoLinea === "=") {
+    doc.setLineDashPattern([], 0);
+    doc.setLineWidth(0.4);
+  } else {
+    doc.setLineDashPattern(
+      [0.8, 0.8],
+      0,
+    );
+    doc.setLineWidth(0.2);
+  }
+
+  doc.line(
+    medidas.margen,
+    y,
+    medidas.ancho - medidas.margen,
+    y,
+  );
+
+  // Evita que el patrón punteado
+  // afecte las líneas posteriores.
+  doc.setLineDashPattern([], 0);
+
+  return y + medidas.espacioLinea;
+}
+
+  function textoMultilineaCorte(doc, texto, y, opciones = {}) {
+    const {
+      centrado = false,
+      negrita = true,
+      tamano = medidas.fuenteTexto,
+    } = opciones;
+
+    doc.setFont("helvetica", negrita ? "bold" : "normal");
+
+    doc.setFontSize(tamano);
+
+    const lineas = doc.splitTextToSize(String(texto ?? ""), anchoContenido);
+
+    lineas.forEach((linea) => {
+      if (centrado) {
+        centrarTextoCorte(doc, linea, y);
+      } else {
+        doc.text(linea, medidas.margen, y);
+      }
+
+      y += medidas.espacioLinea;
+    });
+
+    return y;
+  }
+
+  function textoIzquierdaDerechaCorte(
+    doc,
+    textoIzquierda,
+    textoDerecha,
+    y,
+    opciones = {},
+  ) {
+    const { negrita = true, tamano = medidas.fuenteTexto } = opciones;
+
+    doc.setFont("helvetica", negrita ? "bold" : "normal");
+
+    doc.setFontSize(tamano);
+
+    const izquierda = String(textoIzquierda ?? "");
+
+    const derecha = String(textoDerecha ?? "");
+
+    const anchoDerecha = doc.getTextWidth(derecha);
+
+    const anchoIzquierda = Math.max(12, anchoContenido - anchoDerecha - 2);
+
+    const lineasIzquierda = doc.splitTextToSize(izquierda, anchoIzquierda);
+
+    doc.text(derecha, medidas.ancho - medidas.margen, y, {
+      align: "right",
+    });
+
+    lineasIzquierda.forEach((linea, indice) => {
+      doc.text(linea, medidas.margen, y + indice * medidas.espacioLinea);
+    });
+
+    return y + Math.max(1, lineasIzquierda.length) * medidas.espacioLinea;
+  }
+
+  function tituloCorte(
+  doc,
+  texto,
+  y,
+) {
+  /*
+   * Las llamadas actuales ya envían y + 2.
+   * Aquí agregamos aire adicional.
+   */
+  const yTitulo =
+    y + medidas.espacioAntesTitulo;
+
+  doc.setFont(
+    "helvetica",
+    "bold",
+  );
+
+  doc.setFontSize(
+    medidas.fuenteSeccion,
+  );
+
+  centrarTextoCorte(
+    doc,
+    String(texto ?? "").toUpperCase(),
+    yTitulo,
+  );
+
+  return (
+    yTitulo +
+    medidas.espacioLinea +
+    medidas.espacioDespuesTitulo
+  );
+}
+
+  /*
+   * Esta función dibuja el ticket.
+   * Primero se utiliza para medirlo
+   * y después para crear el PDF final.
+   */
+  function dibujarTicket(doc) {
+    let y = 4;
+
+    /*
+     * ==============================
+     * LOGO
+     * ==============================
+     */
+
+    if (logoBranding) {
+      try {
+        const propiedadesLogo = doc.getImageProperties(logoBranding);
+
+        const anchoLogo = medidas.anchoLogo;
+
+        const altoLogo =
+          (propiedadesLogo.height * anchoLogo) / propiedadesLogo.width;
+
+        const posicionX = centroTicket - anchoLogo / 2;
+
+        doc.addImage(
+          logoBranding,
+          undefined,
+          posicionX,
+          y,
+          anchoLogo,
+          altoLogo,
+        );
+
+        /*
+         * Espaciado de 10 mm entre
+         * el logo y el nombre.
+         */
+        y += altoLogo + 10;
+      } catch (error) {
+        console.warn(
+          "No se pudo agregar el logo del branding al ticket:",
+          error,
+        );
+      }
+    }
+
+    /*
+     * ==============================
+     * NOMBRE DEL GIMNASIO
+     * ==============================
+     */
+
+    doc.setFont("helvetica", "bold");
+
+    doc.setFontSize(medidas.fuenteNombreGym);
+
+    const lineasNombreGym = doc.splitTextToSize(
+      String(nombreGym),
+      anchoContenido,
+    );
+
+    lineasNombreGym.forEach((linea) => {
+      centrarTextoCorte(doc, linea, y);
+
+      y += medidas.espacioLinea;
+    });
+
+    y += 1;
+
+    /*
+     * ==============================
+     * ENCABEZADO
+     * ==============================
+     */
+
+    y = textoMultilineaCorte(doc, "CORTE DE TURNO", y, {
+      centrado: true,
+      negrita: true,
+      tamano: medidas.fuenteTitulo,
+    });
+
+    y = lineaCorte(doc, y, "=");
+
+    y = textoIzquierdaDerechaCorte(
       doc,
-      "TOTAL PRODUCTOS",
-      dineroTicket(totalProductos),
+      "REALIZADO",
+      `${fechaGeneracion} ${horaGeneracion}`,
+      y,
+      {
+        negrita: true,
+        tamano: medidas.fuenteFecha,
+      },
+    );
+
+    y = textoMultilineaCorte(doc, `CAJERO: ${nombreUsuario}`, y, {
+      negrita: true,
+      tamano: medidas.fuenteTexto,
+    });
+
+    y = textoMultilineaCorte(doc, `PERIODO: ${periodoTexto}`, y, {
+      negrita: true,
+      tamano: medidas.fuenteTexto,
+    });
+
+    y = lineaCorte(doc, y);
+
+    /*
+     * ==============================
+     * RESUMEN GENERAL
+     * ==============================
+     */
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "VENTAS TOTALES",
+      dineroTicket(totalVentas),
+      y,
+      {
+        negrita: true,
+        tamano: medidas.fuenteTotales,
+      },
+    );
+
+    y = textoIzquierdaDerechaCorte(doc, "OPERACIONES", cantidadOperaciones, y, {
+      negrita: true,
+      tamano: medidas.fuenteTotales,
+    });
+
+    /*
+     * ==============================
+     * DINERO EN CAJA
+     * ==============================
+     */
+
+    y = tituloCorte(doc, "DINERO EN CAJA", y + 2);
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "FONDO DE CAJA",
+      dineroTicket(cajaInicial),
       y,
       {
         negrita: true,
       },
     );
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "VENTAS EFECTIVO",
+      `+${dineroTicket(ventasEfectivo)}`,
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "ENTRADAS",
+      `+${dineroTicket(entradas)}`,
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "SALIDAS",
+      `-${dineroTicket(salidas)}`,
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    y = lineaCorte(doc, y);
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "EFECTIVO EN CAJA",
+      dineroTicket(efectivoCaja),
+      y,
+      {
+        negrita: true,
+        tamano: medidas.fuenteTotales,
+      },
+    );
+
+    /*
+     * ==============================
+     * ENTRADAS DE EFECTIVO
+     * ==============================
+     */
+
+    y = tituloCorte(doc, "ENTRADAS EFECTIVO", y + 2);
+
+    if (!movimientosEntrada.length) {
+      y = textoMultilineaCorte(doc, "NO HUBO ENTRADAS", y, {
+        centrado: true,
+        negrita: true,
+      });
+    } else {
+      movimientosEntrada.forEach((movimiento) => {
+        y = textoIzquierdaDerechaCorte(
+          doc,
+          movimiento.concepto || "Entrada",
+          dineroTicket(movimiento.monto),
+          y,
+          {
+            negrita: true,
+          },
+        );
+      });
+    }
+
+    y = lineaCorte(doc, y);
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "TOTAL ENTRADAS",
+      dineroTicket(entradas),
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    /*
+     * ==============================
+     * SALIDAS DE EFECTIVO
+     * ==============================
+     */
+
+    y = tituloCorte(doc, "SALIDAS EFECTIVO", y + 2);
+
+    if (!movimientosSalida.length) {
+      y = textoMultilineaCorte(doc, "NO HUBO SALIDAS", y, {
+        centrado: true,
+        negrita: true,
+      });
+    } else {
+      movimientosSalida.forEach((movimiento) => {
+        y = textoIzquierdaDerechaCorte(
+          doc,
+          movimiento.concepto || "Salida",
+          dineroTicket(movimiento.monto),
+          y,
+          {
+            negrita: true,
+          },
+        );
+      });
+    }
+
+    y = lineaCorte(doc, y);
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "TOTAL SALIDAS",
+      dineroTicket(salidas),
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    /*
+     * ==============================
+     * VENTAS POR MÉTODO
+     * ==============================
+     */
+
+    y = tituloCorte(doc, "VENTAS", y + 2);
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "EN EFECTIVO",
+      dineroTicket(ventasMetodo.efectivo),
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "CON TARJETA",
+      dineroTicket(ventasMetodo.tarjeta),
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "TRANSFERENCIA",
+      dineroTicket(ventasMetodo.transferencia),
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    if (ventasMetodo.otro > 0) {
+      y = textoIzquierdaDerechaCorte(
+        doc,
+        "OTROS",
+        dineroTicket(ventasMetodo.otro),
+        y,
+        {
+          negrita: true,
+        },
+      );
+    }
+
+    y = lineaCorte(doc, y);
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "TOTAL VENTAS",
+      dineroTicket(totalVentas),
+      y,
+      {
+        negrita: true,
+        tamano: medidas.fuenteTotales,
+      },
+    );
+
+    /*
+     * ==============================
+     * PAGOS POR TARIFA
+     * ==============================
+     */
+
+    y = tituloCorte(doc, "PAGOS POR TARIFA", y + 2);
+
+    if (!tarifas.length) {
+      y = textoMultilineaCorte(doc, "NO HUBO PAGOS DE TARIFAS", y, {
+        centrado: true,
+        negrita: true,
+      });
+    } else {
+      tarifas.forEach((tarifa) => {
+        y = textoIzquierdaDerechaCorte(
+          doc,
+          `${tarifa.nombre} (${tarifa.cantidad_pagos})`,
+          dineroTicket(tarifa.total),
+          y,
+          {
+            negrita: true,
+          },
+        );
+
+        const metodos = [
+          [
+            "Efectivo",
+            tarifa.efectivo,
+            tarifa.cantidad_efectivo,
+            tarifa.total_efectivo,
+          ],
+          [
+            "Tarjeta",
+            tarifa.tarjeta,
+            tarifa.cantidad_tarjeta,
+            tarifa.total_tarjeta,
+          ],
+          [
+            "Transferencia",
+            tarifa.transferencia,
+            tarifa.cantidad_transferencia,
+            tarifa.total_transferencia,
+          ],
+          ["Otro", tarifa.otro, tarifa.cantidad_otro, tarifa.total_otro],
+        ];
+
+        metodos.forEach(
+          ([nombreMetodo, informacion, cantidadAlterna, totalAlterno]) => {
+            const cantidad = Number(
+              informacion?.cantidad ?? cantidadAlterna ?? 0,
+            );
+
+            const total = Number(informacion?.total ?? totalAlterno ?? 0);
+
+            if (cantidad <= 0 && total <= 0) {
+              return;
+            }
+
+            y = textoIzquierdaDerechaCorte(
+              doc,
+              `  ${nombreMetodo} x${cantidad}`,
+              dineroTicket(total),
+              y,
+              {
+                negrita: true,
+                tamano: medidas.fuenteDetalle,
+              },
+            );
+          },
+        );
+      });
+    }
+
+    /*
+     * ==============================
+     * PAGOS FINANCIADOS
+     * ==============================
+     */
+
+    y = tituloCorte(doc, "PAGOS FINANCIADOS", y + 2);
+
+    if (!pagosFinanciados.length) {
+      y = textoMultilineaCorte(doc, "NO HUBO PAGOS FINANCIADOS", y, {
+        centrado: true,
+        negrita: true,
+      });
+    } else {
+      pagosFinanciados.forEach((pago) => {
+        const descripcion =
+          `Venta ${pago.venta_financiada_id} ` + `Cuota ${pago.cuota_id}`;
+
+        y = textoIzquierdaDerechaCorte(
+          doc,
+          descripcion,
+          dineroTicket(pago.monto),
+          y,
+          {
+            negrita: true,
+          },
+        );
+      });
+
+      y = lineaCorte(doc, y);
+
+      y = textoIzquierdaDerechaCorte(
+        doc,
+        "TOTAL FINANCIADOS",
+        dineroTicket(totalFinanciados),
+        y,
+        {
+          negrita: true,
+        },
+      );
+    }
+
+    /*
+     * ==============================
+     * VENTAS DE PRODUCTOS
+     * ==============================
+     */
+
+    y = tituloCorte(doc, "VENTAS DE PRODUCTOS", y + 2);
+
+    if (!ventas.length) {
+      y = textoMultilineaCorte(doc, "NO HUBO VENTAS DE PRODUCTOS", y, {
+        centrado: true,
+        negrita: true,
+      });
+    } else {
+      productosAgrupados.forEach((producto) => {
+        y = textoIzquierdaDerechaCorte(
+          doc,
+          `${producto.nombre} x${producto.cantidad}`,
+          dineroTicket(producto.total),
+          y,
+          {
+            negrita: true,
+          },
+        );
+      });
+
+      y = lineaCorte(doc, y);
+
+      y = textoIzquierdaDerechaCorte(
+        doc,
+        "TOTAL PRODUCTOS",
+        dineroTicket(totalProductos),
+        y,
+        {
+          negrita: true,
+        },
+      );
+    }
+
+    /*
+     * ==============================
+     * VISITAS
+     * ==============================
+     */
+
+    y = tituloCorte(doc, "VISITAS", y + 2);
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "VISITAS REGISTRADAS",
+      Number(data.visitas_cantidad || 0),
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "TOTAL VISITAS",
+      dineroTicket(totalVisitas),
+      y,
+      {
+        negrita: true,
+      },
+    );
+
+    /*
+ * ==============================
+ * CLASE FUNCIONAL
+ * ==============================
+ */
+
+const cantidadClaseFuncional =
+  Number(
+    data.clase_funcional_cantidad ||
+    0,
+  );
+
+if (cantidadClaseFuncional > 0) {
+  y = tituloCorte(
+    doc,
+    "CLASE FUNCIONAL ADULTOS",
+    y + 2,
+  );
+
+  y = textoIzquierdaDerechaCorte(
+    doc,
+    "ENTRADAS REGISTRADAS",
+    cantidadClaseFuncional,
+    y,
+    {
+      negrita: true,
+    },
+  );
+
+  y = textoIzquierdaDerechaCorte(
+    doc,
+    "TOTAL CLASE FUNCIONAL",
+    dineroTicket(
+      totalClaseFuncional,
+    ),
+    y,
+    {
+      negrita: true,
+    },
+  );
+}
+
+    /*
+     * ==============================
+     * TOTAL FINAL
+     * ==============================
+     */
+
+    y = lineaCorte(doc, y + 2, "=");
+
+    y = textoIzquierdaDerechaCorte(
+      doc,
+      "TOTAL GENERAL",
+      dineroTicket(totalVentas),
+      y,
+      {
+        negrita: true,
+        tamano: medidas.fuenteTotales,
+      },
+    );
+
+    y = lineaCorte(doc, y, "=");
+
+    /*
+     * ==============================
+     * PIE DEL TICKET
+     * ==============================
+     */
+
+    doc.setFont("helvetica", "bold");
+
+    doc.setFontSize(medidas.fuenteFinal);
+
+    centrarTextoCorte(doc, "FIN DEL CORTE", y + 2);
+
+    y += 7;
+
+    doc.setFont("helvetica", "bold");
+
+    doc.setFontSize(medidas.fuenteMarca);
+
+    centrarTextoCorte(doc, "SMARTGATE", y);
+
+    return y + 6;
   }
 
   /*
-  |--------------------------------------------------------------------------
-  | Visitas
-  |--------------------------------------------------------------------------
-  */
+   * Primera pasada:
+   * mide exactamente la altura del contenido,
+   * incluyendo textos que ocupan varias líneas.
+   */
+  const docMedicion = new jsPDF({
+    unit: "mm",
+    format: [medidas.ancho, 5000],
+    orientation: "portrait",
+  });
 
-  y = tituloTicket(doc, "VISITAS", y + 2);
+  const alturaTicket = Math.max(dibujarTicket(docMedicion), 120);
 
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    `VISITAS REGISTRADAS`,
-    Number(data.visitas_cantidad || 0),
-    y,
-  );
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "TOTAL VISITAS",
-    dineroTicket(totalVisitas),
-    y,
-    {
-      negrita: true,
-    },
-  );
   /*
-|--------------------------------------------------------------------------
-| Clase funcional de adultos
-|--------------------------------------------------------------------------
-*/
+   * Segunda pasada:
+   * crea el documento con la altura definitiva.
+   */
+  const doc = new jsPDF({
+    unit: "mm",
+    format: [medidas.ancho, alturaTicket],
+    orientation: "portrait",
+  });
 
-  y = tituloTicket(doc, "CLASE FUNCIONAL ADULTOS", y + 2);
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "ENTRADAS REGISTRADAS",
-    Number(data.clase_funcional_cantidad || 0),
-    y,
-  );
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "TOTAL CLASE FUNCIONAL",
-    dineroTicket(totalClaseFuncional),
-    y,
-    {
-      negrita: true,
-    },
-  );
-  /*
-  |--------------------------------------------------------------------------
-  | Total final
-  |--------------------------------------------------------------------------
-  */
-
-  y = lineaTicket(doc, y + 2, "=");
-
-  y = textoTicketIzquierdaDerecha(
-    doc,
-    "TOTAL GENERAL",
-    dineroTicket(totalVentas),
-    y,
-    {
-      negrita: true,
-      tamano: 9,
-    },
-  );
-
-  y = lineaTicket(doc, y, "=");
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-
-  centrarTextoTicket(doc, "FIN DEL CORTE", y + 2);
-
-  y += 7;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-
-  centrarTextoTicket(doc, "SMARTGATE", y);
-
-  y += 10;
+  dibujarTicket(doc);
 
   return doc;
 }
@@ -2991,7 +3294,7 @@ async function generarTicketCorte58mm() {
   try {
     swalInfo.fire({
       title: "Generando ticket...",
-      text: "Preparando el corte en formato 58 mm",
+      text: "Preparando el corte de caja para impresión.",
       allowOutsideClick: false,
       didOpen: () => Swal.showLoading(),
     });

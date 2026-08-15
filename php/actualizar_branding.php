@@ -41,6 +41,8 @@ $dashboard_sub = trim($_POST['dashboard_sub'] ?? '');
 $horario = trim($_POST['horario'] ?? '');
 $redes_sociales = trim($_POST['redes_sociales'] ?? '');
 $mensaje_ticket = trim($_POST['mensaje_ticket'] ?? '');
+$tipo_impresora = trim($_POST['tipo_impresora'] ?? '48 mm');
+$restringir_movimientos = trim($_POST['restringir_movimientos'] ?? '0');
 
 // Validación de campos obligatorios.
 if ($app_name === '') {
@@ -92,6 +94,20 @@ if (mb_strlen($mensaje_ticket) > 255) {
         'El mensaje para tickets no puede superar 255 caracteres'
     );
 }
+if (!in_array($tipo_impresora, ['48 mm', '58 mm'], true)) {
+    responderError(
+        400,
+        'El tamaño de impresora seleccionado no es válido'
+    );
+}
+if (!in_array($restringir_movimientos, ['0', '1'], true)) {
+    responderError(
+        400,
+        'La configuración de movimientos de inventario no es válida'
+    );
+}
+
+$restringir_movimientos = (int) $restringir_movimientos;
 
 // Los campos opcionales vacíos se almacenan como NULL.
 $dashboard_sub = $dashboard_sub !== ''
@@ -196,10 +212,12 @@ $sql = "UPDATE config_branding
             horario = ?,
             redes_sociales = ?,
             mensaje_ticket = ?,
+            tipo_impresora = ?,
+            restringir_movimientos = ?,
             updated_by = ?,
             updated_at = NOW()";
 
-$types = 'ssssssi';
+$types = 'sssssssii';
 
 $params = [
     $app_name,
@@ -208,6 +226,8 @@ $params = [
     $horario,
     $redes_sociales,
     $mensaje_ticket,
+    $tipo_impresora,
+    $restringir_movimientos,
     $updated_by,
 ];
 

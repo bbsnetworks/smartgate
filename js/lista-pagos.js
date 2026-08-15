@@ -1,149 +1,202 @@
 let offset = 0;
 const limit = 20;
 
-document.addEventListener("DOMContentLoaded", () => {
-  cargarPagos(true);
+let controladorPeticion = null;
+let temporizadorBusqueda = null;
 
-  document.getElementById("selectMes").addEventListener("change", () => cargarPagos(true));
-  document.getElementById("selectYear").addEventListener("change", () => cargarPagos(true));
-  document.getElementById("filtroPagos").addEventListener("input", () => cargarPagos(true));
+document.addEventListener("DOMContentLoaded", () => {
+  cargarPagos(0);
+
+  document.getElementById("selectMes").addEventListener("change", () => {
+    cargarPagos(0);
+  });
+
+  document.getElementById("selectYear").addEventListener("change", () => {
+    cargarPagos(0);
+  });
+
+  document.getElementById("filtroPagos").addEventListener("input", () => {
+    clearTimeout(temporizadorBusqueda);
+
+    temporizadorBusqueda = setTimeout(() => {
+      cargarPagos(0);
+    }, 350);
+  });
 });
 
-async function cargarPagos(reset = false) {
-  if (reset) {
-    offset = 0;
-    document.getElementById("tablaPagos").innerHTML = "";
-  }
+async function cargarPagos(nuevoOffset = 0) {
+  offset = nuevoOffset;
 
   const mes = document.getElementById("selectMes").value;
   const year = document.getElementById("selectYear").value;
-  const busqueda = document.getElementById("filtroPagos").value;
-
-  const res = await fetch("../php/pagos_productos_controller.php?accion=obtener", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mes, year, busqueda, offset, limit }),
-  });
-
-  const data = await res.json();
-  if (!data.success) {
-    swalError.fire("Error", data.error || "No se pudo cargar la lista", "error");
-    return;
-  }
+  const busqueda = document.getElementById("filtroPagos").value.trim();
 
   const tbody = document.getElementById("tablaPagos");
+  const paginacion = document.getElementById("paginacionPagos");
 
-  if (reset) window.listaPagos = [];
-
-  data.pagos.forEach((venta, index) => {
-    window.listaPagos.push(venta);
-
-    const fila = document.createElement("tr");
-    const productosHTML = venta.productos.map(p =>
-      `<div><strong>${p.nombre}</strong> x${p.cantidad} - $${p.total}</div>`
-    ).join("");
-
-    fila.innerHTML = `
-      <td class="px-4 py-2">${offset + index + 1}</td>
-      <td class="px-4 py-2">${venta.venta_id}</td>
-      <td class="px-4 py-2">${venta.fecha_pago}</td>
-      <td class="px-4 py-2">${venta.usuario}</td>
-      <td class="px-4 py-2">$${Number(venta.total).toFixed(2)}</td>
-      <td class="px-4 py-2">${productosHTML}</td>
-      <td class="px-4 py-2 text-center">
-        <button onclick="eliminarPago('${venta.venta_id}')" class="text-red-700 hover:text-white border border-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2 dark:border-red-500 dark:text-red-500 dark:hover:text-white dark:hover:bg-red-600 dark:focus:ring-red-900">
-          🗑️ Eliminar
-        </button>
-      </td>
-    `;
-    tbody.appendChild(fila);
-  });
-
-  if (data.pagos.length === limit) {
-    const btnVerMas = document.createElement("tr");
-    btnVerMas.innerHTML = `<td colspan="7" class="text-center py-4"><button onclick="verMasPagos()" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded">Ver más</button></td>`;
-    tbody.appendChild(btnVerMas);
+  // Cancela la petición anterior si todavía no termina.
+  if (controladorPeticion) {
+    controladorPeticion.abort();
   }
-  if (reset) renderPaginacion(data.total);
 
-  offset += limit;
+  controladorPeticion = new AbortController();
+
+  // No vaciamos la tabla para evitar el flash.
+  tbody.classList.add("opacity-50", "pointer-events-none");
+  paginacion.classList.add("pointer-events-none");
+
+  try {
+    const res = await fetch(
+      "../php/pagos_productos_controller.php?accion=obtener",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mes,
+          year,
+          busqueda,
+          offset,
+          limit,
+        }),
+        signal: controladorPeticion.signal,
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("Error en la respuesta del servidor");
+    }
+
+    const data = await res.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "No se pudo cargar la lista");
+    }
+
+    tbody.innerHTML = "";
+
+    if (!data.pagos || data.pagos.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center py-6 text-slate-400">
+            No se encontraron pagos
+          </td>
+        </tr>
+      `;
+    } else {
+      data.pagos.forEach((venta, index) => {
+        const fila = document.createElement("tr");
+
+        const productosHTML = venta.productos
+          .map((producto) => {
+            const nombre = producto.nombre || "";
+            const nombreCorto =
+              nombre.length > 30
+                ? nombre.slice(0, 30) + "..."
+                : nombre;
+
+            return `
+              <div title="${nombre}">
+                <strong>${nombreCorto}</strong>
+                x${producto.cantidad} - $${Number(producto.total).toFixed(2)}
+              </div>
+            `;
+          })
+          .join("");
+
+        fila.innerHTML = `
+          <td class="px-4 py-2">${offset + index + 1}</td>
+
+          <td class="px-4 py-2">
+            ${venta.venta_id}
+          </td>
+
+          <td class="px-4 py-2">
+            ${venta.fecha_pago}
+          </td>
+
+          <td class="px-4 py-2">
+            ${venta.usuario}
+          </td>
+
+          <td class="px-4 py-2">
+            $${Number(venta.total).toFixed(2)}
+          </td>
+
+          <td class="px-4 py-2">
+            ${productosHTML}
+          </td>
+
+          <td class="px-4 py-2 text-center">
+            <button
+              type="button"
+              onclick="eliminarPago('${venta.venta_id}')"
+              class="text-red-700 hover:text-white border border-red-700
+                     hover:bg-red-800 focus:ring-4 focus:outline-none
+                     focus:ring-red-300 font-medium rounded-lg text-sm
+                     px-5 py-2.5 text-center me-2 mb-2
+                     dark:border-red-500 dark:text-red-500
+                     dark:hover:text-white dark:hover:bg-red-600
+                     dark:focus:ring-red-900"
+            >
+              🗑️ Eliminar
+            </button>
+          </td>
+        `;
+
+        tbody.appendChild(fila);
+      });
+    }
+
+    renderPaginacion(data.total);
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      swalError.fire(
+        "Error",
+        error.message || "No se pudo cargar la lista",
+        "error"
+      );
+    }
+  } finally {
+    tbody.classList.remove("opacity-50", "pointer-events-none");
+    paginacion.classList.remove("pointer-events-none");
+  }
 }
 
-function verMasPagos() {
-  cargarPagos(false);
-}
 function renderPaginacion(totalRegistros) {
   const contenedor = document.getElementById("paginacionPagos");
   contenedor.innerHTML = "";
 
-  const totalPaginas = Math.ceil(totalRegistros / limit);
+  const totalPaginas = Math.ceil(Number(totalRegistros) / limit);
   const paginaActual = Math.floor(offset / limit);
 
-  if (totalPaginas <= 1) return;
+  if (totalPaginas <= 1) {
+    return;
+  }
 
   for (let i = 0; i < totalPaginas; i++) {
     const btn = document.createElement("button");
-    btn.className = `px-3 py-1 rounded-lg text-sm font-medium ${
-      i === paginaActual
-        ? 'bg-blue-600 text-white'
-        : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-    }`;
-    btn.innerText = i + 1;
-    btn.onclick = () => {
-      offset = i * limit;
-      cargarPagos(true);
-    };
+
+    btn.type = "button";
+    btn.textContent = i + 1;
+
+    btn.className = `
+      px-3 py-1 rounded-lg text-sm font-medium transition-colors
+      ${
+        i === paginaActual
+          ? "bg-blue-600 text-white"
+          : "bg-slate-700 text-slate-200 hover:bg-slate-600"
+      }
+    `;
+
+    btn.addEventListener("click", () => {
+      cargarPagos(i * limit);
+    });
+
     contenedor.appendChild(btn);
   }
 }
-
-document.getElementById("filtroPagos").addEventListener("input", (e) => {
-  filtrarPagos(e.target.value);
-});
-function filtrarPagos(texto) {
-  const tbody = document.getElementById("tablaPagos");
-  const filtro = texto.toLowerCase();
-  tbody.innerHTML = "";
-
-  let index = 1;
-
-  window.listaPagos.forEach((venta) => {
-    const contiene = 
-      venta.venta_id.toLowerCase().includes(filtro) ||
-      venta.fecha_pago.toLowerCase().includes(filtro) ||
-      venta.usuario.toLowerCase().includes(filtro) ||
-      venta.productos.some(p => p.nombre.toLowerCase().includes(filtro));
-
-    if (contiene) {
-      const productosHTML = venta.productos
-        .map(p => {
-          const nombreCorto = p.nombre.length > 30 ? p.nombre.slice(0, 30) + "..." : p.nombre;
-          return `<div title="${p.nombre}"><strong>${nombreCorto}</strong> x${p.cantidad} - $${p.total}</div>`;
-        })
-        .join("");
-
-      const fila = document.createElement("tr");
-      fila.innerHTML = `
-        <td class="px-4 py-2">${index++}</td>
-        <td class="px-4 py-2">${venta.venta_id}</td>
-        <td class="px-4 py-2">${venta.fecha_pago}</td>
-        <td class="px-4 py-2">${venta.usuario}</td>
-        <td class="px-4 py-2">$${Number(venta.total).toFixed(2)}</td>
-        <td class="px-4 py-2">${productosHTML}</td>
-        <td class="px-4 py-2 text-center">
-          <button onclick="eliminarPago('${venta.venta_id}')" class="text-red-700 hover:text-white border border-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2 dark:border-red-500 dark:text-red-500 dark:hover:text-white dark:hover:bg-red-600 dark:focus:ring-red-900">
-            🗑️ Eliminar
-          </button>
-        </td>`;
-      tbody.appendChild(fila);
-    }
-  });
-
-  if (tbody.children.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">No se encontraron resultados</td></tr>`;
-  }
-}
-
 function eliminarPago(venta_id) {
   // Si es admin o root, no pedir código
   if (window.tipoUsuario === 'admin' || window.tipoUsuario === 'root') {

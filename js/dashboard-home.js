@@ -976,7 +976,47 @@ function modalBranding() {
               </div>
             </div>
           </section>
+          <!-- Restricción de movimientos -->
+<section class="mb-5 rounded-2xl border border-slate-700
+                bg-slate-900/30 p-5">
 
+  <div class="mb-1 flex items-center gap-2 text-amber-400">
+    <i class="bi bi-shield-lock-fill"></i>
+    <h3 class="font-semibold">
+      Permisos de inventario
+    </h3>
+  </div>
+
+  <p class="mb-4 text-xs text-slate-400">
+    Configura si los trabajadores necesitan autorización para realizar
+    movimientos de inventario.
+  </p>
+
+  <label
+    for="brandRestringirMovimientos"
+    class="flex cursor-pointer items-center justify-between gap-4
+           rounded-xl border border-slate-700 bg-slate-950/30 p-4"
+  >
+    <div>
+      <p class="text-sm font-medium text-slate-200">
+        Restringir movimientos de inventario
+      </p>
+
+      <p class="mt-1 text-xs text-slate-500">
+        Los usuarios worker deberán ingresar un código de administrador.
+        Los usuarios admin y root tendrán acceso directo.
+      </p>
+    </div>
+
+    <input
+      id="brandRestringirMovimientos"
+      type="checkbox"
+      class="h-5 w-5 shrink-0 rounded border-slate-600
+             bg-slate-800 text-violet-600
+             focus:ring-2 focus:ring-violet-500/30"
+    >
+  </label>
+</section>
           <!-- Información para tickets -->
           <section class="mb-5 rounded-2xl border border-slate-700
                           bg-slate-900/30 p-5">
@@ -993,6 +1033,23 @@ function modalBranding() {
             </p>
 
             <div class="space-y-4">
+            <div>
+  <label for="brandTipoImpresora" class="${labelClass}">
+    Tamaño de impresora
+  </label>
+
+  <select
+    id="brandTipoImpresora"
+    class="${inputClass}"
+  >
+    <option value="48 mm">48 mm</option>
+    <option value="58 mm">58 mm</option>
+  </select>
+
+  <p class="mt-1 text-xs text-slate-500">
+    Selecciona el ancho del papel utilizado por la impresora de tickets.
+  </p>
+</div>
               <div>
   <label class="${labelClass}">
     Horario de atención
@@ -1295,6 +1352,12 @@ function modalBranding() {
           document.getElementById("brandSub").value =
             branding.dashboard_sub || "";
 
+          document.getElementById("brandTipoImpresora").value =
+            branding.tipo_impresora || "48 mm";
+
+          document.getElementById("brandRestringirMovimientos").checked =
+            Number(branding.restringir_movimientos) === 1;
+
           precargarHorario(branding.horario);
 
           document.getElementById("brandRedes").value =
@@ -1388,6 +1451,15 @@ function modalBranding() {
         const title = document.getElementById("brandTitle").value.trim();
 
         const sub = document.getElementById("brandSub").value.trim();
+
+        const tipoImpresora =
+          document.getElementById("brandTipoImpresora").value;
+
+        const restringirMovimientos = document.getElementById(
+          "brandRestringirMovimientos",
+        ).checked
+          ? "1"
+          : "0";
 
         const semanaApertura = document.getElementById(
           "horarioSemanaApertura",
@@ -1520,10 +1592,12 @@ function modalBranding() {
           appName,
           title,
           sub,
+          tipoImpresora,
           horario,
           redesSociales,
           mensajeTicket,
           file,
+          restringirMovimientos,
         };
       },
     })
@@ -1539,7 +1613,9 @@ function modalBranding() {
         horario,
         redesSociales,
         mensajeTicket,
+        tipoImpresora,
         file,
+        restringirMovimientos,
       } = result.value;
 
       const formData = new FormData();
@@ -1550,7 +1626,8 @@ function modalBranding() {
       formData.append("horario", horario);
       formData.append("redes_sociales", redesSociales);
       formData.append("mensaje_ticket", mensajeTicket);
-
+      formData.append("tipo_impresora", tipoImpresora);
+      formData.append("restringir_movimientos", restringirMovimientos);
       if (file) {
         formData.append("logo", file);
       }

@@ -569,8 +569,137 @@ function ejecutarEdicionProducto(id) {
       });
   });
 }
+async function solicitarAutorizacionMovimiento() {
+  // Admin y root siempre tienen acceso directo.
+  if (tipoUsuario === "admin" || tipoUsuario === "root") {
+    return {
+      permitido: true,
+      codigoAdmin: null,
+    };
+  }
 
+  try {
+    const response = await fetch("../php/obtener_branding.php", {
+      cache: "no-store",
+    });
+
+    const branding = await response.json();
+
+    if (!response.ok || branding.ok === false) {
+      throw new Error(
+        branding.msg || "No se pudo consultar la configuración.",
+      );
+    }
+
+    const movimientosRestringidos =
+      Number(branding.restringir_movimientos) === 1;
+
+    // Si la restricción está desactivada, conserva el comportamiento actual.
+    if (!movimientosRestringidos) {
+      return {
+        permitido: true,
+        codigoAdmin: null,
+      };
+    }
+
+    // Si está restringido, el worker necesita un código administrativo.
+    const resultado = await swalInfo.fire({
+      title: "Autorización requerida",
+      text: "Ingresa un código de administrador para realizar el movimiento.",
+      input: "password",
+      inputPlaceholder: "Código de administrador",
+      inputAttributes: {
+        autocomplete: "off",
+      },
+      showCancelButton: true,
+      confirmButtonText: "Validar",
+      cancelButtonText: "Cancelar",
+      allowOutsideClick: false,
+
+      preConfirm: async (codigo) => {
+        const codigoLimpio = String(codigo || "").trim();
+
+        if (!codigoLimpio) {
+          Swal.showValidationMessage(
+            "Debes ingresar un código de administrador.",
+          );
+
+          return false;
+        }
+
+        try {
+          const validarResponse = await fetch(
+            "../php/validar_codigo_admin.php",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                codigo: codigoLimpio,
+              }),
+            },
+          );
+
+          const data = await validarResponse.json();
+
+          if (!validarResponse.ok || !data.success) {
+            Swal.showValidationMessage(
+              data.error || "Código inválido o no autorizado.",
+            );
+
+            return false;
+          }
+
+          // Conservamos el código para volver a validarlo en el controller.
+          return codigoLimpio;
+        } catch (error) {
+          console.error(error);
+
+          Swal.showValidationMessage(
+            "No se pudo validar el código de administrador.",
+          );
+
+          return false;
+        }
+      },
+    });
+
+    if (!resultado.isConfirmed || !resultado.value) {
+      return {
+        permitido: false,
+        codigoAdmin: null,
+      };
+    }
+
+    return {
+      permitido: true,
+      codigoAdmin: resultado.value,
+    };
+  } catch (error) {
+    console.error("Error al validar permisos de movimientos:", error);
+
+    await swalError.fire(
+      "Error",
+      error.message || "No se pudo verificar el permiso de inventario.",
+      "error",
+    );
+
+    return {
+      permitido: false,
+      codigoAdmin: null,
+    };
+  }
+}
 async function abrirModalMovimiento() {
+  const autorizacion = await solicitarAutorizacionMovimiento();
+
+  if (!autorizacion.permitido) {
+    return;
+  }
+
+  const codigoAdminMovimiento = autorizacion.codigoAdmin;
+
   const html = `
     <div class="space-y-3 text-left text-sm">
       <label class="block text-slate-300 font-semibold">Buscar producto</label>
@@ -781,7 +910,7 @@ async function abrirModalMovimiento() {
         );
         return false;
       }
-      return { producto_id, tipo, cantidad, nota };
+      return { producto_id, tipo, cantidad, nota, codigo_admin: String(codigoAdminMovimiento || "").trim(),};
     },
   });
 
@@ -1394,7 +1523,10 @@ async function obtenerBrandingInventarioTicket() {
   const brandingDefault = {
     app_name: "Gym Admin",
     logo: "../php/logo_branding.php",
+    tipo_impresora: "48 mm",
   };
+
+  const branding = { ...brandingDefault };
 
   try {
     const response = await fetch("../php/obtener_branding.php", {
@@ -1407,22 +1539,74 @@ async function obtenerBrandingInventarioTicket() {
 
     const data = await response.json();
 
-    return {
-      app_name: data.app_name || brandingDefault.app_name,
+    branding.app_name =
+      data.app_name || brandingDefault.app_name;
 
-      logo: data.logo_etag
-        ? `../php/logo_branding.php?v=${encodeURIComponent(data.logo_etag)}`
-        : "../php/logo_branding.php",
-    };
+    branding.logo = data.logo_etag
+      ? `../php/logo_branding.php?v=${encodeURIComponent(data.logo_etag)}`
+      : "../php/logo_branding.php";
   } catch (error) {
     console.warn(
       "No se pudo cargar el branding para el ticket de inventario:",
       error,
     );
-
-    return brandingDefault;
   }
+
+  try {
+    const response = await fetch(
+      "../php/obtener_tipo_impresora.php",
+      {
+        cache: "no-store",
+      },
+    );
+
+    const impresora = await response.json();
+
+    if (response.ok && impresora.ok !== false) {
+      branding.tipo_impresora =
+        impresora.tipo_impresora || "48 mm";
+    }
+  } catch (error) {
+    console.warn(
+      "No se pudo obtener el tamaño de impresora:",
+      error,
+    );
+  }
+
+  return branding;
 }
+const configuracionesTicketInventario = {
+  "48 mm": {
+    ancho: 48,
+    margen: 3,
+    anchoLogo: 36,
+
+    fuenteNombreGym: 11,
+    fuenteTitulo: 9,
+    fuenteCategoria: 9.5,
+    fuenteProducto: 9,
+    fuenteTexto: 8,
+    fuenteTotales: 8.5,
+    fuenteFinal: 7.5,
+    fuenteMarca: 6.5,
+  },
+
+  "58 mm": {
+    ancho: 58,
+    margen: 4,
+    anchoLogo: 42,
+
+    fuenteNombreGym: 12,
+    fuenteTitulo: 10,
+    fuenteCategoria: 10,
+    fuenteProducto: 9.5,
+    fuenteTexto: 9,
+    fuenteTotales: 9.5,
+    fuenteFinal: 8.5,
+    fuenteMarca: 7.5,
+  },
+};
+
 
 function cargarImagenInventarioTicket(ruta) {
   return new Promise((resolve) => {
@@ -1469,164 +1653,346 @@ function dineroInventarioTicket(valor) {
   })}`;
 }
 
-function centrarInventarioTicket(doc, texto, y) {
-  doc.text(String(texto ?? ""), 29, y, {
-    align: "center",
-  });
+function centrarInventarioTicket(
+  doc,
+  texto,
+  y,
+  medidas
+) {
+  const centro = medidas.ancho / 2;
+
+  doc.text(
+    String(texto ?? ""),
+    centro,
+    y,
+    {
+      align: "center",
+    },
+  );
 }
 
-function lineaInventarioTicket(doc, y, caracter = "-") {
-  doc.setDrawColor(20);
-  doc.setLineWidth(caracter === "=" ? 0.5 : 0.3);
+function lineaInventarioTicket(
+  doc,
+  y,
+  tipo = "-",
+  medidas
+) {
+  const izquierda = medidas.margen;
+  const derecha = medidas.ancho - medidas.margen;
 
-  if (caracter === "-") {
-    doc.setLineDashPattern([1, 0.7], 0);
+  doc.setDrawColor(0);
+
+  if (tipo === "=") {
+    // Línea más marcada para encabezados y totales
+    doc.setLineWidth(0.4);
   } else {
-    doc.setLineDashPattern([], 0);
+    // Línea normal
+    doc.setLineWidth(0.2);
   }
 
-  doc.line(3, y, 55, y);
-  doc.setLineDashPattern([], 0);
+  doc.line(
+    izquierda,
+    y,
+    derecha,
+    y
+  );
 
-  return y + 3.5;
+  // Avanzamos después de la línea
+  return y + 4;
 }
-function separadorProductoInventario(doc, y) {
+function separadorProductoInventario(
+  doc,
+  y,
+  medidas
+) {
+  const izquierda = medidas.margen;
+  const derecha = medidas.ancho - medidas.margen;
+
+  // Línea punteada entre productos
   doc.setDrawColor(120);
   doc.setLineWidth(0.2);
-
-  // Línea punteada: 0.8 mm de línea y 0.8 mm de espacio.
   doc.setLineDashPattern([0.8, 0.8], 0);
-  doc.line(3, y, 55, y);
 
-  // Restablecer línea normal para no afectar otras partes.
+  doc.line(
+    izquierda,
+    y,
+    derecha,
+    y
+  );
+
+  // Restaurar línea normal
   doc.setLineDashPattern([], 0);
+  doc.setDrawColor(0);
 
+  // Continuar debajo del separador
   return y + 3;
 }
-function tituloInventarioTicket(doc, titulo, y) {
-  y += 1.5;
-
+function tituloInventarioTicket(
+  doc,
+  texto,
+  y,
+  medidas
+) {
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
+  doc.setFontSize(medidas.fuenteCategoria);
 
   centrarInventarioTicket(
     doc,
-    String(titulo || "").toUpperCase(),
+    String(texto ?? "").toUpperCase(),
     y,
+    medidas
   );
 
+  // Espacio después del título de la categoría
   return y + 5;
 }
-
 function textoInventarioIzquierdaDerecha(
   doc,
   izquierda,
   derecha,
   y,
-  {
-    negrita = true,
-    tamano = 8,
-    margenIzquierdo = 3,
-    margenDerecho = 55,
-  } = {},
+  opciones = {},
+  medidas
 ) {
-  doc.setFont("helvetica", negrita ? "bold" : "normal");
+  const {
+    negrita = false,
+    tamano = medidas.fuenteTexto,
+  } = opciones;
+
+  const xIzquierda = medidas.margen;
+  const xDerecha = medidas.ancho - medidas.margen;
+
+  doc.setFont(
+    "helvetica",
+    negrita ? "bold" : "normal"
+  );
+
   doc.setFontSize(tamano);
 
-  const textoDerecha = String(derecha ?? "");
-  const anchoDerecha = doc.getTextWidth(textoDerecha);
-  const anchoIzquierda =
-    margenDerecho - margenIzquierdo - anchoDerecha - 2;
+  doc.text(
+    String(izquierda ?? ""),
+    xIzquierda,
+    y
+  );
 
-  let textoIzquierda = String(izquierda ?? "");
+  doc.text(
+    String(derecha ?? ""),
+    xDerecha,
+    y,
+    {
+      align: "right",
+    }
+  );
 
-  while (
-    textoIzquierda.length > 1 &&
-    doc.getTextWidth(textoIzquierda) > anchoIzquierda
-  ) {
-    textoIzquierda = textoIzquierda.slice(0, -1);
-  }
-
-  doc.text(textoIzquierda, margenIzquierdo, y);
-  doc.text(textoDerecha, margenDerecho, y, {
-    align: "right",
-  });
-
-  return y + 4.5;
+  // Avanzar a la siguiente línea
+  return y + 4;
 }
 
 function textoInventarioMultilinea(
   doc,
   texto,
   y,
-  {
-    margen = 3,
-    tamano = 8.5,
-    negrita = true,
-    centrado = false,
-  } = {},
+  opciones = {},
+  medidas
 ) {
-  doc.setFont("helvetica", negrita ? "bold" : "normal");
+  const {
+    negrita = false,
+    tamano = medidas.fuenteProducto,
+  } = opciones;
+
+  const anchoContenido =
+    medidas.ancho - (medidas.margen * 2);
+
+  doc.setFont(
+    "helvetica",
+    negrita ? "bold" : "normal"
+  );
+
   doc.setFontSize(tamano);
 
-  const lineas = doc.splitTextToSize(String(texto ?? ""), 52);
+  const lineas = doc.splitTextToSize(
+    String(texto ?? ""),
+    anchoContenido
+  );
 
   lineas.forEach((linea) => {
-    if (centrado) {
-      centrarInventarioTicket(doc, linea, y);
-    } else {
-      doc.text(linea, margen, y);
-    }
+    doc.text(
+      linea,
+      medidas.margen,
+      y
+    );
 
-    y += 4.3;
+    y += 4;
   });
 
   return y;
 }
 
-function calcularAlturaTicketInventario(productos, categorias) {
-  /*
-   * Cabecera, logo, fecha, resumen general y pie.
-   */
-  let altura = 78;
+function calcularAlturaTicketInventario(
+  doc,
+  productos,
+  categorias,
+  altoLogo,
+  nombreGym,
+  medidas
+) {
+  const anchoContenido =
+    medidas.ancho - (medidas.margen * 2);
 
   /*
-   * Cada categoría ocupa título y separadores.
+   * Comenzamos en la misma posición que
+   * construirTicketInventario58mm()
    */
-  altura += categorias.length * 10;
+  let altura = 4;
 
   /*
-   * Cada producto utiliza:
-   * - línea de código y precio;
-   * - una o más líneas para nombre;
-   * - línea de stock;
-   * - separación.
+   * ==============================
+   * LOGO
+   * ==============================
    */
-  productos.forEach((producto) => {
-    const nombre = String(producto.nombre || "Producto sin nombre");
+  if (altoLogo > 0) {
+    // Alto del logo + los 10 mm de separación
+    altura += altoLogo + 10;
+  }
 
-    const lineasNombre = Math.max(1, Math.ceil(nombre.length / 24));
+  /*
+   * ==============================
+   * NOMBRE DEL GIMNASIO
+   * ==============================
+   */
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(medidas.fuenteNombreGym);
 
-    altura += 11 + lineasNombre * 3.8;
+  const lineasNombreGym = doc.splitTextToSize(
+    String(nombreGym || "Gym Admin"),
+    anchoContenido
+  );
+
+  altura += lineasNombreGym.length * 4;
+
+  // Separación después del nombre
+  altura += 1;
+
+  /*
+   * Título INVENTARIO DE PRODUCTOS
+   */
+  altura += 5;
+
+  /*
+   * Fecha de generación
+   */
+  altura += 4;
+
+  /*
+   * Línea divisoria
+   */
+  altura += 4;
+
+  /*
+   * ==============================
+   * CATEGORÍAS Y PRODUCTOS
+   * ==============================
+   */
+  categorias.forEach((categoria) => {
+    /*
+     * El título recibe y + 1 y después
+     * tituloInventarioTicket() avanza 5 mm.
+     */
+    altura += 6;
+
+    const productosCategoria = productos.filter(
+      (producto) =>
+        (producto.categoria || "Sin categoría") === categoria
+    );
+
+    productosCategoria.forEach((producto) => {
+      /*
+       * Primera línea:
+       * código + precio
+       */
+      altura += 4;
+
+      /*
+       * Nombre del producto.
+       * Debemos medirlo con la misma fuente
+       * utilizada al imprimirlo.
+       */
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(medidas.fuenteProducto);
+
+      const nombreProducto = String(
+        producto.nombre || "Producto sin nombre"
+      ).toUpperCase();
+
+      const lineasNombre = doc.splitTextToSize(
+        nombreProducto,
+        anchoContenido
+      );
+
+      altura += lineasNombre.length * 4;
+
+      /*
+       * Línea STOCK
+       */
+      altura += 4;
+
+      /*
+       * Separador del producto.
+       * En la función principal se llama con y + 1
+       * y el separador devuelve y + 3.
+       */
+      altura += 4;
+    });
+
+    /*
+     * Línea final de categoría
+     */
+    altura += 4;
+
+    /*
+     * TOTAL CATEGORÍA
+     */
+    altura += 4;
   });
 
   /*
-   * Margen inferior adicional para evitar cortes físicos.
+   * ==============================
+   * TOTALES FINALES
+   * ==============================
    */
-  altura += 32;
 
-  return Math.max(altura, 150);
+  // lineaInventarioTicket(doc, y + 2, "=")
+  altura += 6;
+
+  // TOTAL PRODUCTOS
+  altura += 4;
+
+  // UNIDADES TOTALES
+  altura += 4;
+
+  // Línea final
+  altura += 4;
+
+  // FIN DEL INVENTARIO
+  altura += 7;
+
+  // SMARTGATE + margen inferior de seguridad
+  altura += 6;
+
+  /*
+   * Altura mínima para inventarios pequeños.
+   */
+  return Math.max(altura, 120);
 }
 
 async function construirTicketInventario58mm() {
   const { jsPDF } = window.jspdf;
 
   /*
-  |--------------------------------------------------------------------------
-  | Consultar inventario completo
-  |--------------------------------------------------------------------------
-  */
-
+   * ==============================
+   * CONSULTAR INVENTARIO COMPLETO
+   * ==============================
+   */
   const response = await fetch(
     "../php/productos_controller.php?accion=inventario_ticket",
     {
@@ -1637,78 +2003,211 @@ async function construirTicketInventario58mm() {
   const data = await response.json();
 
   if (!data.success) {
-    throw new Error(data.error || "No se pudo obtener el inventario.");
+    throw new Error(
+      data.error || "No se pudo obtener el inventario.",
+    );
   }
 
   /*
-   * El producto con código 1 representa visitas y no forma parte
-   * del inventario físico.
+   * El producto con código 1 representa visitas
+   * y no forma parte del inventario físico.
    */
   const productos = (
-    Array.isArray(data.productos) ? data.productos : []
-  ).filter((producto) => String(producto.codigo || "").trim() !== "1");
+    Array.isArray(data.productos)
+      ? data.productos
+      : []
+  ).filter(
+    (producto) =>
+      String(producto.codigo || "").trim() !== "1",
+  );
 
   if (!productos.length) {
-    throw new Error("No hay productos para imprimir en el inventario.");
+    throw new Error(
+      "No hay productos para imprimir en el inventario.",
+    );
   }
 
   /*
-  |--------------------------------------------------------------------------
-  | Ordenar por categoría y nombre
-  |--------------------------------------------------------------------------
-  */
-
+   * ==============================
+   * ORDENAR POR CATEGORÍA Y NOMBRE
+   * ==============================
+   */
   productos.sort((a, b) => {
-    const categoriaA = String(a.categoria || "Sin categoría").toLocaleLowerCase(
-      "es",
-    );
+    const categoriaA = String(
+      a.categoria || "Sin categoría",
+    ).toLocaleLowerCase("es");
 
-    const categoriaB = String(b.categoria || "Sin categoría").toLocaleLowerCase(
-      "es",
-    );
+    const categoriaB = String(
+      b.categoria || "Sin categoría",
+    ).toLocaleLowerCase("es");
 
-    const comparacionCategoria = categoriaA.localeCompare(categoriaB, "es");
+    const comparacionCategoria =
+      categoriaA.localeCompare(
+        categoriaB,
+        "es",
+      );
 
     if (comparacionCategoria !== 0) {
       return comparacionCategoria;
     }
 
-    return String(a.nombre || "").localeCompare(String(b.nombre || ""), "es");
+    return String(
+      a.nombre || "",
+    ).localeCompare(
+      String(b.nombre || ""),
+      "es",
+    );
   });
 
   const categorias = [
     ...new Set(
-      productos.map((producto) => producto.categoria || "Sin categoría"),
+      productos.map(
+        (producto) =>
+          producto.categoria ||
+          "Sin categoría",
+      ),
     ),
   ];
 
-  const alturaTicket = calcularAlturaTicketInventario(productos, categorias);
+  /*
+   * ==============================
+   * BRANDING Y TIPO DE IMPRESORA
+   * ==============================
+   */
+  const branding =
+    await obtenerBrandingInventarioTicket();
 
-  const doc = new jsPDF({
+  const nombreGym =
+    branding.app_name || "Gym Admin";
+
+  /*
+   * Seleccionamos automáticamente
+   * configuración de 48 o 58 mm.
+   */
+  const tipoImpresora =
+    branding.tipo_impresora || "48 mm";
+
+  const medidas =
+    configuracionesTicketInventario[
+      tipoImpresora
+    ] ||
+    configuracionesTicketInventario[
+      "48 mm"
+    ];
+
+  const anchoContenido =
+    medidas.ancho -
+    (medidas.margen * 2);
+
+  const centro =
+    medidas.ancho / 2;
+
+  const logo =
+    await cargarImagenInventarioTicket(
+      branding.logo,
+    );
+
+  /*
+   * ==============================
+   * DOCUMENTO TEMPORAL DE MEDICIÓN
+   * ==============================
+   */
+  const docMedicion = new jsPDF({
     unit: "mm",
-    format: [58, alturaTicket],
+    format: [medidas.ancho, 150],
     orientation: "portrait",
   });
 
-  /*
-  |--------------------------------------------------------------------------
-  | Branding
-  |--------------------------------------------------------------------------
-  */
-
-  const branding = await obtenerBrandingInventarioTicket();
-
-  const nombreGym = branding.app_name || "Gym Admin";
-
-  const logo = await cargarImagenInventarioTicket(branding.logo);
-
-  let y = 4;
+  let altoLogo = 0;
 
   if (logo) {
     try {
-      doc.addImage(logo, "PNG", 14, y, 30, 17);
+      const propiedadesLogo =
+        docMedicion.getImageProperties(
+          logo,
+        );
 
-      y += 20;
+      altoLogo =
+        (
+          propiedadesLogo.height *
+          medidas.anchoLogo
+        ) /
+        propiedadesLogo.width;
+    } catch (error) {
+      console.warn(
+        "No se pudo medir el logo del inventario:",
+        error,
+      );
+    }
+  }
+
+  /*
+   * ==============================
+   * ALTURA DINÁMICA DEL TICKET
+   * ==============================
+   */
+  const alturaTicket =
+    calcularAlturaTicketInventario(
+      docMedicion,
+      productos,
+      categorias,
+      altoLogo,
+      nombreGym,
+      medidas,
+    );
+
+  /*
+   * ==============================
+   * DOCUMENTO DEFINITIVO
+   * ==============================
+   */
+  const doc = new jsPDF({
+    unit: "mm",
+    format: [
+      medidas.ancho,
+      alturaTicket,
+    ],
+    orientation: "portrait",
+  });
+
+  let y = 4;
+
+  /*
+   * ==============================
+   * LOGO
+   * ==============================
+   */
+  if (logo) {
+    try {
+      const propiedadesLogo =
+        doc.getImageProperties(logo);
+
+      const anchoLogo =
+        medidas.anchoLogo;
+
+      const altoLogo =
+        (
+          propiedadesLogo.height *
+          anchoLogo
+        ) /
+        propiedadesLogo.width;
+
+      const posicionX =
+        centro -
+        (anchoLogo / 2);
+
+      doc.addImage(
+        logo,
+        undefined,
+        posicionX,
+        y,
+        anchoLogo,
+        altoLogo,
+      );
+
+      // Conservamos los 10 mm
+      // entre logo y nombre.
+      y += altoLogo + 10;
     } catch (error) {
       console.warn(
         "No se pudo agregar el logo al ticket de inventario:",
@@ -1718,194 +2217,355 @@ async function construirTicketInventario58mm() {
   }
 
   /*
-  |--------------------------------------------------------------------------
-  | Nombre del gimnasio
-  |--------------------------------------------------------------------------
-  */
+   * ==============================
+   * NOMBRE DEL GIMNASIO
+   * ==============================
+   */
+  doc.setFont(
+    "helvetica",
+    "bold",
+  );
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(
+    medidas.fuenteNombreGym,
+  );
 
-  const lineasNombreGym = doc.splitTextToSize(nombreGym, 50);
+  const lineasNombreGym =
+    doc.splitTextToSize(
+      nombreGym,
+      anchoContenido,
+    );
 
-  lineasNombreGym.forEach((linea) => {
-    centrarInventarioTicket(doc, linea, y);
+  lineasNombreGym.forEach(
+    (linea) => {
+      centrarInventarioTicket(
+        doc,
+        linea,
+        y,
+        medidas,
+      );
 
-    y += 4;
-  });
+      y += 4;
+    },
+  );
 
   y += 1;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  /*
+   * ==============================
+   * TÍTULO
+   * ==============================
+   */
+  doc.setFont(
+    "helvetica",
+    "bold",
+  );
 
-  centrarInventarioTicket(doc, "INVENTARIO DE PRODUCTOS", y);
+  doc.setFontSize(
+    medidas.fuenteTitulo,
+  );
+
+  centrarInventarioTicket(
+    doc,
+    "INVENTARIO DE PRODUCTOS",
+    y,
+    medidas,
+  );
 
   y += 5;
 
   /*
-  |--------------------------------------------------------------------------
-  | Fecha de generación
-  |--------------------------------------------------------------------------
-  */
-
+   * ==============================
+   * FECHA DE GENERACIÓN
+   * ==============================
+   */
   const ahora = new Date();
 
-  const fecha = ahora.toLocaleDateString("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  const fecha =
+    ahora.toLocaleDateString(
+      "es-MX",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      },
+    );
 
-  const hora = ahora.toLocaleTimeString("es-MX", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const hora =
+    ahora.toLocaleTimeString(
+      "es-MX",
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFont(
+    "helvetica",
+    "normal",
+  );
 
-  centrarInventarioTicket(doc, `GENERADO: ${fecha} ${hora}`, y);
+  doc.setFontSize(
+    medidas.fuenteTexto,
+  );
+
+  centrarInventarioTicket(
+    doc,
+    `GENERADO: ${fecha} ${hora}`,
+    y,
+    medidas,
+  );
 
   y += 4;
 
-  y = lineaInventarioTicket(doc, y, "=");
-
-  const cantidadProductos =
-  productos.length;
-
-const cantidadTotalStock =
-  productos.reduce(
-    (total, producto) =>
-      total +
-      Number(producto.stock || 0),
-    0,
+  y = lineaInventarioTicket(
+    doc,
+    y,
+    "=",
+    medidas,
   );
 
   /*
-  |--------------------------------------------------------------------------
-  | Productos agrupados por categoría
-  |--------------------------------------------------------------------------
-  */
+   * ==============================
+   * TOTALES GENERALES
+   * ==============================
+   */
+  const cantidadProductos =
+    productos.length;
 
-  categorias.forEach((categoria) => {
-    const productosCategoria = productos.filter(
-      (producto) => (producto.categoria || "Sin categoría") === categoria,
-    );
-
-    y = tituloInventarioTicket(doc, categoria, y + 1);
-
-    productosCategoria.forEach((producto) => {
-      const codigo = producto.codigo || "SIN CÓDIGO";
-
-      const precio = Number(producto.precio || 0);
-
-      const stock = Number(producto.stock || 0);
-
-      /*
-       * Primera línea:
-       * código a la izquierda y precio a la derecha.
-       */
-      y = textoInventarioIzquierdaDerecha(
-        doc,
-        codigo,
-        dineroInventarioTicket(precio),
-        y,
-        {
-          tamano: 8,
-        },
-      );
-
-      /*
-       * Segunda línea:
-       * nombre completo del producto.
-       */
-      y = textoInventarioMultilinea(
-        doc,
-        String(producto.nombre || "Producto sin nombre").toUpperCase(),
-        y,
-        {
-          negrita: true,
-          tamano: 9,
-        },
-      );
-
-      /*
-       * Tercera línea:
-       * stock disponible.
-       */
-      y = textoInventarioIzquierdaDerecha(doc, "STOCK", stock, y, {
-        tamano: 8,
-      });
-
-      /*
-       * Separador visual para distinguir el stock
-       * y los datos de cada producto.
-       */
-      y = separadorProductoInventario(doc, y + 1);
-    });
-
-    y = lineaInventarioTicket(doc, y);
-
-    const totalCategoria = productosCategoria.reduce(
-      (total, producto) => total + Number(producto.stock || 0),
+  const cantidadTotalStock =
+    productos.reduce(
+      (total, producto) =>
+        total +
+        Number(producto.stock || 0),
       0,
     );
 
-    y = textoInventarioIzquierdaDerecha(
+  /*
+   * ==============================
+   * PRODUCTOS POR CATEGORÍA
+   * ==============================
+   */
+  categorias.forEach(
+    (categoria) => {
+      const productosCategoria =
+        productos.filter(
+          (producto) =>
+            (
+              producto.categoria ||
+              "Sin categoría"
+            ) === categoria,
+        );
+
+      y = tituloInventarioTicket(
+        doc,
+        categoria,
+        y + 1,
+        medidas,
+      );
+
+      productosCategoria.forEach(
+        (producto) => {
+          const codigo =
+            producto.codigo ||
+            "SIN CÓDIGO";
+
+          const precio =
+            Number(
+              producto.precio || 0,
+            );
+
+          const stock =
+            Number(
+              producto.stock || 0,
+            );
+
+          /*
+           * Código y precio
+           */
+          y =
+            textoInventarioIzquierdaDerecha(
+              doc,
+              codigo,
+              dineroInventarioTicket(
+                precio,
+              ),
+              y,
+              {
+                tamano:
+                  medidas.fuenteTexto,
+              },
+              medidas,
+            );
+
+          /*
+           * Nombre del producto
+           */
+          y =
+            textoInventarioMultilinea(
+              doc,
+              String(
+                producto.nombre ||
+                "Producto sin nombre",
+              ).toUpperCase(),
+              y,
+              {
+                negrita: true,
+                tamano:
+                  medidas.fuenteProducto,
+              },
+              medidas,
+            );
+
+          /*
+           * Stock
+           */
+          y =
+            textoInventarioIzquierdaDerecha(
+              doc,
+              "STOCK",
+              stock,
+              y,
+              {
+                tamano:
+                  medidas.fuenteTexto,
+              },
+              medidas,
+            );
+
+          /*
+           * Separador punteado
+           */
+          y =
+            separadorProductoInventario(
+              doc,
+              y + 1,
+              medidas,
+            );
+        },
+      );
+
+      /*
+       * Total de categoría
+       */
+      y = lineaInventarioTicket(
+        doc,
+        y,
+        "-",
+        medidas,
+      );
+
+      const totalCategoria =
+        productosCategoria.reduce(
+          (total, producto) =>
+            total +
+            Number(
+              producto.stock || 0,
+            ),
+          0,
+        );
+
+      y =
+        textoInventarioIzquierdaDerecha(
+          doc,
+          "TOTAL CATEGORÍA",
+          totalCategoria,
+          y,
+          {
+            negrita: true,
+            tamano:
+              medidas.fuenteTexto,
+          },
+          medidas,
+        );
+    },
+  );
+
+  /*
+   * ==============================
+   * TOTAL FINAL
+   * ==============================
+   */
+  y = lineaInventarioTicket(
+    doc,
+    y + 2,
+    "=",
+    medidas,
+  );
+
+  y =
+    textoInventarioIzquierdaDerecha(
       doc,
-      "TOTAL CATEGORÍA",
-      totalCategoria,
+      "TOTAL PRODUCTOS",
+      cantidadProductos,
       y,
       {
         negrita: true,
+        tamano:
+          medidas.fuenteTotales,
       },
+      medidas,
     );
-  });
+
+  y =
+    textoInventarioIzquierdaDerecha(
+      doc,
+      "UNIDADES TOTALES",
+      cantidadTotalStock,
+      y,
+      {
+        negrita: true,
+        tamano:
+          medidas.fuenteTotales,
+      },
+      medidas,
+    );
+
+  y = lineaInventarioTicket(
+    doc,
+    y,
+    "=",
+    medidas,
+  );
 
   /*
-  |--------------------------------------------------------------------------
-  | Total final
-  |--------------------------------------------------------------------------
-  */
-
-  y = lineaInventarioTicket(doc, y + 2, "=");
-
-  y = textoInventarioIzquierdaDerecha(
-    doc,
-    "TOTAL PRODUCTOS",
-    cantidadProductos,
-    y,
-    {
-      negrita: true,
-      tamano: 8.5,
-    },
+   * ==============================
+   * FINAL DEL TICKET
+   * ==============================
+   */
+  doc.setFont(
+    "helvetica",
+    "bold",
   );
 
-  y = textoInventarioIzquierdaDerecha(
-    doc,
-    "UNIDADES TOTALES",
-    cantidadTotalStock,
-    y,
-    {
-      negrita: true,
-      tamano: 8.5,
-    },
+  doc.setFontSize(
+    medidas.fuenteFinal,
   );
 
-  y = lineaInventarioTicket(doc, y, "=");
-
-  doc.setFont("courier", "bold");
-  doc.setFontSize(7.5);
-
-  centrarInventarioTicket(doc, "FIN DEL INVENTARIO", y + 2);
+  centrarInventarioTicket(
+    doc,
+    "FIN DEL INVENTARIO",
+    y + 2,
+    medidas,
+  );
 
   y += 7;
 
-  doc.setFont("courier", "normal");
-  doc.setFontSize(6.5);
+  doc.setFont(
+    "helvetica",
+    "bold",
+  );
 
-  centrarInventarioTicket(doc, "SMARTGATE", y);
+  doc.setFontSize(
+    medidas.fuenteMarca,
+  );
+
+  centrarInventarioTicket(
+    doc,
+    "SMARTGATE",
+    y,
+    medidas,
+  );
 
   return doc;
 }

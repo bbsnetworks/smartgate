@@ -18,6 +18,8 @@ $defaults = [
     'horario'         => null,
     'redes_sociales'  => null,
     'mensaje_ticket'  => null,
+    'tipo_impresora' => '48 mm',
+    'restringir_movimientos' => 0,
 ];
 
 $sql = "SELECT
@@ -29,7 +31,9 @@ $sql = "SELECT
             mail,
             horario,
             redes_sociales,
-            mensaje_ticket
+            mensaje_ticket,
+            tipo_impresora,
+            restringir_movimientos
         FROM config_branding
         WHERE id = 1
         LIMIT 1";
@@ -59,7 +63,9 @@ if (!$row) {
                       mail,
                       horario,
                       redes_sociales,
-                      mensaje_ticket
+                      mensaje_ticket,
+                      tipo_impresora,
+                      restringir_movimientos
                   ) VALUES (
                       1,
                       'Gym Admin',
@@ -68,7 +74,9 @@ if (!$row) {
                       NULL,
                       NULL,
                       NULL,
-                      NULL
+                      NULL,
+                      '48 mm',
+                        0
                   )";
 
     if (!$conexion->query($sqlInsert)) {
@@ -97,4 +105,6 @@ echo json_encode([
     'horario'         => $row['horario'],
     'redes_sociales'  => $row['redes_sociales'],
     'mensaje_ticket'  => $row['mensaje_ticket'],
+    'tipo_impresora'  => $row['tipo_impresora'] ?? '48 mm',
+    'restringir_movimientos' => $row['restringir_movimientos'] ?? 0,
 ], JSON_UNESCAPED_UNICODE);

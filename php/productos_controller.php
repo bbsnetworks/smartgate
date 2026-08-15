@@ -7,6 +7,124 @@ header("Content-Type: application/json");
 function current_user_id() {
   return isset($_SESSION['usuario']['id']) ? (int)$_SESSION['usuario']['id'] : null;
 }
+/**
+ * Valida si el usuario actual puede realizar movimientos manuales
+ * de inventario.
+ */
+function validarPermisoMovimientoInventario($conexion, $data) {
+  $rol = strtolower(
+    trim((string)($_SESSION['usuario']['rol'] ?? ''))
+  );
+
+  // Admin y root siempre tienen acceso directo.
+  if (in_array($rol, ['admin', 'root'], true)) {
+    return [
+      'permitido' => true,
+      'error' => null
+    ];
+  }
+
+  // Consultar la configuración del gimnasio.
+  $stmtConfig = $conexion->prepare(
+    "SELECT restringir_movimientos
+     FROM config_branding
+     WHERE id = 1
+     LIMIT 1"
+  );
+
+  if (!$stmtConfig) {
+    return [
+      'permitido' => false,
+      'error' => 'No se pudo consultar la configuración de movimientos'
+    ];
+  }
+
+  if (!$stmtConfig->execute()) {
+    $stmtConfig->close();
+
+    return [
+      'permitido' => false,
+      'error' => 'No se pudo verificar la configuración de movimientos'
+    ];
+  }
+
+  $configuracion = $stmtConfig->get_result()->fetch_assoc();
+  $stmtConfig->close();
+
+  // El valor predeterminado es 0: conserva el comportamiento anterior.
+  $restringirMovimientos = (int)(
+    $configuracion['restringir_movimientos'] ?? 0
+  );
+
+  if ($restringirMovimientos !== 1) {
+    return [
+      'permitido' => true,
+      'error' => null
+    ];
+  }
+
+  // Con la restricción activada, solamente worker puede solicitar
+  // autorización mediante código administrativo.
+  if ($rol !== 'worker') {
+    return [
+      'permitido' => false,
+      'error' => 'No tienes autorización para realizar movimientos de inventario'
+    ];
+  }
+
+  $codigoAdmin = trim(
+    (string)($data['codigo_admin'] ?? '')
+  );
+
+  if (strlen($codigoAdmin) !== 10) {
+    return [
+      'permitido' => false,
+      'error' => 'Debes ingresar un código de administrador válido'
+    ];
+  }
+
+  // Misma validación utilizada en validar_codigo_admin.php.
+  $stmtCodigo = $conexion->prepare(
+    "SELECT id
+     FROM usuarios
+     WHERE rol = 'admin'
+       AND codigo = ?
+     LIMIT 1"
+  );
+
+  if (!$stmtCodigo) {
+    return [
+      'permitido' => false,
+      'error' => 'No se pudo validar el código administrativo'
+    ];
+  }
+
+  $stmtCodigo->bind_param('s', $codigoAdmin);
+
+  if (!$stmtCodigo->execute()) {
+    $stmtCodigo->close();
+
+    return [
+      'permitido' => false,
+      'error' => 'No se pudo validar el código administrativo'
+    ];
+  }
+
+  $codigoValido = $stmtCodigo->get_result()->num_rows > 0;
+  $stmtCodigo->close();
+
+  if (!$codigoValido) {
+    return [
+      'permitido' => false,
+      'error' => 'Código incorrecto o no autorizado'
+    ];
+  }
+
+  return [
+    'permitido' => true,
+    'error' => null
+  ];
+}
 // === Producto reservado: Visita ===
 function esCodigoReservadoVisita($codigo) {
   $codigo = trim((string)$codigo);
@@ -276,22 +394,62 @@ function agregarProducto($conexion) {
 
 }
 
-
-
-
 function ajustarStock($conexion) {
   $in = json_decode(file_get_contents("php://input"), true);
-  $producto_id = (int)($in['producto_id'] ?? 0);
-  $tipo = $in['tipo'] ?? '';           // 'ingreso' | 'ajuste-'
-  $cantidad = (float)($in['cantidad'] ?? 0);
-  $nota = trim($in['nota'] ?? '');
 
-  if ($producto_id <= 0 || $cantidad <= 0 || !in_array($tipo, ['ingreso','ajuste-'])) {
-    echo json_encode(['ok'=>false, 'error'=>'Parámetros inválidos']);
+  if (!is_array($in)) {
+    echo json_encode([
+      'ok' => false,
+      'error' => 'La información recibida no es válida'
+    ]);
+
     return;
   }
 
-  $res = aplicarMovimientoInventario($conexion, $producto_id, $tipo, $cantidad, $nota, current_user_id());
+  /*
+   * La autorización se valida antes de revisar o modificar
+   * cualquier producto.
+   */
+  $permiso = validarPermisoMovimientoInventario($conexion, $in);
+
+  if (!$permiso['permitido']) {
+    http_response_code(403);
+
+    echo json_encode([
+      'ok' => false,
+      'error' => $permiso['error']
+    ]);
+
+    return;
+  }
+
+  $producto_id = (int)($in['producto_id'] ?? 0);
+  $tipo = trim((string)($in['tipo'] ?? ''));
+  $cantidad = (float)($in['cantidad'] ?? 0);
+  $nota = trim((string)($in['nota'] ?? ''));
+
+  if (
+    $producto_id <= 0 ||
+    $cantidad <= 0 ||
+    !in_array($tipo, ['ingreso', 'ajuste-'], true)
+  ) {
+    echo json_encode([
+      'ok' => false,
+      'error' => 'Parámetros inválidos'
+    ]);
+
+    return;
+  }
+
+  $res = aplicarMovimientoInventario(
+    $conexion,
+    $producto_id,
+    $tipo,
+    $cantidad,
+    $nota,
+    current_user_id()
+  );
+
   echo json_encode($res);
 }
 
