@@ -1755,7 +1755,7 @@ function textoInventarioIzquierdaDerecha(
   medidas
 ) {
   const {
-    negrita = false,
+    negrita = true,
     tamano = medidas.fuenteTexto,
   } = opciones;
 
@@ -2205,8 +2205,6 @@ async function construirTicketInventario58mm() {
         altoLogo,
       );
 
-      // Conservamos los 10 mm
-      // entre logo y nombre.
       y += altoLogo + 10;
     } catch (error) {
       console.warn(
@@ -2302,7 +2300,7 @@ async function construirTicketInventario58mm() {
 
   doc.setFont(
     "helvetica",
-    "normal",
+    "bold",
   );
 
   doc.setFontSize(
@@ -2426,6 +2424,7 @@ async function construirTicketInventario58mm() {
               "STOCK",
               stock,
               y,
+              
               {
                 tamano:
                   medidas.fuenteTexto,

@@ -177,12 +177,13 @@
               <i class="bi bi-gear-wide-connected icon-20 text-amber-400"></i>
               <span>Configurar API</span>
             </a>
-          <?php endif; ?>
+          
           <a onclick="modalBranding()"
             class="block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3 cursor-pointer">
             <i class="bi bi-brush icon-20 text-amber-400"></i>
             <span>Configuración de Marca</span>
           </a>
+          <?php endif; ?>
           <a href="vistas/reportes.php"
             class="card-bloqueable block px-3 py-2 rounded-lg border border-slate-700/70 bg-slate-800/70 hover:bg-slate-700/60 flex items-center gap-3">
             <i class="bi bi-file-text icon-20 text-amber-400"></i><span>Ver Reportes</span>
