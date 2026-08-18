@@ -2994,7 +2994,7 @@ async function construirTicketCorte58mm() {
       },
     );
 
-    /*
+        /*
      * ==============================
      * PAGOS POR TARIFA
      * ==============================
@@ -3002,12 +3002,88 @@ async function construirTicketCorte58mm() {
 
     y = tituloCorte(doc, "PAGOS POR TARIFA", y + 2);
 
-    if (!tarifas.length) {
-      y = textoMultilineaCorte(doc, "NO HUBO PAGOS DE TARIFAS", y, {
-        centrado: true,
-        negrita: true,
+    const cantidadVisitasTicket = Number(
+      data.visitas_cantidad || 0,
+    );
+
+    const cantidadClaseFuncionalTicket = Number(
+      data.clase_funcional_cantidad || 0,
+    );
+
+    /*
+     * Imprime una tarifa especial:
+     * Visitas o Clase funcional.
+     */
+    function imprimirTarifaEspecial(
+      nombre,
+      cantidad,
+      total,
+      totalesPorMetodo,
+    ) {
+      if (cantidad <= 0) {
+        return;
+      }
+
+      y = textoIzquierdaDerechaCorte(
+        doc,
+        `${nombre} (${cantidad})`,
+        dineroTicket(total),
+        y,
+        {
+          negrita: true,
+        },
+      );
+
+      const metodos = [
+        ["Efectivo", totalesPorMetodo?.efectivo],
+        ["Tarjeta", totalesPorMetodo?.tarjeta],
+        ["Transferencia", totalesPorMetodo?.transferencia],
+        ["Otro", totalesPorMetodo?.otro],
+      ].filter(([, totalMetodo]) => Number(totalMetodo || 0) > 0);
+
+      metodos.forEach(([nombreMetodo, totalMetodo]) => {
+        /*
+         * Si solamente se utilizó un método,
+         * todas las entradas pertenecen a ese método
+         * y se puede mostrar la cantidad.
+         */
+        const cantidadMetodo =
+          metodos.length === 1
+            ? ` x${cantidad}`
+            : "";
+
+        y = textoIzquierdaDerechaCorte(
+          doc,
+          `  ${nombreMetodo}${cantidadMetodo}`,
+          dineroTicket(totalMetodo),
+          y,
+          {
+            negrita: true,
+            tamano: medidas.fuenteDetalle,
+          },
+        );
       });
+    }
+
+    const hayPagosPorTarifa =
+      tarifas.length > 0 ||
+      cantidadVisitasTicket > 0 ||
+      cantidadClaseFuncionalTicket > 0;
+
+    if (!hayPagosPorTarifa) {
+      y = textoMultilineaCorte(
+        doc,
+        "NO HUBO PAGOS DE TARIFAS",
+        y,
+        {
+          centrado: true,
+          negrita: true,
+        },
+      );
     } else {
+      /*
+       * Tarifas normales.
+       */
       tarifas.forEach((tarifa) => {
         y = textoIzquierdaDerechaCorte(
           doc,
@@ -3038,16 +3114,27 @@ async function construirTicketCorte58mm() {
             tarifa.cantidad_transferencia,
             tarifa.total_transferencia,
           ],
-          ["Otro", tarifa.otro, tarifa.cantidad_otro, tarifa.total_otro],
+          [
+            "Otro",
+            tarifa.otro,
+            tarifa.cantidad_otro,
+            tarifa.total_otro,
+          ],
         ];
 
         metodos.forEach(
           ([nombreMetodo, informacion, cantidadAlterna, totalAlterno]) => {
             const cantidad = Number(
-              informacion?.cantidad ?? cantidadAlterna ?? 0,
+              informacion?.cantidad ??
+              cantidadAlterna ??
+              0,
             );
 
-            const total = Number(informacion?.total ?? totalAlterno ?? 0);
+            const total = Number(
+              informacion?.total ??
+              totalAlterno ??
+              0,
+            );
 
             if (cantidad <= 0 && total <= 0) {
               return;
@@ -3066,8 +3153,28 @@ async function construirTicketCorte58mm() {
           },
         );
       });
-    }
 
+      /*
+       * Visitas como una tarifa adicional.
+       */
+      imprimirTarifaEspecial(
+        "Visitas",
+        cantidadVisitasTicket,
+        totalVisitas,
+        data.visitas_por_metodo,
+      );
+
+      /*
+       * Clase funcional como una tarifa adicional.
+       */
+      imprimirTarifaEspecial(
+        "Clase funcional adultos",
+        cantidadClaseFuncionalTicket,
+        totalClaseFuncional,
+        data.clase_funcional_por_metodo,
+      );
+    }
+    
     /*
      * ==============================
      * PAGOS FINANCIADOS
@@ -3148,76 +3255,6 @@ async function construirTicketCorte58mm() {
         },
       );
     }
-
-    /*
-     * ==============================
-     * VISITAS
-     * ==============================
-     */
-
-    y = tituloCorte(doc, "VISITAS", y + 2);
-
-    y = textoIzquierdaDerechaCorte(
-      doc,
-      "VISITAS REGISTRADAS",
-      Number(data.visitas_cantidad || 0),
-      y,
-      {
-        negrita: true,
-      },
-    );
-
-    y = textoIzquierdaDerechaCorte(
-      doc,
-      "TOTAL VISITAS",
-      dineroTicket(totalVisitas),
-      y,
-      {
-        negrita: true,
-      },
-    );
-
-    /*
- * ==============================
- * CLASE FUNCIONAL
- * ==============================
- */
-
-const cantidadClaseFuncional =
-  Number(
-    data.clase_funcional_cantidad ||
-    0,
-  );
-
-if (cantidadClaseFuncional > 0) {
-  y = tituloCorte(
-    doc,
-    "CLASE FUNCIONAL ADULTOS",
-    y + 2,
-  );
-
-  y = textoIzquierdaDerechaCorte(
-    doc,
-    "ENTRADAS REGISTRADAS",
-    cantidadClaseFuncional,
-    y,
-    {
-      negrita: true,
-    },
-  );
-
-  y = textoIzquierdaDerechaCorte(
-    doc,
-    "TOTAL CLASE FUNCIONAL",
-    dineroTicket(
-      totalClaseFuncional,
-    ),
-    y,
-    {
-      negrita: true,
-    },
-  );
-}
 
     /*
      * ==============================
